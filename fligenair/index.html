@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fligen Aircrafts Trading Ltd. — Aircraft & Engine Trading, UAE</title>
+  <meta name="description" content="Fligen Aircrafts Trading Ltd. — Wholesale trading of aircraft, aviation engines, spare parts and sections. Based in Abu Dhabi, UAE.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Noto+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red: #9B2335;
+      --green: #0D503C;
+      --gold: #A8873C;
+      --gold-light: #C4AD6C;
+      --blue: #00639B;
+      --blue-light: #E8F4FA;
+      --dark: #1A1A18;
+      --dark-blue: #2C2C28;
+      --white: #FFFFFF;
+      --off-white: #F7F6F2;
+      --gray-50: #EFEEE8;
+      --gray-100: #E0DED6;
+      --gray-200: #C8C6BC;
+      --gray-400: #8E8C82;
+      --gray-600: #5C5A52;
+      --gray-800: #2E2D28;
+      --gray-900: #1C1B18;
+      --radius: 12px;
+      --radius-lg: 20px;
+      --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+      --font-ar: 'Noto Sans Arabic', var(--font);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      color: var(--gray-800);
+      background: var(--white);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body[dir="rtl"] { font-family: var(--font-ar); }
+
+    /* ═══ NAV ═══ */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,0.04);
+      transition: box-shadow 0.4s ease;
+    }
+    nav.scrolled { box-shadow: 0 1px 24px rgba(0,0,0,0.06); }
+
+    .nav-inner {
+      max-width: 1180px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px;
+    }
+
+    .nav-logo { display: flex; align-items: center; gap: 14px; text-decoration: none; }
+    .nav-logo img { height: 48px; width: auto; }
+    .nav-logo-text { display: flex; flex-direction: column; gap: 1px; }
+    .nav-logo-title {
+      font-weight: 700; font-size: 17px; color: var(--green);
+      letter-spacing: 2px; line-height: 1.1;
+    }
+    .nav-logo-subtitle { font-size: 10.5px; color: var(--red); letter-spacing: 0.4px; font-weight: 500; }
+
+    .nav-links { display: flex; align-items: center; gap: 36px; list-style: none; }
+    .nav-links a {
+      text-decoration: none; color: var(--gray-600);
+      font-size: 14px; font-weight: 500; letter-spacing: 0.2px;
+      transition: color 0.2s;
+      position: relative;
+    }
+    .nav-links a::after {
+      content: ''; position: absolute; bottom: -4px; left: 0; right: 0;
+      height: 1.5px; background: var(--red); transform: scaleX(0);
+      transition: transform 0.25s ease; transform-origin: right;
+    }
+    .nav-links a:hover { color: var(--gray-900); }
+    .nav-links a:hover::after { transform: scaleX(1); transform-origin: left; }
+
+    .lang-toggle {
+      background: transparent; border: 1.5px solid var(--gray-200);
+      color: var(--gray-600); padding: 7px 16px; border-radius: 8px;
+      cursor: pointer; font-size: 13px; font-weight: 600;
+      transition: all 0.2s; font-family: var(--font-ar);
+    }
+    .lang-toggle:hover { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.06); }
+
+    .mobile-menu-btn { display: none; background: none; border: none; cursor: pointer; padding: 8px; }
+    .mobile-menu-btn span { display: block; width: 22px; height: 1.5px; background: var(--gray-800); margin: 5px 0; transition: 0.3s; border-radius: 1px; }
+
+    /* ═══ HERO ═══ */
+    .hero {
+      position: relative; min-height: 100vh; display: flex; align-items: center;
+      overflow: hidden;
+      background: var(--dark);
+    }
+
+    .hero-bg {
+      position: absolute; inset: 0;
+      background-image: url('hero-bg.jpg');
+      background-size: cover; background-position: center 40%;
+      opacity: 0.55;
+    }
+
+    .hero-overlay {
+      position: absolute; inset: 0;
+      background: linear-gradient(160deg, rgba(26,26,24,0.88) 0%, rgba(44,44,40,0.72) 50%, rgba(26,26,24,0.65) 100%);
+    }
+
+    /* Subtle grid pattern */
+    .hero-pattern {
+      position: absolute; inset: 0; opacity: 0.04;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    .hero-content {
+      position: relative; z-index: 2;
+      max-width: 1180px; margin: 0 auto;
+      padding: 140px 32px 100px; width: 100%;
+    }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(201,168,76,0.1);
+      border: 1px solid rgba(201,168,76,0.2);
+      color: var(--gold); padding: 8px 18px; border-radius: 100px;
+      font-size: 12px; font-weight: 600; letter-spacing: 1.5px;
+      text-transform: uppercase; margin-bottom: 28px;
+    }
+    .hero-badge::before {
+      content: ''; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--gold); animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; } 50% { opacity: 0.4; }
+    }
+
+    .hero h1 {
+      font-size: clamp(38px, 5.5vw, 68px); font-weight: 700;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; line-height: 1.1; margin-bottom: 24px;
+      max-width: 680px; letter-spacing: -0.02em;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-desc {
+      font-size: 17px; color: rgba(255,255,255,0.55); max-width: 520px;
+      margin-bottom: 40px; font-weight: 400; line-height: 1.75;
+    }
+
+    .hero-cta {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: var(--red); color: white; text-decoration: none;
+      padding: 15px 36px; border-radius: 10px;
+      font-weight: 600; font-size: 15px;
+      transition: all 0.25s ease; letter-spacing: 0.3px;
+      box-shadow: 0 4px 16px rgba(212,54,75,0.25);
+    }
+    .hero-cta:hover { background: #BE2E42; transform: translateY(-2px); box-shadow: 0 6px 24px rgba(212,54,75,0.3); }
+    .hero-cta svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+    .hero-stats {
+      display: flex; gap: 56px; margin-top: 72px;
+      padding-top: 40px; border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .hero-stat h3 {
+      font-size: 32px; font-weight: 700; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 4px;
+    }
+    .hero-stat p { font-size: 13px; color: rgba(255,255,255,0.4); font-weight: 400; letter-spacing: 0.3px; }
+
+    /* ═══ SECTIONS ═══ */
+    section { padding: 110px 32px; }
+    .section-inner { max-width: 1180px; margin: 0 auto; }
+
+    .section-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 3px;
+      text-transform: uppercase; color: var(--gold); margin-bottom: 14px;
+    }
+    .section-title {
+      font-size: clamp(30px, 3.5vw, 44px); font-weight: 700;
+      color: var(--gray-900); margin-bottom: 16px;
+      line-height: 1.15; letter-spacing: -0.02em;
+    }
+    .section-desc {
+      font-size: 16px; color: var(--gray-600); max-width: 520px;
+      line-height: 1.75; font-weight: 400;
+    }
+
+    /* ═══ ABOUT ═══ */
+    .about { background: var(--off-white); }
+    .about-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 72px; margin-top: 56px; align-items: center;
+    }
+    .about-text p {
+      color: var(--gray-600); font-size: 15.5px;
+      line-height: 1.8; margin-bottom: 20px;
+    }
+
+    .about-image {
+      position: relative; border-radius: var(--radius-lg); overflow: hidden;
+      aspect-ratio: 4/3; background: var(--gray-100);
+    }
+    .about-image img { width: 100%; height: 100%; object-fit: cover; }
+    .about-image-placeholder {
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+      background: linear-gradient(145deg, var(--gray-100) 0%, var(--gray-200) 100%);
+    }
+    .about-image-placeholder svg { width: 48px; height: 48px; stroke: var(--gray-400); fill: none; stroke-width: 1.5; }
+    .about-image-placeholder span { font-size: 12px; color: var(--gray-400); letter-spacing: 0.5px; }
+    .about-accent {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--green), var(--gold), var(--red));
+    }
+
+    /* ═══ SERVICES ═══ */
+    .services { background: var(--white); }
+    .services-list { margin-top: 56px; }
+
+    .service-row {
+      display: flex; align-items: flex-start; gap: 40px;
+      padding: 40px 0;
+      border-top: 1px solid var(--gray-100);
+    }
+    .service-row:last-child { border-bottom: 1px solid var(--gray-100); }
+
+    .service-num {
+      font-size: 48px; font-weight: 700; color: var(--gray-100);
+      line-height: 1; min-width: 80px; letter-spacing: -0.03em;
+      transition: color 0.3s ease;
+    }
+    .service-row:hover .service-num { color: var(--green); }
+
+    .service-content { flex: 1; }
+    .service-content h3 { font-size: 22px; font-weight: 600; margin-bottom: 12px; color: var(--gray-900); letter-spacing: -0.01em; }
+    .service-content p { font-size: 15px; color: var(--gray-600); line-height: 1.75; max-width: 560px; }
+
+    /* ═══ COMPLIANCE ═══ */
+    .compliance { background: var(--off-white); padding-bottom: 80px; }
+    .compliance-content {
+      margin-top: 40px; max-width: 720px;
+    }
+    .compliance-content p {
+      font-size: 15px; color: var(--gray-600); line-height: 1.8;
+    }
+    .compliance-content ul {
+      margin: 24px 0; padding-left: 0; list-style: none;
+    }
+    .compliance-content li {
+      font-size: 14.5px; color: var(--gray-700); line-height: 1.75;
+      padding: 8px 0 8px 28px; position: relative;
+      border-bottom: 1px solid var(--gray-100);
+    }
+    .compliance-content li:first-child { border-top: 1px solid var(--gray-100); }
+    .compliance-content li::before {
+      content: ''; position: absolute; left: 0; top: 16px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--green); opacity: 0.6;
+    }
+
+    /* ═══ CONTACT ═══ */
+    .contact { background: var(--white); position: relative; overflow: hidden; }
+    .contact-bg {
+      position: absolute; inset: 0;
+      background-image: url('contact-bg.jpg');
+      background-size: cover; background-position: center right;
+      opacity: 0.1;
+    }
+    .contact .section-inner { position: relative; z-index: 2; }
+    .contact-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 48px;
+      margin-top: 56px; align-items: start;
+    }
+
+    .contact-info { display: flex; flex-direction: column; gap: 28px; padding-top: 8px; }
+    .contact-item { display: flex; gap: 18px; align-items: flex-start; }
+
+    .contact-icon-wrap {
+      width: 48px; height: 48px; min-width: 48px;
+      background: var(--white); border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--gray-100);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+    }
+    .contact-icon-wrap svg { width: 20px; height: 20px; stroke: var(--green); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+    .contact-item h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--gray-900); }
+    .contact-item p, .contact-item a { font-size: 14px; color: var(--gray-600); text-decoration: none; line-height: 1.6; }
+    .contact-item a:hover { color: var(--red); }
+    .contact-highlight { color: var(--blue); font-weight: 600; }
+
+    .contact-form {
+      background: transparent; padding: 0;
+    }
+    .contact-form h3 { font-size: 22px; font-weight: 600; margin-bottom: 28px; color: var(--gray-900); letter-spacing: -0.01em; }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 7px; color: var(--gray-800); }
+    .form-group input, .form-group textarea, .form-group select {
+      width: 100%; padding: 11px 16px;
+      border: 1.5px solid var(--gray-200); border-radius: 10px;
+      font-size: 14px; font-family: var(--font);
+      transition: all 0.2s; background: var(--white);
+      color: var(--gray-800);
+    }
+    body[dir="rtl"] .form-group input, body[dir="rtl"] .form-group textarea, body[dir="rtl"] .form-group select { font-family: var(--font-ar); }
+    .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+      outline: none; border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(0,106,48,0.08);
+    }
+    .form-group textarea { height: 110px; resize: vertical; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .form-submit {
+      width: 100%; padding: 13px;
+      background: var(--red); color: white; border: none;
+      border-radius: 10px; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: all 0.25s; font-family: var(--font);
+      letter-spacing: 0.3px;
+      box-shadow: 0 2px 10px rgba(155,35,53,0.25);
+    }
+    body[dir="rtl"] .form-submit { font-family: var(--font-ar); }
+    .form-submit:hover { background: #7E1C2B; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(155,35,53,0.3); }
+
+    /* ═══ FOOTER ═══ */
+    footer { background: #3D3220; color: rgba(255,255,255,0.55); padding: 48px 32px; }
+    .footer-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+    .footer-logo { display: flex; align-items: center; gap: 14px; }
+    .footer-logo img { height: 32px; opacity: 0.6; }
+    .footer-text { font-size: 13px; font-weight: 400; }
+    .footer-uae { display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: 0.5px; font-weight: 500; }
+    .uae-flag { display: flex; width: 28px; height: 18px; border-radius: 3px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,0.1); }
+    .uae-flag-vert { background: var(--green); width: 28%; }
+    .uae-flag-horiz { width: 72%; display: flex; flex-direction: column; }
+    .uae-flag-horiz div:nth-child(1) { background: #1A7A5C; flex: 1; }
+    .uae-flag-horiz div:nth-child(2) { background: #FFFFFF; flex: 1; }
+    .uae-flag-horiz div:nth-child(3) { background: #000000; flex: 1; }
+
+    /* ═══ RESPONSIVE ═══ */
+    @media (max-width: 900px) {
+      .service-row { gap: 24px; }
+      .service-num { font-size: 36px; min-width: 56px; }
+    }
+    @media (max-width: 768px) {
+      .nav-inner { padding: 12px 20px; }
+      .nav-links {
+        display: none; position: absolute; top: 100%; left: 0; right: 0;
+        background: rgba(255,255,255,0.98); backdrop-filter: blur(20px);
+        flex-direction: column; padding: 24px; gap: 18px;
+        border-bottom: 1px solid var(--gray-100);
+      }
+      .nav-links.active { display: flex; }
+      .mobile-menu-btn { display: block; }
+      .hero-content { padding: 120px 20px 80px; }
+      .hero h1 { font-size: 34px; }
+      .hero-stats { flex-direction: column; gap: 24px; }
+      .about-grid, .contact-grid { grid-template-columns: 1fr; gap: 36px; }
+      .contact-info { padding-top: 0; }
+      .form-row { grid-template-columns: 1fr; }
+      section { padding: 72px 20px; }
+      .footer-inner { flex-direction: column; gap: 20px; text-align: center; }
+      .contact-form { padding: 28px 24px; }
+    }
+
+    /* ═══ ANIMATIONS ═══ */
+    .fade-up {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+    .fade-up:nth-child(2) { transition-delay: 0.1s; }
+    .fade-up:nth-child(3) { transition-delay: 0.2s; }
+
+    /* ═══ RTL ═══ */
+    body[dir="rtl"] .hero h1, body[dir="rtl"] .section-title, body[dir="rtl"] .section-desc,
+    body[dir="rtl"] .about-text p, body[dir="rtl"] .service-card p,
+    body[dir="rtl"] .service-card h3, body[dir="rtl"] .section-label { text-align: right; }
+    body[dir="rtl"] .hero-stats { direction: rtl; }
+    body[dir="rtl"] .nav-links a::after { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav id="navbar">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <img src="logo.jpg" alt="Fligen Logo">
+        <div class="nav-logo-text">
+          <span class="nav-logo-title">FLIGEN</span>
+          <span class="nav-logo-subtitle" data-en="Aircrafts Trading" data-ar="تجارة الطائرات">Aircrafts Trading</span>
+        </div>
+      </a>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#about" data-en="About" data-ar="عن الشركة">About</a></li>
+        <li><a href="#services" data-en="Products" data-ar="منتجاتنا">Products</a></li>
+        <li><a href="#compliance" data-en="Compliance" data-ar="الامتثال">Compliance</a></li>
+        <li><a href="#contact" data-en="Contact" data-ar="اتصل بنا">Contact</a></li>
+        <li><button class="lang-toggle" id="langToggle" onclick="toggleLang()">العربية</button></li>
+      </ul>
+      <button class="mobile-menu-btn" onclick="toggleMenu()" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero" id="hero">
+    <div class="hero-bg"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-pattern"></div>
+    <div class="hero-content">
+      <div class="hero-badge" data-en="Abu Dhabi, UAE" data-ar="أبوظبي، الإمارات">Abu Dhabi, UAE</div>
+      <h1 data-en="Global <span>Aviation</span> Trading" data-ar="التجارة <span>العالمية</span> للطيران">Global <span>Aviation</span> Trading</h1>
+      <p class="hero-desc" data-en="Fligen Aircrafts Trading Ltd. — your trusted partner in wholesale aircraft, aviation engine, and spare parts trading." data-ar="فليجن لتجارة الطائرات ذ.م.م — شريككم الموثوق في تجارة الطائرات ومحركات الطيران وقطع الغيار بالجملة.">Fligen Aircrafts Trading Ltd. — your trusted partner in wholesale aircraft, aviation engine, and spare parts trading.</p>
+      <a href="#contact" class="hero-cta" data-en="Get in Touch" data-ar="تواصل معنا">Get in Touch
+        <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <h3 data-en="UAE" data-ar="الإمارات">UAE</h3>
+          <p data-en="Based in Abu Dhabi" data-ar="مقرنا في أبوظبي">Based in Abu Dhabi</p>
+        </div>
+        <div class="hero-stat">
+          <h3 data-en="Global" data-ar="عالمياً">Global</h3>
+          <p data-en="Worldwide Operations" data-ar="عمليات عالمية">Worldwide Operations</p>
+        </div>
+        <div class="hero-stat">
+          <h3 data-en="B2B" data-ar="أعمال">B2B</h3>
+          <p data-en="Wholesale Trading" data-ar="تجارة بالجملة">Wholesale Trading</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="about" id="about">
+    <div class="section-inner">
+      <div class="section-label fade-up" data-en="ABOUT US" data-ar="عن الشركة">ABOUT US</div>
+      <h2 class="section-title fade-up" data-en="Trusted Aviation Trading Partner" data-ar="شريك موثوق في تجارة الطيران">Trusted Aviation Trading Partner</h2>
+      <div class="about-grid">
+        <div class="about-text fade-up">
+          <p data-en="Fligen Aircrafts Trading Ltd. is headquartered in Abu Dhabi, specializing in the wholesale trading of aircraft and aviation engines. With deep industry expertise and a strategic location in the heart of the Middle East, we connect buyers and sellers across the global aviation market." data-ar="يقع المقر الرئيسي لشركة فليجن لتجارة الطائرات ذ.م.م في أبوظبي، وهي متخصصة في تجارة الطائرات ومحركات الطيران بالجملة. بفضل خبرتنا العميقة في الصناعة وموقعنا الاستراتيجي في قلب الشرق الأوسط، نربط المشترين والبائعين عبر سوق الطيران العالمي.">Fligen Aircrafts Trading Ltd. is headquartered in Abu Dhabi, specializing in the wholesale trading of aircraft and aviation engines. With deep industry expertise and a strategic location in the heart of the Middle East, we connect buyers and sellers across the global aviation market.</p>
+          <p data-en="Our core strength lies in sourcing and supplying aviation engines, airframes, and certified spare parts. We serve airlines, MRO facilities, leasing companies, and government agencies worldwide, ensuring every transaction meets the highest standards of quality and compliance." data-ar="تكمن قوتنا الأساسية في توفير وتوريد محركات الطيران وهياكل الطائرات وقطع الغيار المعتمدة. نخدم شركات الطيران ومرافق الصيانة والإصلاح والعمرة وشركات التأجير والهيئات الحكومية حول العالم، مع ضمان أن كل معاملة تلبي أعلى معايير الجودة والامتثال.">Our core strength lies in sourcing and supplying aviation engines, airframes, and certified spare parts. We serve airlines, MRO facilities, leasing companies, and government agencies worldwide, ensuring every transaction meets the highest standards of quality and compliance.</p>
+        </div>
+        <div class="about-image fade-up">
+          <img src="about.jpg" alt="Aviation engine maintenance">
+          <div class="about-accent"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SERVICES -->
+  <section class="services" id="services">
+    <div class="section-inner">
+      <div class="section-label fade-up" data-en="OUR PRODUCTS" data-ar="منتجاتنا">OUR PRODUCTS</div>
+      <h2 class="section-title fade-up" data-en="What We Supply" data-ar="ما نورّده">What We Supply</h2>
+      <p class="section-desc fade-up" data-en="Reliable supply of aviation components worldwide — built on trust, expertise, and global reach." data-ar="توريد موثوق لمكونات الطيران حول العالم — مبني على الثقة والخبرة والانتشار العالمي.">Reliable supply of aviation components worldwide — built on trust, expertise, and global reach.</p>
+      <div class="services-list">
+        <div class="service-row fade-up">
+          <div class="service-num">01</div>
+          <div class="service-content">
+            <h3 data-en="Aviation Engines" data-ar="محركات الطيران">Aviation Engines</h3>
+            <p data-en="Our primary specialization — sourcing, trading and supplying turbofan, turboprop, and turboshaft engines for commercial aviation platforms worldwide." data-ar="تخصصنا الرئيسي — توفير وتجارة وتوريد محركات التوربوفان والتوربوبروب والتوربوشافت لمنصات الطيران التجارية حول العالم.">Our primary specialization — sourcing, trading and supplying turbofan, turboprop, and turboshaft engines for commercial aviation platforms worldwide.</p>
+          </div>
+        </div>
+        <div class="service-row fade-up">
+          <div class="service-num">02</div>
+          <div class="service-content">
+            <h3 data-en="Spare Parts & Components" data-ar="قطع الغيار والمكونات">Spare Parts & Components</h3>
+            <p data-en="Supply and delivery of certified aircraft spare parts, sections, and components. From avionics to landing gear — traceable, quality-assured parts for maintenance and overhaul." data-ar="توريد وتسليم قطع غيار الطائرات والأقسام والمكونات المعتمدة. من إلكترونيات الطيران إلى معدات الهبوط — قطع غيار قابلة للتتبع ومضمونة الجودة للصيانة والعمرة.">Supply and delivery of certified aircraft spare parts, sections, and components. From avionics to landing gear — traceable, quality-assured parts for maintenance and overhaul.</p>
+          </div>
+        </div>
+        <div class="service-row fade-up">
+          <div class="service-num">03</div>
+          <div class="service-content">
+            <h3 data-en="Aircraft Trading" data-ar="تجارة الطائرات">Aircraft Trading</h3>
+            <p data-en="Sourcing and trading of commercial aircraft for airlines and lessors. We facilitate acquisitions, dispositions, and lease transitions across all major aircraft types." data-ar="توفير وتجارة الطائرات التجارية لشركات الطيران والمؤجرين. نسهّل عمليات الاستحواذ والتصرف وانتقالات الإيجار لجميع أنواع الطائرات الرئيسية.">Sourcing and trading of commercial aircraft for airlines and lessors. We facilitate acquisitions, dispositions, and lease transitions across all major aircraft types.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPLIANCE -->
+  <section class="compliance" id="compliance">
+    <div class="section-inner">
+      <div class="section-label fade-up" data-en="COMPLIANCE" data-ar="الامتثال">COMPLIANCE</div>
+      <h2 class="section-title fade-up" data-en="Legal & Regulatory Compliance" data-ar="الامتثال القانوني والتنظيمي">Legal & Regulatory Compliance</h2>
+      <div class="compliance-content fade-up">
+        <p data-en="Fligen Aircrafts Trading operates in full compliance with all applicable international laws, regulations, and trade control requirements. We strictly adhere to:" data-ar="تعمل شركة فليغن لتجارة الطائرات بالامتثال الكامل لجميع القوانين واللوائح الدولية المعمول بها ومتطلبات الرقابة التجارية. نلتزم بصرامة بـ:">Fligen Aircrafts Trading operates in full compliance with all applicable international laws, regulations, and trade control requirements. We strictly adhere to:</p>
+        <ul>
+          <li data-en="International sanctions regimes including UN, EU, US (OFAC), and UAE regulations" data-ar="أنظمة العقوبات الدولية بما في ذلك الأمم المتحدة والاتحاد الأوروبي والولايات المتحدة (OFAC) ولوائح الإمارات">International sanctions regimes including UN, EU, US (OFAC), and UAE regulations</li>
+          <li data-en="Export control laws and end-use/end-user verification procedures" data-ar="قوانين الرقابة على الصادرات وإجراءات التحقق من الاستخدام النهائي والمستخدم النهائي">Export control laws and end-use/end-user verification procedures</li>
+<li data-en="UAE Federal laws and Abu Dhabi regulatory framework governing trade activities" data-ar="القوانين الاتحادية لدولة الإمارات والإطار التنظيمي لأبوظبي الذي يحكم الأنشطة التجارية">UAE Federal laws and Abu Dhabi regulatory framework governing trade activities</li>
+        </ul>
+        <p data-en="We are committed to ethical business practices and transparent operations. Every transaction undergoes thorough compliance screening to ensure adherence to all applicable legal frameworks." data-ar="نحن ملتزمون بممارسات الأعمال الأخلاقية والعمليات الشفافة. تخضع كل معاملة لفحص امتثال شامل لضمان الالتزام بجميع الأطر القانونية المعمول بها.">We are committed to ethical business practices and transparent operations. Every transaction undergoes thorough compliance screening to ensure adherence to all applicable legal frameworks.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section class="contact" id="contact">
+    <div class="contact-bg"></div>
+    <div class="section-inner">
+      <div class="section-label fade-up" data-en="CONTACT US" data-ar="اتصل بنا">CONTACT US</div>
+      <h2 class="section-title fade-up" data-en="Let's Work Together" data-ar="لنعمل معاً">Let's Work Together</h2>
+      <p class="section-desc fade-up" data-en="Have an inquiry about aircraft, engines, or spare parts? Reach out and our team will respond promptly." data-ar="هل لديك استفسار حول الطائرات أو المحركات أو قطع الغيار؟ تواصل معنا وسيرد فريقنا بسرعة.">Have an inquiry about aircraft, engines, or spare parts? Reach out and our team will respond promptly.</p>
+      <div class="contact-grid">
+        <div class="contact-info fade-up">
+          <div class="contact-item">
+            <div class="contact-icon-wrap">
+              <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+            <div>
+              <h4 data-en="Address" data-ar="العنوان">Address</h4>
+              <p>170A, Building No. 280, Taweelah</p>
+              <p class="contact-highlight" data-en="Abu Dhabi, UAE" data-ar="أبوظبي، الإمارات">Abu Dhabi, UAE</p>
+            </div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-icon-wrap">
+              <svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-8.97 5.7a1.94 1.94 0 01-2.06 0L2 7"/></svg>
+            </div>
+            <div>
+              <h4 data-en="Email" data-ar="البريد الإلكتروني">Email</h4>
+              <a href="mailto:office@fligenair.com">office@fligenair.com</a>
+            </div>
+          </div>
+          <div class="contact-item">
+            <div class="contact-icon-wrap">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+            </div>
+            <div>
+              <h4 data-en="Website" data-ar="الموقع الإلكتروني">Website</h4>
+              <a href="https://fligenair.com">fligenair.com</a>
+            </div>
+          </div>
+        </div>
+        <form class="contact-form fade-up" name="contact" method="POST" data-netlify="true" netlify-honeypot="bot-field">
+          <input type="hidden" name="form-name" value="contact">
+          <p style="display:none"><input name="bot-field"></p>
+          <h3 data-en="Send us a message" data-ar="أرسل لنا رسالة">Send us a message</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label data-en="Full Name" data-ar="الاسم الكامل">Full Name</label>
+              <input type="text" name="name" required>
+            </div>
+            <div class="form-group">
+              <label data-en="Company" data-ar="الشركة">Company</label>
+              <input type="text" name="company">
+            </div>
+          </div>
+          <div class="form-group">
+            <label data-en="Email" data-ar="البريد الإلكتروني">Email</label>
+            <input type="email" name="email" required>
+          </div>
+          <div class="form-group">
+            <label data-en="Subject" data-ar="الموضوع">Subject</label>
+            <select name="subject">
+              <option value="engines" data-en="Engine Inquiry" data-ar="استفسار عن محرك">Engine Inquiry</option>
+              <option value="parts" data-en="Spare Parts" data-ar="قطع غيار">Spare Parts</option>
+              <option value="aircraft" data-en="Aircraft Inquiry" data-ar="استفسار عن طائرة">Aircraft Inquiry</option>
+              <option value="other" data-en="Other" data-ar="أخرى">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label data-en="Message" data-ar="الرسالة">Message</label>
+            <textarea name="message" required></textarea>
+          </div>
+          <button type="submit" class="form-submit" data-en="Send Message" data-ar="إرسال الرسالة">Send Message</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-logo">
+        <img src="logo.jpg" alt="Fligen">
+        <span class="footer-text" data-en="&copy; 2026 Fligen Aircrafts Trading Ltd. All rights reserved." data-ar="&copy; ٢٠٢٦ فليجن لتجارة الطائرات ذ.م.م. جميع الحقوق محفوظة.">&copy; 2026 Fligen Aircrafts Trading Ltd. All rights reserved.</span>
+      </div>
+      <div class="footer-uae">
+        <div class="uae-flag">
+          <div class="uae-flag-vert"></div>
+          <div class="uae-flag-horiz"><div></div><div></div><div></div></div>
+        </div>
+        <span data-en="Abu Dhabi, UAE" data-ar="أبوظبي، الإمارات">Abu Dhabi, UAE</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    let currentLang = 'en';
+
+    function toggleLang() {
+      currentLang = currentLang === 'en' ? 'ar' : 'en';
+      document.getElementById('langToggle').textContent = currentLang === 'en' ? 'العربية' : 'English';
+      document.body.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+      document.documentElement.lang = currentLang;
+      document.querySelectorAll('[data-en]').forEach(el => {
+        const text = el.getAttribute('data-' + currentLang);
+        if (text) {
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = text;
+          else el.innerHTML = text;
+        }
+      });
+    }
+
+    function toggleMenu() { document.getElementById('navLinks').classList.toggle('active'); }
+
+    window.addEventListener('scroll', () => {
+      document.getElementById('navbar').classList.toggle('scrolled', window.scrollY > 50);
+    });
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.fade-up').forEach(el => observer.observe(el));
+
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const t = document.querySelector(a.getAttribute('href'));
+        if (t) { t.scrollIntoView({ behavior: 'smooth' }); document.getElementById('navLinks').classList.remove('active'); }
+      });
+    });
+  </script>
+</body>
+</html>
