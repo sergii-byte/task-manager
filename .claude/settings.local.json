@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:claude.ai)",
+      "WebFetch(domain:drive.google.com)",
+      "Bash(pip show python-docx)",
+      "Bash(python generate_all_docs.py)",
+      "Bash(python -c \":*)",
+      "Bash(python -c \"from docx import Document; print\\(''OK''\\)\")",
+      "Bash(python -u -c \":*)",
+      "Bash(pip show google-api-python-client google-auth-oauthlib)",
+      "Bash(pip install google-api-python-client google-auth-oauthlib google-auth-httplib2)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(pip install:*)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3 -c \"import pymupdf; print\\(dir\\(pymupdf\\)\\)\")",
+      "Bash(pip show:*)",
+      "Bash(python3 -c \"import sys; print\\(sys.executable\\)\")",
+      "Bash(python3 -m pip install PyMuPDF)",
+      "Bash(cp logo_extracted_0.png logo.png)",
+      "Bash(cp logo_extracted_2.png logo-gold.png)",
+      "Bash(python3 -m pip install Pillow)",
+      "Bash(ls \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\logo-\"*)"
+    ]
+  }
+}

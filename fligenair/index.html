@@ -56,13 +56,19 @@
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid rgba(0,0,0,0.04);
       transition: box-shadow 0.4s ease;
+      overflow: hidden;
+    }
+    nav::before {
+      content: ''; position: absolute; inset: 0; opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23A8873C' stroke-width='0.5'%3E%3Cpath d='M40 0L80 40L40 80L0 40Z'/%3E%3Cpath d='M40 10L70 40L40 70L10 40Z'/%3E%3Cpath d='M40 20L60 40L40 60L20 40Z'/%3E%3Ccircle cx='40' cy='40' r='8'/%3E%3Cpath d='M0 0L40 40M80 0L40 40M0 80L40 40M80 80L40 40'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 80px 80px; pointer-events: none;
     }
     nav.scrolled { box-shadow: 0 1px 24px rgba(0,0,0,0.06); }
 
     .nav-inner {
       max-width: 1180px; margin: 0 auto;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 14px 32px;
+      padding: 14px 32px; position: relative; z-index: 1;
     }
 
     .nav-logo { display: flex; align-items: center; gap: 14px; text-decoration: none; }
@@ -141,6 +147,7 @@
       position: absolute; top: 0; left: 0;
       height: 100%; width: auto; object-fit: contain;
       filter: drop-shadow(0 8px 32px rgba(0,0,0,0.3));
+      opacity: 0.60;
     }
     .hero-text-side {
       flex: 1; display: flex; flex-direction: column; align-items: flex-end; text-align: right;
@@ -177,7 +184,7 @@
     }
 
     .hero-desc {
-      font-size: 17px; color: rgba(255,255,255,0.55); max-width: 520px;
+      font-size: 14px; color: rgba(255,255,255,0.55); max-width: 520px;
       margin-bottom: 40px; font-weight: 400; line-height: 1.75;
     }
 
@@ -278,7 +285,14 @@
     }
 
     /* ═══ SERVICES ═══ */
-    .services { background: var(--white); }
+    .services {
+      background: var(--white); position: relative; overflow: hidden;
+    }
+    .services::before {
+      content: ''; position: absolute; inset: 0; opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23A8873C' stroke-width='0.5'%3E%3Cpath d='M40 0L80 40L40 80L0 40Z'/%3E%3Cpath d='M40 10L70 40L40 70L10 40Z'/%3E%3Cpath d='M40 20L60 40L40 60L20 40Z'/%3E%3Ccircle cx='40' cy='40' r='8'/%3E%3Cpath d='M0 0L40 40M80 0L40 40M0 80L40 40M80 80L40 40'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 80px 80px; pointer-events: none;
+    }
     .services-list { margin-top: 56px; }
 
     .service-row {
@@ -328,7 +342,7 @@
       position: absolute; inset: 0;
       background-image: url('contact-bg.jpg');
       background-size: cover; background-position: center right;
-      opacity: 0.1;
+      opacity: 0.13;
     }
     .contact .section-inner { position: relative; z-index: 2; }
     .contact-grid {
@@ -387,7 +401,15 @@
     .form-submit:hover { background: #7E1C2B; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(155,35,53,0.3); }
 
     /* ═══ FOOTER ═══ */
-    footer { background: #FFFFFF; color: #5C4A2A; padding: 32px 32px; }
+    footer {
+      background: #FFFFFF; color: #5C4A2A; padding: 32px 32px;
+      position: relative; overflow: hidden;
+    }
+    footer::before {
+      content: ''; position: absolute; inset: 0; opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23A8873C' stroke-width='0.5'%3E%3Cpath d='M40 0L80 40L40 80L0 40Z'/%3E%3Cpath d='M40 10L70 40L40 70L10 40Z'/%3E%3Cpath d='M40 20L60 40L40 60L20 40Z'/%3E%3Ccircle cx='40' cy='40' r='8'/%3E%3Cpath d='M0 0L40 40M80 0L40 40M0 80L40 40M80 80L40 40'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: 80px 80px; pointer-events: none;
+    }
     .footer-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; justify-content: center; text-align: center; flex-direction: column; gap: 12px; }
     .footer-left { display: flex; flex-direction: row; align-items: center; gap: 10px; }
     .footer-brand { font-family: 'Montserrat', sans-serif; font-size: 16px; font-weight: 700; color: #5C4A2A; letter-spacing: 1.5px; }
