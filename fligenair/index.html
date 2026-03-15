@@ -370,7 +370,7 @@
     /* ═══ FOOTER ═══ */
     footer { background: #FFFFFF; color: #5C4A2A; padding: 32px 32px; }
     .footer-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; justify-content: center; text-align: center; flex-direction: column; gap: 12px; }
-    .footer-left { display: flex; flex-direction: column; align-items: center; }
+    .footer-left { display: flex; flex-direction: row; align-items: center; gap: 10px; }
     .footer-brand { font-size: 16px; font-weight: 700; color: #5C4A2A; letter-spacing: 1.5px; }
     .footer-brand-sub { font-size: 11px; color: var(--gold); font-weight: 500; letter-spacing: 0.4px; }
     .footer-center { text-align: center; font-size: 11px; color: var(--gray-600); line-height: 1.8; }
@@ -647,8 +647,11 @@
   <footer>
     <div class="footer-inner">
       <div class="footer-left">
-        <span class="footer-brand">FLIGEN</span>
-        <span class="footer-brand-sub" data-en="Aircrafts Trading" data-ar="تجارة الطائرات">Aircrafts Trading</span>
+        <img src="logo-icon.png" alt="Fligen" style="height: 36px; opacity: 0.7;">
+        <div style="display: flex; flex-direction: column; align-items: flex-start;">
+          <span class="footer-brand">FLIGEN</span>
+          <span class="footer-brand-sub" data-en="Aircrafts Trading" data-ar="تجارة الطائرات">Aircrafts Trading</span>
+        </div>
       </div>
       <div class="footer-center">
         <div data-en="Fligen Aircrafts Trading Ltd., 170A, Building No. 280, Taweelah, Abu Dhabi, UAE" data-ar="فليجن لتجارة الطائرات ذ.م.م، 170A، مبنى رقم 280، الطويلة، أبوظبي، الإمارات">Fligen Aircrafts Trading Ltd., 170A, Building No. 280, Taweelah, Abu Dhabi, UAE</div>
