@@ -66,12 +66,11 @@
 
     .nav-logo { display: flex; align-items: center; gap: 14px; text-decoration: none; }
     .nav-logo img { height: 48px; width: auto; }
-    .nav-logo-text { display: flex; flex-direction: column; gap: 1px; }
+    .nav-logo-text { display: flex; align-items: center; }
     .nav-logo-title {
-      font-weight: 700; font-size: 17px; color: #5C4A2A;
-      letter-spacing: 2px; line-height: 1.1;
+      font-family: 'Montserrat', sans-serif; font-weight: 700; font-size: 16px; color: #5C4A2A;
+      letter-spacing: 1.5px; line-height: 1;
     }
-    .nav-logo-subtitle { font-size: 10.5px; color: var(--gold); letter-spacing: 0.4px; font-weight: 500; }
 
     .nav-links { display: flex; align-items: center; gap: 36px; list-style: none; }
     .nav-links a {
@@ -436,8 +435,7 @@
       <a href="#" class="nav-logo">
         <img src="logo-full.png" alt="Fligen Logo">
         <div class="nav-logo-text">
-          <span class="nav-logo-title">FLIGEN</span>
-          <span class="nav-logo-subtitle" data-en="Aircrafts Trading" data-ar="تجارة الطائرات">Aircrafts Trading</span>
+          <span class="nav-logo-title" data-en="FLIGEN Aircrafts Trading" data-ar="FLIGEN تجارة الطائرات">FLIGEN Aircrafts Trading</span>
         </div>
       </a>
       <ul class="nav-links" id="navLinks">
@@ -650,7 +648,15 @@
         <span class="footer-brand" data-en="FLIGEN Aircrafts Trading" data-ar="FLIGEN تجارة الطائرات">FLIGEN Aircrafts Trading</span>
       </div>
       <div class="footer-center">
-        <div data-en="Fligen Aircrafts Trading Ltd., 170A, Building No. 280, Taweelah, Abu Dhabi, UAE" data-ar="فليجن لتجارة الطائرات ذ.م.م، 170A، مبنى رقم 280، الطويلة، أبوظبي، الإمارات">Fligen Aircrafts Trading Ltd., 170A, Building No. 280, Taweelah, Abu Dhabi, UAE</div>
+        <div style="display: inline-flex; align-items: center; gap: 6px;">
+          <span data-en="Fligen Aircrafts Trading Ltd., 170A, Building No. 280, Taweelah, Abu Dhabi, UAE" data-ar="فليجن لتجارة الطائرات ذ.م.م، 170A، مبنى رقم 280، الطويلة، أبوظبي، الإمارات">Fligen Aircrafts Trading Ltd., 170A, Building No. 280, Taweelah, Abu Dhabi, UAE</span>
+          <svg width="22" height="14" viewBox="0 0 640 480" style="opacity: 0.7; flex-shrink: 0;">
+            <rect width="640" height="160" fill="#00732f"/>
+            <rect y="160" width="640" height="160" fill="#fff"/>
+            <rect y="320" width="640" height="160" fill="#000"/>
+            <rect width="220" height="480" fill="#f00"/>
+          </svg>
+        </div>
         <div>phone: <a href="tel:+40749768909">+40749768909</a> &nbsp; e-mail: <a href="mailto:office@fligenair.com">office@fligenair.com</a> &nbsp; web: <a href="https://fligenair.com">fligenair.com</a></div>
       </div>
       <div class="footer-right">
@@ -662,6 +668,7 @@
       <svg viewBox="0 0 40 40"><path d="M20 2l6 6-6 6-6-6 6-6zm0 26l6 6-6 6-6-6 6-6zm-14-14l6 6-6 6-6-6 6-6zm28 0l6 6-6 6-6-6 6-6zM20 14l4 4-4 4-4-4 4-4z"/></svg>
       <div class="line"></div>
     </div>
+    <div style="text-align: center; font-size: 10px; color: var(--gray-400); padding-top: 10px;">&copy; 2026 Fligen Aircrafts Trading Ltd. All rights reserved.</div>
   </footer>
 
   <script>
