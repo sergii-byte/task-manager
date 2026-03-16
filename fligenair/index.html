@@ -649,9 +649,11 @@
             </div>
           </div>
         </div>
-        <form class="contact-form fade-up" name="contact" method="POST" netlify data-netlify="true" netlify-honeypot="bot-field">
-          <input type="hidden" name="form-name" value="contact">
-          <p style="display:none"><input name="bot-field"></p>
+        <form class="contact-form fade-up" name="contact" method="POST" action="https://formsubmit.co/office@fligenair.com">
+          <input type="hidden" name="_subject" value="New inquiry from fligenair.com">
+          <input type="hidden" name="_captcha" value="false">
+          <input type="hidden" name="_next" value="https://fligenair.com/">
+          <input type="text" name="_honey" style="display:none">
           <h3 data-en="Send us a message" data-ar="أرسل لنا رسالة">Send us a message</h3>
           <div class="form-row">
             <div class="form-group">
@@ -753,41 +755,6 @@
       });
     });
 
-    // Contact form AJAX submit
-    const contactForm = document.querySelector('form[name="contact"]');
-    contactForm.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const btn = contactForm.querySelector('.form-submit');
-      const origText = btn.textContent;
-      btn.textContent = '...';
-      btn.disabled = true;
-
-      fetch('/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams(new FormData(contactForm)).toString()
-      })
-      .then(res => {
-        if (res.ok) {
-          contactForm.innerHTML = '<div style="text-align:center;padding:48px 0;">' +
-            '<div style="font-size:40px;margin-bottom:16px;">✓</div>' +
-            '<h3 style="color:var(--green);margin-bottom:12px;">' +
-            (currentLang === 'ar' ? 'شكراً لك!' : 'Thank you!') + '</h3>' +
-            '<p style="color:var(--gray-600);font-size:15px;line-height:1.7;">' +
-            (currentLang === 'ar' ? 'تم استلام رسالتك. سيتواصل معك فريقنا قريباً.' : 'Your message has been received. Our team will get back to you shortly.') +
-            '</p></div>';
-        } else {
-          btn.textContent = origText;
-          btn.disabled = false;
-          alert(currentLang === 'ar' ? 'حدث خطأ. يرجى المحاولة مرة أخرى.' : 'Something went wrong. Please try again.');
-        }
-      })
-      .catch(() => {
-        btn.textContent = origText;
-        btn.disabled = false;
-        alert(currentLang === 'ar' ? 'حدث خطأ. يرجى المحاولة مرة أخرى.' : 'Something went wrong. Please try again.');
-      });
-    });
   </script>
 </body>
 </html>
