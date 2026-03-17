@@ -20,7 +20,31 @@
       "Bash(cp logo_extracted_0.png logo.png)",
       "Bash(cp logo_extracted_2.png logo-gold.png)",
       "Bash(python3 -m pip install Pillow)",
-      "Bash(ls \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\logo-\"*)"
+      "Bash(ls \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\logo-\"*)",
+      "WebFetch(domain:c7.alamy.com)",
+      "Bash(python3:*)",
+      "Bash(ls \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\"/arabic*)",
+      "Bash(cp \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\fligen\\\\1.jpg\" \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\jet-tarmac.jpg\")",
+      "Bash(cp \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\fligen\\\\2.png\" \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\evtol.png\")",
+      "Bash(cp \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\fligen\\\\4.jpg\" \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\boeing-front.jpg\")",
+      "Bash(cp \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\fligen\\\\5.jpg\" \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\jet-dubai.jpg\")",
+      "Bash(cp \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\fligen\\\\6.jpg\" \"C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\Claude\\\\.claude\\\\worktrees\\\\keen-antonelli\\\\fligenair\\\\light-aircraft.jpg\")",
+      "Bash(grep -i -E '\\\\.\\(jpg|jpeg|png|webp\\)$')",
+      "Bash(cp \"/c/Users/sergi/OneDrive/Рабочий стол/fligen/1.jpg\" \"/c/Users/sergi/OneDrive/Рабочий стол/Claude/.claude/worktrees/keen-antonelli/fligenair/jet-sunset.jpg\")",
+      "Bash(cp \"/c/Users/sergi/OneDrive/Рабочий стол/fligen/5.jpg\" \"/c/Users/sergi/OneDrive/Рабочий стол/Claude/.claude/worktrees/keen-antonelli/fligenair/jet-dubai-flowers.jpg\")",
+      "Bash(cp \"/c/Users/sergi/OneDrive/Рабочий стол/fligen/4.jpg\" \"/c/Users/sergi/OneDrive/Рабочий стол/Claude/.claude/worktrees/keen-antonelli/fligenair/boeing-747.jpg\")",
+      "Bash(cp \"/c/Users/sergi/OneDrive/Рабочий стол/fligen/2.png\" \"/c/Users/sergi/OneDrive/Рабочий стол/Claude/.claude/worktrees/keen-antonelli/fligenair/evtol-flight.png\")",
+      "Bash(cp \"/c/Users/sergi/OneDrive/Рабочий стол/fligen/6.jpg\" \"/c/Users/sergi/OneDrive/Рабочий стол/Claude/.claude/worktrees/keen-antonelli/fligenair/light-fleet.jpg\")",
+      "Read(//mnt/c/Users/sergi/OneDrive/Рабочий стол/**)",
+      "Read(//c/Users/sergi/OneDrive/Рабочий стол/fligen//**)",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Users\\\\sergi\\\\OneDrive\\\\Рабочий стол\\\\fligen'' | Format-Table Name, Length\")",
+      "Bash(npx netlify-cli:*)",
+      "Bash(netlify status:*)",
+      "Bash(curl -sI https://fligenair.com/)",
+      "Bash(curl -sI \"https://fligenair.com/thank-you.html\")",
+      "Bash(curl -s \"https://fligenair.com/\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://fligenair.com/\" -H \"Content-Type: application/x-www-form-urlencoded\" -d \"form-name=contact&name=Test&company=Test&email=test@test.com&subject=engines&message=Test+message\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://fligenair.com/\" -H \"Content-Type: application/x-www-form-urlencoded\" -d \"form-name=contact&name=Test&company=TestCo&email=test@test.com&subject=engines&message=Test+message\")"
     ]
   }
 }

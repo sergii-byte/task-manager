@@ -407,9 +407,20 @@
       .mobile-menu-btn { display: block; }
       .hero-content { padding: 120px 20px 80px; }
       .hero-top { flex-direction: column; }
-      .hero-logo-side img { max-width: 140px; height: auto; }
+      .hero-logo-side { width: 100%; position: static; display: flex; justify-content: center; margin-bottom: 20px; }
+      .hero-logo-side img { position: static; height: 120px; width: auto; }
+      .hero-text-side { align-items: center; text-align: center; }
+      .hero-badge { align-self: center; }
+      .hero-desc { text-align: center; }
+      .hero-content { padding: 100px 20px 60px; }
+      .hero-text-side img { max-width: 85%; height: auto !important; }
+      .arabesque-divider { transform: none !important; }
+      .hero-motto { transform: none !important; }
       .hero-motto { font-size: 12px !important; }
-      .about-grid, .contact-grid, .compliance-grid { grid-template-columns: 1fr; gap: 36px; }
+      .about-grid, .contact-grid, .compliance-grid { grid-template-columns: 1fr !important; gap: 36px !important; }
+      .service-row { flex-direction: column; }
+      .service-num { font-size: 32px; min-width: auto; }
+      .service-image { max-width: 100%; }
       .contact-info { padding-top: 0; }
       .form-row { grid-template-columns: 1fr; }
       section { padding: 72px 20px; }
