@@ -997,26 +997,65 @@ const App = {
     // ===== AI Preview =====
     showAiPreview(data) {
         const container = document.getElementById('ai-preview-content');
-        container.innerHTML = `<div class="ai-preview">
-            <div class="ai-preview-label">\u2728 ${this.t('aiSuggestion')}</div>
-            <div class="ai-preview-content">
+        const action = data.action || 'create_task';
+        let fieldsHtml = '';
+
+        if (action === 'create_client') {
+            fieldsHtml = `
+                <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newClient')}</strong></div>
+                <div class="ai-field"><span class="ai-field-label">${this.t('clientName')}:</span> <strong>${this.esc(data.name)}</strong></div>
+                ${data.email ? `<div class="ai-field"><span class="ai-field-label">Email:</span> ${this.esc(data.email)}</div>` : ''}
+                ${data.telegram ? `<div class="ai-field"><span class="ai-field-label">Telegram:</span> ${this.esc(data.telegram)}</div>` : ''}
+                ${data.notes ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.notes)}</div>` : ''}`;
+        } else if (action === 'create_company') {
+            fieldsHtml = `
+                <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newCompany')}</strong></div>
+                <div class="ai-field"><span class="ai-field-label">${this.t('companyName')}:</span> <strong>${this.esc(data.name)}</strong></div>
+                ${data.ownerName ? `<div class="ai-field"><span class="ai-field-label">${this.t('statClients')}:</span> ${this.esc(data.ownerName)}</div>` : ''}
+                ${data.notes ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.notes)}</div>` : ''}`;
+        } else if (action === 'create_project') {
+            fieldsHtml = `
+                <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newProject')}</strong></div>
+                <div class="ai-field"><span class="ai-field-label">${this.t('projectName')}:</span> <strong>${this.esc(data.name)}</strong></div>
+                ${data.clientName ? `<div class="ai-field"><span class="ai-field-label">${this.t('statCompanies')}:</span> ${this.esc(data.clientName)}</div>` : ''}
+                ${data.projectType ? `<div class="ai-field"><span class="ai-field-label">${this.t('typeLabel')}:</span> ${data.projectType}</div>` : ''}
+                ${data.jurisdiction ? `<div class="ai-field"><span class="ai-field-label">${this.t('jurisdictionLabel')}:</span> ${this.esc(data.jurisdiction)}</div>` : ''}
+                ${data.deadline ? `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${data.deadline}</div>` : ''}`;
+        } else if (action === 'create_chain') {
+            fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')}</strong></div>`;
+            (data.items || []).forEach((item, i) => {
+                const labels = { create_client: this.t('newClient'), create_company: this.t('newCompany'), create_project: this.t('newProject'), create_task: this.t('newTask') };
+                fieldsHtml += `<div style="margin:8px 0 4px;font-weight:600;font-size:12px;color:var(--accent)">${i+1}. ${labels[item.action] || item.action}</div>`;
+                fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${item.title ? this.t('taskTitle') : this.t('clientName')}:</span> <strong>${this.esc(item.name || item.title || '')}</strong></div>`;
+                if (item.projectType) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('typeLabel')}:</span> ${item.projectType}</div>`;
+                if (item.jurisdiction) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('jurisdictionLabel')}:</span> ${this.esc(item.jurisdiction)}</div>`;
+                if (item.deadline) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${item.deadline}</div>`;
+                if (item.priority) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('priority')}:</span> ${item.priority}</div>`;
+            });
+        } else {
+            // create_task (default)
+            fieldsHtml = `
+                <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newTask')}</strong></div>
                 <div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> <strong>${this.esc(data.title)}</strong></div>
-                ${data.project ? `<div class="ai-field"><span class="ai-field-label">Project:</span> ${this.esc(data.project)}</div>` : ''}
+                ${data.projectName ? `<div class="ai-field"><span class="ai-field-label">Project:</span> ${this.esc(data.projectName)}</div>` : ''}
                 ${data.priority ? `<div class="ai-field"><span class="ai-field-label">${this.t('priority')}:</span> ${data.priority}</div>` : ''}
                 ${data.deadline ? `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${data.deadline}</div>` : ''}
                 ${data.isProcedural ? `<div class="ai-field"><span class="procedural-badge">${this.t('procedural')}</span></div>` : ''}
-                ${data.subtasks?.length ? `<div class="ai-field"><span class="ai-field-label">Subtasks:</span><ul style="margin:4px 0 0 16px;font-size:12px">${data.subtasks.map(s=>'<li>'+this.esc(s)+'</li>').join('')}</ul></div>` : ''}
-            </div>
+                ${data.notes ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.notes)}</div>` : ''}
+                ${data.subtasks?.length ? `<div class="ai-field"><span class="ai-field-label">Subtasks:</span><ul style="margin:4px 0 0 16px;font-size:12px">${data.subtasks.map(s=>'<li>'+this.esc(s)+'</li>').join('')}</ul></div>` : ''}`;
+        }
+
+        container.innerHTML = `<div class="ai-preview">
+            <div class="ai-preview-label">\u2728 ${this.t('aiSuggestion')}</div>
+            <div class="ai-preview-content">${fieldsHtml}</div>
         </div>`;
 
         const actionsEl = document.getElementById('ai-preview-actions');
         actionsEl.innerHTML = `
             <button class="btn btn-glass" id="ai-btn-cancel">${this.t('cancel')}</button>
-            <button class="btn btn-glass" id="ai-btn-edit">${this.t('edit')}</button>
             <button class="btn" id="ai-btn-accept">${this.t('accept')}</button>
         `;
         actionsEl.querySelector('#ai-btn-cancel').onclick = () => this.closeAiPreview();
-        actionsEl.querySelector('#ai-btn-edit').onclick = () => this.editAiResult();
         actionsEl.querySelector('#ai-btn-accept').onclick = () => this.acceptAiResult();
 
         document.getElementById('ai-overlay').classList.add('open');
@@ -1026,34 +1065,93 @@ const App = {
 
     _pendingAiData: null,
 
-    editAiResult() {
-        if (!this._pendingAiData) return;
-        this.closeAiPreview();
-        this.showModal('task');
-        const form = document.getElementById('modal-form');
-        const d = this._pendingAiData;
-        if (d.title) form.querySelector('[name=title]').value = d.title;
-        if (d.priority) form.querySelector('[name=priority]').value = d.priority;
-        if (d.deadline) form.querySelector('[name=deadline]').value = d.deadline;
-        if (d.isProcedural) { const cb = form.querySelector('[name=isProcedural]'); if (cb) cb.checked = true; }
-        if (d.notes) form.querySelector('[name=notes]').value = d.notes;
-    },
-
     acceptAiResult() {
         if (!this._pendingAiData) return;
         const d = this._pendingAiData;
-        let projectId = this.currentProjectId || d.projectId;
-        if (!projectId) {
-            this.toast(this.t('selectProjectFirst'), 'warning');
-            this.closeAiPreview();
-            return;
+        const action = d.action || 'create_task';
+
+        if (action === 'create_client') {
+            const o = Store.addOwner({ name: d.name, email: d.email || '', telegram: d.telegram || '', notes: d.notes || '' });
+            this.toast(`${this.t('clientCreated')}: ${d.name}`, 'success');
+            this.selectOwner(o.id);
         }
-        Store.addTask({ projectId, title: d.title, priority: d.priority || 'medium', deadline: d.deadline || '', isProcedural: d.isProcedural || false, notes: d.notes || '', tags: d.tagIds || [] });
-        if (d.subtasks?.length) d.subtasks.forEach(sub => Store.addTask({ projectId, title: sub, priority: 'medium' }));
+
+        else if (action === 'create_company') {
+            let ownerId = d.ownerId || this.currentOwnerId;
+            if (!ownerId) {
+                const owners = Store.getOwners();
+                if (owners.length === 1) ownerId = owners[0].id;
+                else { this.toast(this.t('selectClientFirst'), 'warning'); this.closeAiPreview(); return; }
+            }
+            const c = Store.addClient({ name: d.name, ownerId, notes: d.notes || '' });
+            this.toast(`${this.t('companyCreated')}: ${d.name}`, 'success');
+            this.selectClient(c.id);
+        }
+
+        else if (action === 'create_project') {
+            let clientId = d.clientId || this.currentClientId;
+            if (!clientId) {
+                const clients = Store.getClients();
+                if (clients.length === 1) clientId = clients[0].id;
+                else { this.toast(this.t('selectCompanyFirst'), 'warning'); this.closeAiPreview(); return; }
+            }
+            const p = Store.addProject({ name: d.name, clientId, projectType: d.projectType || '', jurisdiction: d.jurisdiction || '', status: d.status || 'active', deadline: d.deadline || '' });
+            this.toast(`${this.t('projectCreated')}: ${d.name}`, 'success');
+            this.selectProject(p.id);
+        }
+
+        else if (action === 'create_chain') {
+            let lastOwnerId = this.currentOwnerId;
+            let lastClientId = this.currentClientId;
+            let lastProjectId = this.currentProjectId;
+            const items = d.items || [];
+
+            items.forEach(item => {
+                if (item.action === 'create_client') {
+                    const o = Store.addOwner({ name: item.name, email: item.email || '', telegram: item.telegram || '', notes: item.notes || '' });
+                    lastOwnerId = o.id;
+                } else if (item.action === 'create_company') {
+                    const oid = item.ownerId || lastOwnerId;
+                    if (!oid) return;
+                    const c = Store.addClient({ name: item.name, ownerId: oid, notes: item.notes || '' });
+                    lastClientId = c.id;
+                } else if (item.action === 'create_project') {
+                    const cid = item.clientId || lastClientId;
+                    if (!cid) return;
+                    const p = Store.addProject({ name: item.name, clientId: cid, projectType: item.projectType || '', jurisdiction: item.jurisdiction || '', status: item.status || 'active', deadline: item.deadline || '' });
+                    lastProjectId = p.id;
+                } else if (item.action === 'create_task') {
+                    const pid = item.projectId || lastProjectId;
+                    if (!pid) return;
+                    Store.addTask({ projectId: pid, title: item.title, priority: item.priority || 'medium', deadline: item.deadline || '', isProcedural: item.isProcedural || false, notes: item.notes || '', tags: item.tagIds || [] });
+                    if (item.subtasks?.length) item.subtasks.forEach(sub => Store.addTask({ projectId: pid, title: sub, priority: 'medium' }));
+                }
+            });
+
+            this.toast(`${this.t('created')}: ${items.length} items`, 'success');
+            if (lastProjectId) this.selectProject(lastProjectId);
+            else if (lastClientId) this.selectClient(lastClientId);
+            else if (lastOwnerId) this.selectOwner(lastOwnerId);
+            else this.showDashboard();
+        }
+
+        else {
+            // create_task
+            let projectId = this.currentProjectId || d.projectId;
+            if (!projectId) {
+                const projects = Store.getProjects();
+                if (projects.length === 1) projectId = projects[0].id;
+                else { this.toast(this.t('selectProjectFirst'), 'warning'); this.closeAiPreview(); return; }
+            }
+            Store.addTask({ projectId, title: d.title, priority: d.priority || 'medium', deadline: d.deadline || '', isProcedural: d.isProcedural || false, notes: d.notes || '', tags: d.tagIds || [] });
+            if (d.subtasks?.length) d.subtasks.forEach(sub => Store.addTask({ projectId, title: sub, priority: 'medium' }));
+            this.toast(`${this.t('taskCreated')}: ${d.title}`, 'success');
+            if (this.currentProjectId) this.renderProject();
+        }
+
         this._pendingAiData = null;
         this.closeAiPreview();
         document.getElementById('qi-text').value = '';
-        this.toast(this.t('taskCreated') + ': ' + d.title, 'success');
         this.refresh();
     },
 

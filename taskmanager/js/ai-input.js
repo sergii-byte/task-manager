@@ -5,22 +5,19 @@ const AiInput = {
 
     // --- Voice Input ---
     toggleMic() {
-        if (this.isRecording) {
-            this.stopMic();
-        } else {
-            this.startMic();
-        }
+        if (this.isRecording) this.stopMic();
+        else this.startMic();
     },
 
     startMic() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            alert('Ваш браузер не поддерживает голосовой ввод. Используйте Chrome или Edge.');
+            App.toast('Browser does not support voice input. Use Chrome or Edge.', 'error');
             return;
         }
 
         this.recognition = new SpeechRecognition();
-        this.recognition.lang = 'ru-RU';
+        this.recognition.lang = I18n.lang === 'uk' ? 'uk-UA' : 'en-US';
         this.recognition.interimResults = true;
         this.recognition.continuous = true;
 
@@ -47,7 +44,6 @@ const AiInput = {
 
         this.recognition.onend = () => {
             if (this.isRecording) {
-                // Auto-restart if still recording
                 try { this.recognition.start(); } catch(e) {}
             }
         };
@@ -74,15 +70,15 @@ const AiInput = {
         if (this.isRecording) this.stopMic();
 
         if (!this.apiKey) {
-            alert('Укажите Claude API Key в настройках');
+            App.toast(I18n.t('setApiKey'), 'warning');
             App.showSettings();
             return;
         }
 
-        // Show loading
         const sendBtn = document.getElementById('qi-send');
         sendBtn.disabled = true;
-        input.placeholder = 'AI обрабатывает...';
+        sendBtn.classList.add('loading');
+        input.placeholder = I18n.t('aiProcessing');
 
         try {
             const context = this.buildContext();
@@ -93,10 +89,11 @@ const AiInput = {
             App.showAiPreview(parsed);
         } catch (e) {
             console.error('AI error:', e);
-            alert('Ошибка AI: ' + e.message);
+            App.toast('AI error: ' + e.message, 'error');
         } finally {
             sendBtn.disabled = false;
-            input.placeholder = 'Опишите задачу текстом или голосом — AI поможет оформить...';
+            sendBtn.classList.remove('loading');
+            input.placeholder = I18n.t('quickInputPlaceholder');
         }
     },
 
@@ -106,52 +103,70 @@ const AiInput = {
         const projects = Store.getProjects();
         const tags = Store.getTags();
 
-        let context = 'Текущая структура данных:\n';
+        let context = 'Current data structure:\n';
 
-        owners.forEach(o => {
-            context += `\nБенефициар: "${o.name}" (id: ${o.id})\n`;
-            const ownerClients = clients.filter(c => c.ownerId === o.id);
-            ownerClients.forEach(c => {
-                context += `  Компания: "${c.name}" (id: ${c.id})\n`;
-                const clientProjects = projects.filter(p => p.clientId === c.id);
-                clientProjects.forEach(p => {
-                    context += `    Проект: "${p.name}" (id: ${p.id}, тип: ${p.projectType || 'не указан'}, юрисдикция: ${p.jurisdiction || 'не указана'})\n`;
+        if (owners.length === 0) {
+            context += '\nNo clients yet (empty system).\n';
+        } else {
+            owners.forEach(o => {
+                context += `\nClient: "${o.name}" (id: ${o.id})\n`;
+                const ownerClients = clients.filter(c => c.ownerId === o.id);
+                ownerClients.forEach(c => {
+                    context += `  Company: "${c.name}" (id: ${c.id})\n`;
+                    const clientProjects = projects.filter(p => p.clientId === c.id);
+                    clientProjects.forEach(p => {
+                        context += `    Project: "${p.name}" (id: ${p.id}, type: ${p.projectType || 'not set'}, jurisdiction: ${p.jurisdiction || 'not set'})\n`;
+                    });
                 });
             });
-        });
+        }
 
         if (tags.length) {
-            context += '\nДоступные теги: ' + tags.map(t => `"${t.name}" (id: ${t.id})`).join(', ') + '\n';
+            context += '\nAvailable tags: ' + tags.map(t => `"${t.name}" (id: ${t.id})`).join(', ') + '\n';
         }
 
-        if (App.currentProjectId) {
-            context += `\nТекущий выбранный проект ID: ${App.currentProjectId}\n`;
-        }
+        if (App.currentProjectId) context += `\nCurrently selected project ID: ${App.currentProjectId}\n`;
+        if (App.currentClientId) context += `Currently selected company ID: ${App.currentClientId}\n`;
+        if (App.currentOwnerId) context += `Currently selected client ID: ${App.currentOwnerId}\n`;
 
         const today = new Date().toISOString().split('T')[0];
-        context += `\nСегодня: ${today}\n`;
+        context += `\nToday: ${today}\n`;
 
         return context;
     },
 
     async callClaude(userText, context) {
-        const systemPrompt = `Ты — юридический ассистент для task manager. Твоя задача — парсить текст пользователя и создавать структурированную задачу.
+        const systemPrompt = `You are a legal assistant for a task manager app called LegalFlow. The app has a hierarchy: Clients (people) → Companies → Projects → Tasks.
 
 ${context}
 
-Пользователь описывает задачу в свободной форме. Ты должен вернуть JSON объект с полями:
-- title: чёткое название задачи (краткое, 3-10 слов)
-- notes: описание/детали если есть
-- priority: "low", "medium", или "high"
-- deadline: дата в формате YYYY-MM-DD если упоминается
-- isProcedural: true если это процессуальный/регуляторный срок
-- projectId: ID проекта если можешь определить из контекста
-- project: название проекта (для отображения)
-- tagIds: массив ID тегов которые подходят
-- tags: массив названий тегов (для отображения)
-- subtasks: массив подзадач если задача сложная (каждая — строка с названием)
+The user describes what they want in free form (any language — Ukrainian, English, Russian, etc). You must determine what they want to create and return a JSON object.
 
-Отвечай ТОЛЬКО валидным JSON, без markdown, без пояснений.`;
+IMPORTANT: Determine the "action" based on what user says:
+
+1. If user wants to add a CLIENT (person): action = "create_client"
+   Return: { "action": "create_client", "name": "...", "email": "..." (optional), "telegram": "..." (optional), "notes": "..." (optional) }
+
+2. If user wants to add a COMPANY for a client: action = "create_company"
+   Return: { "action": "create_company", "name": "...", "ownerId": "..." (client ID if you can determine), "ownerName": "..." (for display), "notes": "..." (optional) }
+
+3. If user wants to add a PROJECT: action = "create_project"
+   Return: { "action": "create_project", "name": "...", "clientId": "..." (company ID if known), "clientName": "..." (for display), "projectType": "licensing"|"corporate"|"contracts"|"compliance" (if applicable), "jurisdiction": "..." (if mentioned), "status": "active", "deadline": "YYYY-MM-DD" (if mentioned) }
+
+4. If user wants to add a TASK: action = "create_task"
+   Return: { "action": "create_task", "title": "...", "notes": "...", "priority": "low"|"medium"|"high", "deadline": "YYYY-MM-DD" (if mentioned), "isProcedural": true/false, "projectId": "..." (if you can determine from context), "projectName": "..." (for display), "tagIds": [...], "subtasks": ["...", "..."] (if complex task) }
+
+5. If user wants to create MULTIPLE things at once (e.g. "add client John with company XYZ and project licensing"): action = "create_chain"
+   Return: { "action": "create_chain", "items": [ {each item as above} ] }
+
+Rules:
+- If the user mentions a specific existing client/company/project by name, match it to the IDs from context
+- If creating a task and no project exists yet, suggest create_chain with the full chain
+- Dates: convert relative dates ("friday", "next week", "через 3 дня") to YYYY-MM-DD format
+- Priority: default to "medium" unless user indicates urgency
+- isProcedural: true if it's a court/regulatory/filing deadline
+- NEVER suggest Russia as jurisdiction
+- Respond with ONLY valid JSON, no markdown, no explanations`;
 
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -180,15 +195,11 @@ ${context}
 
     parseResponse(text) {
         try {
-            // Try to extract JSON from response
             const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
-            }
+            if (jsonMatch) return JSON.parse(jsonMatch[0]);
             throw new Error('No JSON found');
         } catch (e) {
-            // Fallback: use raw text as title
-            return { title: text.slice(0, 100), notes: text };
+            return { action: 'create_task', title: text.slice(0, 100), notes: text };
         }
     },
 };

@@ -157,6 +157,10 @@ const I18n = {
             // Placeholders
             clientNamePlaceholder: 'e.g. John Smith',
             notesPlaceholder: 'Any additional notes...',
+            setApiKey: 'Set Claude API Key in Settings first',
+            createMultiple: 'Create multiple items',
+            selectClientFirst: 'Select a client first',
+            selectCompanyFirst: 'Select a company first',
         },
         uk: {
             logo: '⚖ LegalFlow',
@@ -293,6 +297,10 @@ const I18n = {
             confirmDeleteTaskText: 'Цю дію неможливо скасувати.',
             clientNamePlaceholder: 'наприклад, Іван Петренко',
             notesPlaceholder: 'Будь-які додаткові нотатки...',
+            setApiKey: 'Вкажіть Claude API Key в налаштуваннях',
+            createMultiple: 'Створити декілька елементів',
+            selectClientFirst: 'Спочатку оберіть клієнта',
+            selectCompanyFirst: 'Спочатку оберіть компанію',
         },
     },
 
