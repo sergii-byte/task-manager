@@ -138,6 +138,25 @@ const I18n = {
             theme: 'Theme',
             light: 'Light',
             dark: 'Dark',
+            // Welcome
+            welcomeMessage: 'Welcome to LegalFlow! Start by adding your first client.',
+            // Toast messages
+            clientCreated: 'Client created',
+            companyCreated: 'Company created',
+            projectCreated: 'Project created',
+            taskCreated: 'Task created',
+            deleted: 'Deleted',
+            created: 'created',
+            timerStarted: 'Timer started',
+            timerStopped: 'Timer stopped',
+            // Confirm dialogs
+            confirmDeleteClientText: 'All companies, projects and tasks will be permanently deleted.',
+            confirmDeleteCompanyText: 'All projects and tasks will be permanently deleted.',
+            confirmDeleteProjectText: 'All tasks will be permanently deleted.',
+            confirmDeleteTaskText: 'This action cannot be undone.',
+            // Placeholders
+            clientNamePlaceholder: 'e.g. John Smith',
+            notesPlaceholder: 'Any additional notes...',
         },
         uk: {
             logo: '⚖ LegalFlow',
@@ -259,6 +278,21 @@ const I18n = {
             theme: 'Тема',
             light: 'Світла',
             dark: 'Темна',
+            welcomeMessage: 'Ласкаво просимо до LegalFlow! Почніть з додавання першого клієнта.',
+            clientCreated: 'Клієнта створено',
+            companyCreated: 'Компанію створено',
+            projectCreated: 'Проєкт створено',
+            taskCreated: 'Задачу створено',
+            deleted: 'Видалено',
+            created: 'створено',
+            timerStarted: 'Таймер запущено',
+            timerStopped: 'Таймер зупинено',
+            confirmDeleteClientText: 'Всі компанії, проєкти та задачі будуть видалені назавжди.',
+            confirmDeleteCompanyText: 'Всі проєкти та задачі будуть видалені назавжди.',
+            confirmDeleteProjectText: 'Всі задачі будуть видалені назавжди.',
+            confirmDeleteTaskText: 'Цю дію неможливо скасувати.',
+            clientNamePlaceholder: 'наприклад, Іван Петренко',
+            notesPlaceholder: 'Будь-які додаткові нотатки...',
         },
     },
 
@@ -274,12 +308,13 @@ const I18n = {
         return this.translations[this._lang]?.[key] || this.translations.en[key] || key;
     },
 
+    setLang(newLang) {
+        this.lang = newLang;
+    },
+
     toggle() {
         this.lang = this._lang === 'en' ? 'uk' : 'en';
+        App.applyI18n();
         App.refresh();
-        App.renderSidebar();
-        // Update quick input placeholder
-        const qi = document.getElementById('qi-text');
-        if (qi) qi.placeholder = this.t('quickInputPlaceholder');
     },
 };
