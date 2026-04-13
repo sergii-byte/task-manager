@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "fligenair",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "3000", "-d", "fligenair"],
-      "port": 3000
+      "name": "misha-comics",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3456"],
+      "port": 3456
+    },
+    {
+      "name": "taskflow",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3457", "-d", "taskmanager"],
+      "port": 3457
     }
   ]
 }
