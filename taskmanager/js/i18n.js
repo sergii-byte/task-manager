@@ -171,6 +171,16 @@ const I18n = {
             noProject: '— No project (Inbox) —',
             taskAssigned: 'Task assigned to project',
             addTaskHere: '+ Task',
+            // Hours / time logging
+            hours: 'Hours',
+            logHours: 'Log Hours',
+            hoursLogged: 'Hours logged',
+            taskNotFound: 'Task not found — log via task page',
+            invalidHours: 'Hours must be greater than 0',
+            chainPartial: 'Some steps were skipped',
+            // Sidebar
+            sectionWorkspace: 'Workspace',
+            sectionClients: 'Clients',
         },
         uk: {
             logo: '⚖ LegalFlow',
@@ -321,6 +331,14 @@ const I18n = {
             noProject: '— Без проєкту (Вхідні) —',
             taskAssigned: 'Задачу призначено до проєкту',
             addTaskHere: '+ Задача',
+            hours: 'Години',
+            logHours: 'Залогувати години',
+            hoursLogged: 'Години залоговано',
+            taskNotFound: 'Задачу не знайдено — залогуйте через сторінку задачі',
+            invalidHours: 'Години мають бути більше 0',
+            chainPartial: 'Деякі кроки пропущено',
+            sectionWorkspace: 'Робочий простір',
+            sectionClients: 'Клієнти',
         },
     },
 

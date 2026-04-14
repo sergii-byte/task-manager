@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LegalFlow</title>
-    <link rel="stylesheet" href="css/style.css?v=4">
+    <link rel="stylesheet" href="css/style.css?v=7">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2696;</text></svg>">
 </head>
 <body>
@@ -31,24 +31,23 @@
 
             <!-- Nav -->
             <div class="sidebar-section">
-                <div class="section-label">
-                    <span data-i18n="menu">MENU</span>
-                </div>
-                <ul class="nav-list">
+                <ul class="nav-list nav-main">
                     <li class="nav-item active" id="nav-dashboard" data-view="dashboard">
-                        <span>&#x1F4CA; <span data-i18n="dashboard">Dashboard</span></span>
+                        <span class="nav-icon">&#x1F4CA;</span><span class="nav-label" data-i18n="dashboard">Dashboard</span>
                     </li>
                     <li class="nav-item" id="nav-calendar" data-view="calendar">
-                        <span>&#x1F4C5; <span data-i18n="calendar">Calendar</span></span>
+                        <span class="nav-icon">&#x1F4C5;</span><span class="nav-label" data-i18n="calendar">Calendar</span>
                     </li>
                     <li class="nav-item" id="nav-inbox" data-view="inbox">
-                        <span>&#x1F4E5; <span data-i18n="inbox">Inbox</span></span>
+                        <span class="nav-icon">&#x1F4E5;</span><span class="nav-label" data-i18n="inbox">Inbox</span>
                         <span class="badge" id="inbox-count"></span>
                     </li>
                 </ul>
 
-                <div class="section-label" style="margin-top: 8px;">
-                    <span data-i18n="clients">CLIENTS</span>
+                <div class="section-divider"></div>
+
+                <div class="section-label">
+                    <span data-i18n="sectionClients">Clients</span>
                     <button class="add-btn" id="add-client-btn" title="Add client">+</button>
                 </div>
                 <ul id="owners-list" class="nav-list"></ul>
@@ -145,6 +144,7 @@
                 </div>
                 <div id="owner-info" class="info-bar"></div>
                 <div id="clients-grid" class="cards-grid"></div>
+                <div id="owner-tasks-section" class="section" style="margin-top:24px"></div>
             </div>
 
             <!-- Company view -->
@@ -163,6 +163,7 @@
                 </div>
                 <div id="client-info" class="info-bar"></div>
                 <div id="projects-grid" class="cards-grid"></div>
+                <div id="client-tasks-section" class="section" style="margin-top:24px"></div>
             </div>
 
             <!-- Project view -->
@@ -279,10 +280,10 @@
     <!-- Toast container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="js/store.js?v=4"></script>
-    <script src="js/i18n.js?v=4"></script>
-    <script src="js/sheets-sync.js?v=4"></script>
-    <script src="js/ai-input.js?v=4"></script>
-    <script src="js/app.js?v=4"></script>
+    <script src="js/store.js?v=7"></script>
+    <script src="js/i18n.js?v=7"></script>
+    <script src="js/sheets-sync.js?v=7"></script>
+    <script src="js/ai-input.js?v=7"></script>
+    <script src="js/app.js?v=7"></script>
 </body>
 </html>

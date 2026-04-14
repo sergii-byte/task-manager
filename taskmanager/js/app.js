@@ -415,12 +415,92 @@ const App = {
             this.renderCalendarMini(containerId);
         });
 
-        // Click on day to create task with that deadline
+        // Click on day: show day detail (tasks + add button)
         el.querySelectorAll('.cal-day.clickable').forEach(dayEl => {
             dayEl.addEventListener('click', () => {
                 const date = dayEl.dataset.date;
-                if (date) this.showModal('task', null, { deadline: date });
+                if (date) this.showDayDetail(date);
             });
+        });
+    },
+
+    // ===== Day detail popover =====
+    showDayDetail(dateStr) {
+        const tasks = Store.getTasks().filter(t => t.deadline === dateStr);
+        const d = new Date(dateStr + 'T00:00:00');
+        const locale = I18n.lang === 'uk' ? 'uk-UA' : 'en-GB';
+        const dateLabel = d.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay open';
+        overlay.id = 'day-detail-overlay';
+
+        let tasksHtml = '';
+        if (tasks.length === 0) {
+            tasksHtml = `<div class="empty-state" style="padding:20px 0">
+                <p style="color:var(--text-3);font-size:13px">${this.t('noDeadlines')}</p>
+            </div>`;
+        } else {
+            const sorted = [...tasks].sort((a, b) => {
+                if (a.status === 'done' && b.status !== 'done') return 1;
+                if (b.status === 'done' && a.status !== 'done') return -1;
+                if (a.isProcedural && !b.isProcedural) return -1;
+                if (!a.isProcedural && b.isProcedural) return 1;
+                return 0;
+            });
+            tasksHtml = `<div class="tasks-list">${sorted.map(t => this.renderTaskItem(t, true)).join('')}</div>`;
+        }
+
+        overlay.innerHTML = `<div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3>\uD83D\uDCC5 ${this.esc(dateLabel)}</h3>
+                <button class="icon-btn" id="day-detail-close">\u00D7</button>
+            </div>
+            <div class="modal-body">
+                <div style="font-size:12px;color:var(--text-3);margin-bottom:10px">${tasks.length} ${this.t('tasks')}</div>
+                ${tasksHtml}
+                <div class="form-actions" style="margin-top:16px">
+                    <button type="button" class="btn btn-glass" id="day-detail-cancel">${this.t('cancel')}</button>
+                    <button type="button" class="btn" id="day-detail-add">\u002B ${this.t('newTask')}</button>
+                </div>
+            </div>
+        </div>`;
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('#day-detail-close').onclick = () => overlay.remove();
+        overlay.querySelector('#day-detail-cancel').onclick = () => overlay.remove();
+        overlay.querySelector('#day-detail-add').onclick = () => {
+            overlay.remove();
+            this.showModal('task', null, { deadline: dateStr });
+        };
+        overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+        // Wire task actions inside day detail (edit/delete/status cycle/timer)
+        overlay.querySelector('.tasks-list')?.addEventListener('click', (e) => {
+            const target = e.target.closest('[data-action]');
+            if (!target) return;
+            const action = target.dataset.action;
+            const id = target.dataset.id;
+            switch (action) {
+                case 'cycle-status':
+                    this.cycleTaskStatus(id);
+                    overlay.remove();
+                    this.showDayDetail(dateStr);
+                    break;
+                case 'edit-task':
+                    overlay.remove();
+                    this.editTask(id);
+                    break;
+                case 'delete-task':
+                    this.deleteTask(id).then(() => {
+                        overlay.remove();
+                        this.showDayDetail(dateStr);
+                    });
+                    break;
+                case 'toggle-timer':
+                    this.toggleTimer(id);
+                    break;
+            }
         });
     },
 
@@ -470,29 +550,40 @@ const App = {
         document.getElementById('owner-info').innerHTML = infoParts.join('') || `<span style="color:var(--text-3)">${this.t('noContactInfo')}</span>`;
 
         const clients = Store.getClients(this.currentOwnerId);
+        const clientsGrid = document.getElementById('clients-grid');
         if (clients.length === 0) {
-            document.getElementById('clients-grid').innerHTML = `<div class="empty-state">
+            clientsGrid.innerHTML = `<div class="empty-state">
                 <div class="empty-icon">\uD83C\uDFE2</div>
                 <p>${this.t('noCompanies')}</p>
                 <button class="cta-btn" data-action="show-modal" data-type="client">\u002B ${this.t('newCompany')}</button>
             </div>`;
-            return;
+        } else {
+            clientsGrid.innerHTML = clients.map(c => {
+                const allTasks = Store.getTasksForClient(c.id);
+                const done = allTasks.filter(t => t.status === 'done').length;
+                const projects = Store.getProjects(c.id);
+                const pct = allTasks.length ? Math.round(done / allTasks.length * 100) : 0;
+                return `<div class="card" data-action="select-client" data-id="${c.id}">
+                    <h3>${this.esc(c.name)}</h3>
+                    <div class="card-meta">
+                        <span>${projects.length} ${this.t('projects')}</span>
+                        <span>${done}/${allTasks.length} ${this.t('tasks')}</span>
+                    </div>
+                    <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
+                </div>`;
+            }).join('');
         }
 
-        document.getElementById('clients-grid').innerHTML = clients.map(c => {
-            const projects = Store.getProjects(c.id);
-            const allTasks = projects.flatMap(p => Store.getTasks(p.id));
-            const done = allTasks.filter(t => t.status === 'done').length;
-            const pct = allTasks.length ? Math.round(done / allTasks.length * 100) : 0;
-            return `<div class="card" data-action="select-client" data-id="${c.id}">
-                <h3>${this.esc(c.name)}</h3>
-                <div class="card-meta">
-                    <span>${projects.length} ${this.t('projects')}</span>
-                    <span>${done}/${allTasks.length} ${this.t('tasks')}</span>
-                </div>
-                <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
-            </div>`;
-        }).join('');
+        // Direct tasks attached to this client (not routed through companies)
+        const directTasks = Store.getDirectOwnerTasks(this.currentOwnerId);
+        const section = document.getElementById('owner-tasks-section');
+        if (directTasks.length) {
+            const sorted = [...directTasks].sort((a, b) => new Date(b.created) - new Date(a.created));
+            section.innerHTML = `<div class="section-title">${this.t('tasks')} <span class="count">${directTasks.length}</span></div>
+                <div class="tasks-list">${sorted.map(t => this.renderTaskItem(t)).join('')}</div>`;
+        } else {
+            section.innerHTML = '';
+        }
     },
 
     // ===== Company (Client) =====
@@ -623,10 +714,24 @@ const App = {
         const meta = [];
 
         if (showContext) {
-            const project = Store.getProject(task.projectId);
-            const client = project ? Store.getClient(project.clientId) : null;
-            if (client && project) meta.push(`${this.esc(client.name)} \u2192 ${this.esc(project.name)}`);
-            else if (!task.projectId) meta.push(`<span style="color:var(--accent)">\uD83D\uDCE5 ${this.t('inbox')}</span>`);
+            // Build hierarchy path from whatever IDs the task has
+            if (task.projectId) {
+                const project = Store.getProject(task.projectId);
+                const client = project ? Store.getClient(project.clientId) : null;
+                const owner = client ? Store.getOwner(client.ownerId) : null;
+                const parts = [owner?.name, client?.name, project?.name].filter(Boolean).map(n => this.esc(n));
+                if (parts.length) meta.push(parts.join(' \u2192 '));
+            } else if (task.clientId) {
+                const client = Store.getClient(task.clientId);
+                const owner = client ? Store.getOwner(client.ownerId) : null;
+                const parts = [owner?.name, client?.name].filter(Boolean).map(n => this.esc(n));
+                if (parts.length) meta.push(parts.join(' \u2192 '));
+            } else if (task.ownerId) {
+                const owner = Store.getOwner(task.ownerId);
+                if (owner) meta.push(`\uD83D\uDC64 ${this.esc(owner.name)}`);
+            } else {
+                meta.push(`<span style="color:var(--accent)">\uD83D\uDCE5 ${this.t('inbox')}</span>`);
+            }
         }
 
         if (task.deadline) {
@@ -856,27 +961,36 @@ const App = {
                 `<label class="form-check"><input type="checkbox" name="tag_${tag.id}" ${taskTags.includes(tag.id)?'checked':''}> <span class="tag" style="background:${tag.color}22;color:${tag.color}">${this.esc(tag.name)}</span></label>`
             ).join(' ');
 
-            // Build project selector when not inside a specific project
-            let projectSelectHtml = '';
-            const taskProjectId = isEdit ? (t.projectId || '') : (this.currentProjectId || '');
-            if (!this.currentProjectId || isEdit) {
-                const owners = Store.getOwners();
-                let projectOpts = `<option value="">${this.t('noProject')}</option>`;
-                owners.forEach(o => {
-                    const clients = Store.getClients(o.id);
-                    clients.forEach(c => {
-                        const projects = Store.getProjects(c.id);
-                        if (projects.length) {
-                            projectOpts += `<optgroup label="${this.esc(o.name)} \u2192 ${this.esc(c.name)}">`;
-                            projects.forEach(p => {
-                                projectOpts += `<option value="${p.id}"${p.id === taskProjectId ? ' selected' : ''}>${this.esc(p.name)}</option>`;
-                            });
-                            projectOpts += `</optgroup>`;
-                        }
+            // Unified target selector: value encodes "kind:id" so we can tell which level was picked.
+            // kind: inbox | owner | client | project
+            let currentTarget = 'inbox:';
+            if (isEdit) {
+                if (t.projectId) currentTarget = 'project:' + t.projectId;
+                else if (t.clientId) currentTarget = 'client:' + t.clientId;
+                else if (t.ownerId) currentTarget = 'owner:' + t.ownerId;
+            } else if (this.currentProjectId) currentTarget = 'project:' + this.currentProjectId;
+            else if (this.currentClientId) currentTarget = 'client:' + this.currentClientId;
+            else if (this.currentOwnerId) currentTarget = 'owner:' + this.currentOwnerId;
+
+            const owners = Store.getOwners();
+            let targetOpts = `<option value="inbox:"${currentTarget === 'inbox:' ? ' selected' : ''}>${this.t('noProject')}</option>`;
+            owners.forEach(o => {
+                targetOpts += `<optgroup label="\uD83D\uDC64 ${this.esc(o.name)}">`;
+                const ownerVal = 'owner:' + o.id;
+                targetOpts += `<option value="${ownerVal}"${currentTarget === ownerVal ? ' selected' : ''}>${this.t('clientLabel')}: ${this.esc(o.name)}</option>`;
+                const clients = Store.getClients(o.id);
+                clients.forEach(c => {
+                    const clientVal = 'client:' + c.id;
+                    targetOpts += `<option value="${clientVal}"${currentTarget === clientVal ? ' selected' : ''}>\u00A0\u00A0\u00A0\u00A0${this.t('companyLabel')}: ${this.esc(c.name)}</option>`;
+                    const projects = Store.getProjects(c.id);
+                    projects.forEach(p => {
+                        const projectVal = 'project:' + p.id;
+                        targetOpts += `<option value="${projectVal}"${currentTarget === projectVal ? ' selected' : ''}>\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0${this.esc(p.name)}</option>`;
                     });
                 });
-                projectSelectHtml = `<div class="form-group"><label>${this.t('projectOptional')}</label><select name="projectId">${projectOpts}</select></div>`;
-            }
+                targetOpts += `</optgroup>`;
+            });
+            const projectSelectHtml = `<div class="form-group"><label>${this.t('assignToProject')}</label><select name="taskTarget">${targetOpts}</select></div>`;
 
             const deadlineVal = pf.deadline || t.deadline || '';
 
@@ -986,16 +1100,34 @@ const App = {
         }
         data.tags = tags;
         data.isProcedural = !!fd.get('isProcedural');
+
+        // Parse unified target selector ("kind:id") into ownerId/clientId/projectId
+        const target = data.taskTarget || '';
+        delete data.taskTarget;
+        const [kind, targetId] = target.split(':');
+        data.ownerId = ''; data.clientId = ''; data.projectId = '';
+        if (kind === 'project' && targetId) {
+            data.projectId = targetId;
+            const proj = Store.getProject(targetId);
+            if (proj) {
+                data.clientId = proj.clientId;
+                const client = Store.getClient(proj.clientId);
+                if (client) data.ownerId = client.ownerId;
+            }
+        } else if (kind === 'client' && targetId) {
+            data.clientId = targetId;
+            const client = Store.getClient(targetId);
+            if (client) data.ownerId = client.ownerId;
+        } else if (kind === 'owner' && targetId) {
+            data.ownerId = targetId;
+        }
+
         if (this.editingId) {
             const addHours = parseFloat(data.addHours); delete data.addHours;
             if (addHours > 0) Store.addTimeLog({ taskId: this.editingId, hours: addHours, description: this.t('manualEntry') });
-            // projectId from selector or keep existing
-            if (!data.projectId) data.projectId = '';
             Store.updateTask(this.editingId, data);
             this.toast(this.t('saved'), 'success');
         } else {
-            // Use project selector value, or current project, or empty (inbox)
-            if (!data.projectId) data.projectId = this.currentProjectId || '';
             delete data.addHours;
             Store.addTask(data);
             this.toast(`${this.t('taskCreated')}: ${data.title}`, 'success');
@@ -1102,16 +1234,34 @@ const App = {
                 ${data.projectType ? `<div class="ai-field"><span class="ai-field-label">${this.t('typeLabel')}:</span> ${data.projectType}</div>` : ''}
                 ${data.jurisdiction ? `<div class="ai-field"><span class="ai-field-label">${this.t('jurisdictionLabel')}:</span> ${this.esc(data.jurisdiction)}</div>` : ''}
                 ${data.deadline ? `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${data.deadline}</div>` : ''}`;
+        } else if (action === 'log_hours') {
+            fieldsHtml = `
+                <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('logHours')}</strong></div>
+                <div class="ai-field"><span class="ai-field-label">${this.t('hours')}:</span> <strong>${this.esc(data.hours)}h</strong></div>
+                ${data.taskName ? `<div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> ${this.esc(data.taskName)}</div>` : ''}
+                ${data.description ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.description)}</div>` : ''}`;
         } else if (action === 'create_chain') {
-            fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')}</strong></div>`;
+            const icons = { create_client: '\uD83D\uDC64', create_company: '\uD83C\uDFE2', create_project: '\uD83D\uDCC1', create_task: '\u2705', log_hours: '\u23F1' };
+            const labels = { create_client: this.t('newClient'), create_company: this.t('newCompany'), create_project: this.t('newProject'), create_task: this.t('newTask'), log_hours: this.t('logHours') };
+            fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')} (${(data.items || []).length})</strong></div>`;
             (data.items || []).forEach((item, i) => {
-                const labels = { create_client: this.t('newClient'), create_company: this.t('newCompany'), create_project: this.t('newProject'), create_task: this.t('newTask') };
-                fieldsHtml += `<div style="margin:8px 0 4px;font-weight:600;font-size:12px;color:var(--accent)">${i+1}. ${labels[item.action] || item.action}</div>`;
-                fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${item.title ? this.t('taskTitle') : this.t('clientName')}:</span> <strong>${this.esc(item.name || item.title || '')}</strong></div>`;
-                if (item.projectType) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('typeLabel')}:</span> ${item.projectType}</div>`;
-                if (item.jurisdiction) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('jurisdictionLabel')}:</span> ${this.esc(item.jurisdiction)}</div>`;
-                if (item.deadline) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${item.deadline}</div>`;
-                if (item.priority) fieldsHtml += `<div class="ai-field"><span class="ai-field-label">${this.t('priority')}:</span> ${item.priority}</div>`;
+                const icon = icons[item.action] || '\u2022';
+                const label = labels[item.action] || item.action;
+                fieldsHtml += `<div style="margin:10px 0 2px;padding:6px 10px;background:var(--input-bg);border-radius:6px;font-size:12px">
+                    <strong>${icon} ${i+1}. ${label}</strong>`;
+                if (item.action === 'log_hours') {
+                    fieldsHtml += ` &mdash; <strong>${this.esc(item.hours)}h</strong>`;
+                    if (item.taskName) fieldsHtml += ` on "${this.esc(item.taskName)}"`;
+                } else {
+                    const name = item.name || item.title || '';
+                    if (name) fieldsHtml += ` &mdash; <strong>${this.esc(name)}</strong>`;
+                    if (item.clientName) fieldsHtml += ` <span style="color:var(--text-3)">(${this.esc(item.clientName)})</span>`;
+                    if (item.ownerName) fieldsHtml += ` <span style="color:var(--text-3)">(${this.esc(item.ownerName)})</span>`;
+                    if (item.projectName) fieldsHtml += ` <span style="color:var(--text-3)">(\u2192 ${this.esc(item.projectName)})</span>`;
+                    if (item.deadline) fieldsHtml += ` <span style="color:var(--text-3)">${this.t('deadline')}: ${item.deadline}</span>`;
+                    if (item.priority && item.priority !== 'medium') fieldsHtml += ` <span style="color:var(--text-3)">${item.priority}</span>`;
+                }
+                fieldsHtml += `</div>`;
             });
         } else {
             // create_task (default)
@@ -1145,6 +1295,188 @@ const App = {
     closeAiPreview(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('ai-overlay').classList.remove('open'); },
 
     _pendingAiData: null,
+
+    // ===== AI chain helpers =====
+    _findOwnerByName(name) {
+        if (!name) return null;
+        const n = name.toLowerCase().trim();
+        return Store.getOwners().find(o => (o.name || '').toLowerCase() === n)
+            || Store.getOwners().find(o => (o.name || '').toLowerCase().includes(n))
+            || null;
+    },
+    _findClientByName(name, ownerId) {
+        if (!name) return null;
+        const n = name.toLowerCase().trim();
+        const all = Store.getClients(ownerId || undefined);
+        return all.find(c => (c.name || '').toLowerCase() === n)
+            || all.find(c => (c.name || '').toLowerCase().includes(n))
+            || null;
+    },
+    _findProjectByName(name, clientId) {
+        if (!name) return null;
+        const n = name.toLowerCase().trim();
+        const all = Store.getProjects(clientId || undefined);
+        return all.find(p => (p.name || '').toLowerCase() === n)
+            || all.find(p => (p.name || '').toLowerCase().includes(n))
+            || null;
+    },
+    _findTaskByName(name) {
+        if (!name) return null;
+        const n = name.toLowerCase().trim();
+        const all = Store.getTasks();
+        return all.find(t => (t.title || '').toLowerCase() === n)
+            || all.find(t => (t.title || '').toLowerCase().includes(n))
+            || null;
+    },
+    _resolveTaskId(d) {
+        if (d.taskId && Store.getTask(d.taskId)) return d.taskId;
+        const found = this._findTaskByName(d.taskName);
+        return found ? found.id : null;
+    },
+    // Run a chain of AI items in order, auto-linking by name.
+    // Returns: { lastOwnerId, lastClientId, lastProjectId, lastTaskId, created: {...counters}, skipped: [labels] }
+    _runChain(items) {
+        let lastOwnerId = this.currentOwnerId;
+        let lastClientId = this.currentClientId;
+        let lastProjectId = this.currentProjectId;
+        let lastTaskId = null;
+        const created = { client: 0, company: 0, project: 0, task: 0, hours: 0 };
+        const skipped = [];
+
+        items.forEach(item => {
+            if (item.action === 'create_client') {
+                const existing = this._findOwnerByName(item.name);
+                if (existing) { lastOwnerId = existing.id; return; }
+                const o = Store.addOwner({ name: item.name, email: item.email || '', telegram: item.telegram || '', notes: item.notes || '' });
+                lastOwnerId = o.id;
+                created.client++;
+            }
+            else if (item.action === 'create_company') {
+                // Try resolve owner: explicit id → ownerName → lastOwnerId
+                let oid = item.ownerId && Store.getOwner(item.ownerId) ? item.ownerId : null;
+                if (!oid && item.ownerName) {
+                    const o = this._findOwnerByName(item.ownerName);
+                    if (o) oid = o.id;
+                    else {
+                        // Auto-create owner from name
+                        const newO = Store.addOwner({ name: item.ownerName });
+                        oid = newO.id;
+                        created.client++;
+                    }
+                }
+                if (!oid) oid = lastOwnerId;
+                if (!oid) { skipped.push(`company "${item.name}" (no client)`); return; }
+
+                // Reuse existing company with same name under that owner
+                const existing = this._findClientByName(item.name, oid);
+                if (existing) { lastClientId = existing.id; lastOwnerId = oid; return; }
+                const c = Store.addClient({ name: item.name, ownerId: oid, notes: item.notes || '' });
+                lastClientId = c.id;
+                lastOwnerId = oid;
+                created.company++;
+            }
+            else if (item.action === 'create_project') {
+                // Resolve company: explicit id → clientName → lastClientId
+                let cid = item.clientId && Store.getClient(item.clientId) ? item.clientId : null;
+                if (!cid && item.clientName) {
+                    const c = this._findClientByName(item.clientName);
+                    if (c) cid = c.id;
+                    else {
+                        // Try matching as a client (person) name first — common case where user says "for client X"
+                        const owner = this._findOwnerByName(item.clientName);
+                        let ownerId;
+                        if (owner) {
+                            ownerId = owner.id;
+                            // Look for any company under that owner
+                            const companies = Store.getClients(ownerId);
+                            if (companies.length === 1) cid = companies[0].id;
+                        } else {
+                            // Auto-create client + company with same name
+                            const newO = Store.addOwner({ name: item.clientName });
+                            ownerId = newO.id;
+                            created.client++;
+                        }
+                        if (!cid) {
+                            const newC = Store.addClient({ name: item.clientName, ownerId });
+                            cid = newC.id;
+                            created.company++;
+                        }
+                        lastOwnerId = ownerId;
+                    }
+                }
+                if (!cid) cid = lastClientId;
+                if (!cid && lastOwnerId) {
+                    // Fallback: create implicit company under last owner
+                    const newC = Store.addClient({ name: item.name, ownerId: lastOwnerId });
+                    cid = newC.id;
+                    created.company++;
+                }
+                if (!cid) { skipped.push(`project "${item.name}" (no company)`); return; }
+
+                const existing = this._findProjectByName(item.name, cid);
+                if (existing) { lastProjectId = existing.id; lastClientId = cid; return; }
+                const p = Store.addProject({ name: item.name, clientId: cid, projectType: item.projectType || '', jurisdiction: item.jurisdiction || '', status: item.status || 'active', deadline: item.deadline || '' });
+                lastProjectId = p.id;
+                lastClientId = cid;
+                const cl = Store.getClient(cid);
+                if (cl) lastOwnerId = cl.ownerId;
+                created.project++;
+            }
+            else if (item.action === 'create_task') {
+                // Resolve project: explicit id → projectName → lastProjectId
+                let pid = item.projectId && Store.getProject(item.projectId) ? item.projectId : null;
+                if (!pid && item.projectName) {
+                    const p = this._findProjectByName(item.projectName);
+                    if (p) pid = p.id;
+                }
+                if (!pid) pid = lastProjectId;
+
+                // Dedup: if a task with the same title already exists in the same project, reuse it
+                // (so a re-run of the same chain doesn't pile up duplicate tasks)
+                const existing = pid
+                    ? Store.getTasks(pid).find(t => (t.title || '').toLowerCase() === (item.title || '').toLowerCase())
+                    : null;
+                if (existing) {
+                    lastTaskId = existing.id;
+                    return;
+                }
+
+                // pid may still be empty → free-floating task is OK
+                const t = Store.addTask({
+                    projectId: pid || '',
+                    clientId: !pid && lastClientId ? lastClientId : '',
+                    ownerId: !pid && !lastClientId && lastOwnerId ? lastOwnerId : '',
+                    title: item.title,
+                    priority: item.priority || 'medium',
+                    deadline: item.deadline || '',
+                    isProcedural: item.isProcedural || false,
+                    notes: item.notes || '',
+                    tags: item.tagIds || [],
+                });
+                lastTaskId = t.id;
+                created.task++;
+                if (item.subtasks?.length) {
+                    item.subtasks.forEach(sub => Store.addTask({ projectId: pid || '', title: sub, priority: 'medium' }));
+                }
+            }
+            else if (item.action === 'log_hours') {
+                // In a chain, prefer the task we just created (lastTaskId) over a name lookup,
+                // because the chain is acting on what it just made.
+                let tid = item.taskId && Store.getTask(item.taskId) ? item.taskId : null;
+                if (!tid) tid = lastTaskId;
+                if (!tid && item.taskName) {
+                    const t = this._findTaskByName(item.taskName);
+                    if (t) tid = t.id;
+                }
+                const hours = parseFloat(item.hours) || 0;
+                if (!tid || hours <= 0) { skipped.push(`${hours}h log (no task)`); return; }
+                Store.addTimeLog({ taskId: tid, hours, description: item.description || this.t('manualEntry') });
+                created.hours += hours;
+            }
+        });
+
+        return { lastOwnerId, lastClientId, lastProjectId, lastTaskId, created, skipped };
+    },
 
     acceptAiResult() {
         if (!this._pendingAiData) return;
@@ -1181,44 +1513,46 @@ const App = {
             this.selectProject(p.id);
         }
 
+        else if (action === 'log_hours') {
+            const tid = this._resolveTaskId(d);
+            if (!tid) {
+                this.toast(this.t('taskNotFound'), 'warning');
+                this.closeAiPreview();
+                return;
+            }
+            const hours = parseFloat(d.hours) || 0;
+            if (hours <= 0) {
+                this.toast(this.t('invalidHours'), 'warning');
+                this.closeAiPreview();
+                return;
+            }
+            Store.addTimeLog({ taskId: tid, hours, description: d.description || this.t('manualEntry') });
+            this.toast(`${this.t('hoursLogged')}: ${hours}h`, 'success');
+        }
+
         else if (action === 'create_chain') {
-            let lastOwnerId = this.currentOwnerId;
-            let lastClientId = this.currentClientId;
-            let lastProjectId = this.currentProjectId;
-            const items = d.items || [];
-
-            items.forEach(item => {
-                if (item.action === 'create_client') {
-                    const o = Store.addOwner({ name: item.name, email: item.email || '', telegram: item.telegram || '', notes: item.notes || '' });
-                    lastOwnerId = o.id;
-                } else if (item.action === 'create_company') {
-                    const oid = item.ownerId || lastOwnerId;
-                    if (!oid) return;
-                    const c = Store.addClient({ name: item.name, ownerId: oid, notes: item.notes || '' });
-                    lastClientId = c.id;
-                } else if (item.action === 'create_project') {
-                    const cid = item.clientId || lastClientId;
-                    if (!cid) return;
-                    const p = Store.addProject({ name: item.name, clientId: cid, projectType: item.projectType || '', jurisdiction: item.jurisdiction || '', status: item.status || 'active', deadline: item.deadline || '' });
-                    lastProjectId = p.id;
-                } else if (item.action === 'create_task') {
-                    const pid = item.projectId || lastProjectId;
-                    if (!pid) return;
-                    Store.addTask({ projectId: pid, title: item.title, priority: item.priority || 'medium', deadline: item.deadline || '', isProcedural: item.isProcedural || false, notes: item.notes || '', tags: item.tagIds || [] });
-                    if (item.subtasks?.length) item.subtasks.forEach(sub => Store.addTask({ projectId: pid, title: sub, priority: 'medium' }));
-                }
-            });
-
-            this.toast(`${this.t('created')}: ${items.length} items`, 'success');
-            if (lastProjectId) this.selectProject(lastProjectId);
-            else if (lastClientId) this.selectClient(lastClientId);
-            else if (lastOwnerId) this.selectOwner(lastOwnerId);
+            const summary = this._runChain(d.items || []);
+            const parts = [];
+            if (summary.created.client) parts.push(`${summary.created.client} ${this.t('newClient').toLowerCase()}`);
+            if (summary.created.company) parts.push(`${summary.created.company} ${this.t('newCompany').toLowerCase()}`);
+            if (summary.created.project) parts.push(`${summary.created.project} ${this.t('newProject').toLowerCase()}`);
+            if (summary.created.task) parts.push(`${summary.created.task} ${this.t('newTask').toLowerCase()}`);
+            if (summary.created.hours) parts.push(`${summary.created.hours}h ${this.t('hoursLogged').toLowerCase()}`);
+            this.toast(parts.length ? parts.join(', ') : `${this.t('created')}: ${(d.items || []).length}`, 'success');
+            if (summary.skipped.length) this.toast(this.t('chainPartial') + ': ' + summary.skipped.join(', '), 'warning');
+            if (summary.lastProjectId) this.selectProject(summary.lastProjectId);
+            else if (summary.lastClientId) this.selectClient(summary.lastClientId);
+            else if (summary.lastOwnerId) this.selectOwner(summary.lastOwnerId);
             else this.showDashboard();
         }
 
         else {
-            // create_task — now supports free-floating tasks (no project required)
+            // create_task — supports free-floating tasks (no project required)
             let projectId = this.currentProjectId || d.projectId || '';
+            if (!projectId && d.projectName) {
+                const match = Store.getProjects().find(p => p.name.toLowerCase() === d.projectName.toLowerCase());
+                if (match) projectId = match.id;
+            }
             if (!projectId) {
                 const projects = Store.getProjects();
                 if (projects.length === 1) projectId = projects[0].id;

@@ -32,8 +32,13 @@ const Store = {
     deleteOwner(id) {
         const clientIds = this._data.clients.filter(c => c.ownerId === id).map(c => c.id);
         const projectIds = this._data.projects.filter(p => clientIds.includes(p.clientId)).map(p => p.id);
-        this._data.timeLogs = this._data.timeLogs.filter(t => !projectIds.includes(Store.getTask(t.taskId)?.projectId));
-        this._data.tasks = this._data.tasks.filter(t => !projectIds.includes(t.projectId));
+        const taskIdsToDelete = this._data.tasks.filter(t =>
+            t.ownerId === id ||
+            (t.clientId && clientIds.includes(t.clientId)) ||
+            (t.projectId && projectIds.includes(t.projectId))
+        ).map(t => t.id);
+        this._data.timeLogs = this._data.timeLogs.filter(t => !taskIdsToDelete.includes(t.taskId));
+        this._data.tasks = this._data.tasks.filter(t => !taskIdsToDelete.includes(t.id));
         this._data.projects = this._data.projects.filter(p => !clientIds.includes(p.clientId));
         this._data.clients = this._data.clients.filter(c => c.ownerId !== id);
         this._data.owners = this._data.owners.filter(o => o.id !== id);
@@ -58,7 +63,9 @@ const Store = {
     },
     deleteClient(id) {
         const projectIds = this._data.projects.filter(p => p.clientId === id).map(p => p.id);
-        this._data.tasks = this._data.tasks.filter(t => !projectIds.includes(t.projectId));
+        this._data.tasks = this._data.tasks.filter(t =>
+            t.clientId !== id && !(t.projectId && projectIds.includes(t.projectId))
+        );
         this._data.projects = this._data.projects.filter(p => p.clientId !== id);
         this._data.clients = this._data.clients.filter(c => c.id !== id);
         this.save();
@@ -87,21 +94,40 @@ const Store = {
     },
 
     // --- Tasks ---
+    // Tasks can be attached at any hierarchy level: ownerId (client), clientId (company), projectId, or none (inbox)
     getTasks(projectId) {
         if (projectId) return this._data.tasks.filter(t => t.projectId === projectId);
         return this._data.tasks;
     },
+    // Free-floating: no attachment at any level
     getInboxTasks() {
-        return this._data.tasks.filter(t => !t.projectId);
+        return this._data.tasks.filter(t => !t.projectId && !t.clientId && !t.ownerId);
     },
+    // All tasks under an owner (client person): direct owner tasks + tasks in their companies + tasks in their projects
     getTasksForOwner(ownerId) {
         const clientIds = this._data.clients.filter(c => c.ownerId === ownerId).map(c => c.id);
         const projectIds = this._data.projects.filter(p => clientIds.includes(p.clientId)).map(p => p.id);
-        return this._data.tasks.filter(t => projectIds.includes(t.projectId));
+        return this._data.tasks.filter(t =>
+            t.ownerId === ownerId ||
+            (t.clientId && clientIds.includes(t.clientId)) ||
+            (t.projectId && projectIds.includes(t.projectId))
+        );
     },
+    // Tasks attached directly to owner (not to any company or project)
+    getDirectOwnerTasks(ownerId) {
+        return this._data.tasks.filter(t => t.ownerId === ownerId && !t.clientId && !t.projectId);
+    },
+    // All tasks under a company: direct company tasks + tasks in its projects
     getTasksForClient(clientId) {
         const projectIds = this._data.projects.filter(p => p.clientId === clientId).map(p => p.id);
-        return this._data.tasks.filter(t => projectIds.includes(t.projectId));
+        return this._data.tasks.filter(t =>
+            t.clientId === clientId ||
+            (t.projectId && projectIds.includes(t.projectId))
+        );
+    },
+    // Tasks attached directly to a company (not to any project)
+    getDirectClientTasks(clientId) {
+        return this._data.tasks.filter(t => t.clientId === clientId && !t.projectId);
     },
     getTask(id) { return this._data.tasks.find(t => t.id === id); },
     addTask(data) {

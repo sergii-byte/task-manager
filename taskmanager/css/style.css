@@ -147,16 +147,33 @@ body::before {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 10px 6px;
+    padding: 4px 10px 6px;
 }
 
 .section-label span {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
+    font-size: 11px;
+    letter-spacing: 0.3px;
     color: var(--text-3);
     font-weight: 600;
 }
+
+.section-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 12px 6px 10px;
+    opacity: .6;
+}
+
+.nav-main { margin-top: 4px; }
+.nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    margin-right: 10px;
+    font-size: 14px;
+}
+.nav-label { flex: 1; }
 
 .sidebar-footer {
     padding: 12px 14px;
