@@ -116,8 +116,42 @@ const SheetsSync = {
         return this.SHEET_ID;
     },
 
+    _getErrorMessage(e) {
+        if (e?.result?.error?.message) return e.result.error.message;
+        if (e?.message) return e.message;
+        if (e?.error) return typeof e.error === 'string' ? e.error : JSON.stringify(e.error);
+        if (typeof e === 'string') return e;
+        return JSON.stringify(e);
+    },
+
+    async _ensureGapiReady() {
+        if (!this.isAuthorized) {
+            this.setStatus('Сначала подключите Google (Connect Google)', 'error');
+            return false;
+        }
+        if (!window.gapi?.client?.sheets) {
+            this.setStatus('Google Sheets API загружается...', 'info');
+            try {
+                await this._ensureLoaded();
+                await new Promise((resolve, reject) => {
+                    gapi.load('client', async () => {
+                        try {
+                            await gapi.client.init({});
+                            await gapi.client.load('sheets', 'v4');
+                            resolve();
+                        } catch (e) { reject(e); }
+                    });
+                });
+            } catch (e) {
+                this.setStatus('Не удалось загрузить Google Sheets API: ' + this._getErrorMessage(e), 'error');
+                return false;
+            }
+        }
+        return true;
+    },
+
     async pushAll() {
-        if (!this.isAuthorized) { this.setStatus('Сначала подключите Google', 'error'); return; }
+        if (!(await this._ensureGapiReady())) return;
 
         const syncBtn = document.getElementById('sync-btn');
         syncBtn.classList.add('syncing');
@@ -156,15 +190,15 @@ const SheetsSync = {
             const counts = Object.keys(this.SHEET_NAMES).map(k => `${(data[k]||[]).length} ${k}`).join(', ');
             this.setStatus(`Выгружено: ${counts}`, 'success');
         } catch (e) {
-            this.setStatus('Ошибка: ' + e.message, 'error');
-            console.error(e);
+            this.setStatus('Ошибка: ' + this._getErrorMessage(e), 'error');
+            console.error('Push error:', e);
         } finally {
             syncBtn.classList.remove('syncing');
         }
     },
 
     async pullAll() {
-        if (!this.isAuthorized) { this.setStatus('Сначала подключите Google', 'error'); return; }
+        if (!(await this._ensureGapiReady())) return;
         if (!this.SHEET_ID) { this.setStatus('Укажите ID таблицы', 'error'); return; }
 
         const syncBtn = document.getElementById('sync-btn');
@@ -187,14 +221,11 @@ const SheetsSync = {
                     const obj = {};
                     sheetHeaders.forEach((h, i) => {
                         let val = row[i] || '';
-                        // Parse arrays
                         if (val.startsWith('[')) {
                             try { val = JSON.parse(val); } catch(e) {}
                         }
-                        // Parse booleans
                         if (val === 'TRUE') val = true;
                         if (val === 'FALSE') val = false;
-                        // Parse numbers for specific fields
                         if (['hours', 'hoursLogged', 'rate', 'fixedPrice'].includes(h) && val !== '') {
                             val = parseFloat(val) || 0;
                         }
@@ -211,8 +242,8 @@ const SheetsSync = {
             App.renderSidebar();
             App.showDashboard();
         } catch (e) {
-            this.setStatus('Ошибка: ' + e.message, 'error');
-            console.error(e);
+            this.setStatus('Ошибка: ' + this._getErrorMessage(e), 'error');
+            console.error('Pull error:', e);
         } finally {
             syncBtn.classList.remove('syncing');
         }

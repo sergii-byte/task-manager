@@ -85,6 +85,7 @@ const App = {
         // Sidebar nav
         this._on('nav-dashboard', 'click', () => this.showDashboard());
         this._on('nav-calendar', 'click', () => this.showCalendar());
+        this._on('nav-inbox', 'click', () => this.showInbox());
         this._on('add-client-btn', 'click', () => this.showModal('owner'));
 
         // Sync
@@ -117,12 +118,15 @@ const App = {
         this._on('btn-add-company', 'click', () => this.showModal('client'));
         this._on('btn-edit-owner', 'click', () => this.editOwner());
         this._on('btn-delete-owner', 'click', () => this.deleteOwner());
+        this._on('btn-add-task-owner', 'click', () => this.showModal('task'));
         this._on('btn-add-project', 'click', () => this.showModal('project'));
         this._on('btn-edit-client', 'click', () => this.editClient());
         this._on('btn-delete-client', 'click', () => this.deleteClient());
+        this._on('btn-add-task-client', 'click', () => this.showModal('task'));
         this._on('btn-add-task', 'click', () => this.showModal('task'));
         this._on('btn-edit-project', 'click', () => this.editProject());
         this._on('btn-delete-project', 'click', () => this.deleteProject());
+        this._on('btn-add-task-inbox', 'click', () => this.showModal('task'));
 
         // Modal close buttons
         this._on('modal-close-btn', 'click', () => this.closeModal());
@@ -181,6 +185,7 @@ const App = {
                 case 'select-client': this.selectClient(id); break;
                 case 'select-project': this.selectProject(id); break;
                 case 'show-modal': this.showModal(target.dataset.type); break;
+                case 'assign-project': this.editTask(id); break;
             }
         });
 
@@ -243,6 +248,15 @@ const App = {
         // Update nav active states
         document.getElementById('nav-dashboard')?.classList.toggle('active', this.currentView === 'dashboard');
         document.getElementById('nav-calendar')?.classList.toggle('active', this.currentView === 'calendar');
+        document.getElementById('nav-inbox')?.classList.toggle('active', this.currentView === 'inbox');
+
+        // Inbox count
+        const inboxCount = Store.getInboxTasks().length;
+        const inboxBadge = document.getElementById('inbox-count');
+        if (inboxBadge) {
+            inboxBadge.textContent = inboxCount || '';
+            inboxBadge.style.display = inboxCount ? '' : 'none';
+        }
     },
 
     getInitials(name) {
@@ -315,6 +329,30 @@ const App = {
         this.renderCalendarMini('dashboard-calendar');
     },
 
+    // ===== Inbox (free-floating tasks) =====
+    showInbox() {
+        this.currentOwnerId = null; this.currentClientId = null; this.currentProjectId = null;
+        this.showView('inbox');
+        this.renderInbox();
+        this.renderSidebar();
+        this.closeSidebar();
+    },
+
+    renderInbox() {
+        const tasks = Store.getInboxTasks();
+        const container = document.getElementById('inbox-tasks');
+        if (tasks.length === 0) {
+            container.innerHTML = `<div class="empty-state">
+                <div class="empty-icon">\uD83D\uDCE5</div>
+                <p>${this.t('noInboxTasks')}</p>
+                <button class="cta-btn" data-action="show-modal" data-type="task">\u002B ${this.t('newTask')}</button>
+            </div>`;
+            return;
+        }
+        const sorted = [...tasks].sort((a, b) => new Date(b.created) - new Date(a.created));
+        container.innerHTML = sorted.map(t => this.renderTaskItem(t, false, true)).join('');
+    },
+
     // ===== Calendar =====
     showCalendar() {
         this.currentOwnerId = null; this.currentClientId = null; this.currentProjectId = null;
@@ -345,11 +383,11 @@ const App = {
             const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
             const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
             const dl = deadlines[dateStr];
-            let cls = 'cal-day';
+            let cls = 'cal-day clickable';
             if (isToday) cls += ' today';
             if (dl?.procedural) cls += ' has-procedural';
             else if (dl?.count) cls += ' has-deadline';
-            daysHtml += `<div class="${cls}" title="${dl ? dl.count + ' tasks' : ''}">${d}</div>`;
+            daysHtml += `<div class="${cls}" data-date="${dateStr}" title="${dl ? dl.count + ' tasks' : '+ task'}">${d}</div>`;
         }
 
         const totalCells = startDow + daysInMonth;
@@ -375,6 +413,14 @@ const App = {
             this.calMonth++;
             if (this.calMonth > 11) { this.calMonth = 0; this.calYear++; }
             this.renderCalendarMini(containerId);
+        });
+
+        // Click on day to create task with that deadline
+        el.querySelectorAll('.cal-day.clickable').forEach(dayEl => {
+            dayEl.addEventListener('click', () => {
+                const date = dayEl.dataset.date;
+                if (date) this.showModal('task', null, { deadline: date });
+            });
         });
     },
 
@@ -572,7 +618,7 @@ const App = {
         document.getElementById('tasks-list').innerHTML = filtered.map(t => this.renderTaskItem(t)).join('');
     },
 
-    renderTaskItem(task, showContext = false) {
+    renderTaskItem(task, showContext = false, showAssign = false) {
         const checkClass = task.status === 'done' ? 'checked' : task.status === 'in_progress' ? 'in-progress' : '';
         const meta = [];
 
@@ -580,6 +626,7 @@ const App = {
             const project = Store.getProject(task.projectId);
             const client = project ? Store.getClient(project.clientId) : null;
             if (client && project) meta.push(`${this.esc(client.name)} \u2192 ${this.esc(project.name)}`);
+            else if (!task.projectId) meta.push(`<span style="color:var(--accent)">\uD83D\uDCE5 ${this.t('inbox')}</span>`);
         }
 
         if (task.deadline) {
@@ -606,6 +653,9 @@ const App = {
             </div>
             ${timerHtml}
             <div class="task-actions">
+                ${showAssign && !task.projectId ? `<button class="icon-btn" data-action="assign-project" data-id="${task.id}" title="${this.t('assignToProject')}">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                </button>` : ''}
                 <button class="icon-btn" data-action="toggle-timer" data-id="${task.id}" title="Timer">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${this.activeTimer?.taskId === task.id ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>' : '<polygon points="5 3 19 12 5 21 5 3"/>'}</svg>
                 </button>
@@ -720,8 +770,9 @@ const App = {
     onSearchBlur() { document.getElementById('search-results').classList.remove('open'); },
 
     // ===== Modals =====
-    showModal(type, editId) {
+    showModal(type, editId, prefill) {
         this.editingId = editId || null;
+        this._modalPrefill = prefill || {};
         const overlay = document.getElementById('modal-overlay');
         const title = document.getElementById('modal-title');
         const form = document.getElementById('modal-form');
@@ -798,15 +849,41 @@ const App = {
 
         else if (type === 'task') {
             const t = isEdit ? Store.getTask(editId) : {};
+            const pf = this._modalPrefill;
             const allTags = Store.getTags();
             const taskTags = t.tags || [];
             const tagsHtml = allTags.map(tag =>
                 `<label class="form-check"><input type="checkbox" name="tag_${tag.id}" ${taskTags.includes(tag.id)?'checked':''}> <span class="tag" style="background:${tag.color}22;color:${tag.color}">${this.esc(tag.name)}</span></label>`
             ).join(' ');
 
+            // Build project selector when not inside a specific project
+            let projectSelectHtml = '';
+            const taskProjectId = isEdit ? (t.projectId || '') : (this.currentProjectId || '');
+            if (!this.currentProjectId || isEdit) {
+                const owners = Store.getOwners();
+                let projectOpts = `<option value="">${this.t('noProject')}</option>`;
+                owners.forEach(o => {
+                    const clients = Store.getClients(o.id);
+                    clients.forEach(c => {
+                        const projects = Store.getProjects(c.id);
+                        if (projects.length) {
+                            projectOpts += `<optgroup label="${this.esc(o.name)} \u2192 ${this.esc(c.name)}">`;
+                            projects.forEach(p => {
+                                projectOpts += `<option value="${p.id}"${p.id === taskProjectId ? ' selected' : ''}>${this.esc(p.name)}</option>`;
+                            });
+                            projectOpts += `</optgroup>`;
+                        }
+                    });
+                });
+                projectSelectHtml = `<div class="form-group"><label>${this.t('projectOptional')}</label><select name="projectId">${projectOpts}</select></div>`;
+            }
+
+            const deadlineVal = pf.deadline || t.deadline || '';
+
             title.textContent = isEdit ? this.t('editTask') : this.t('newTask');
             form.innerHTML = `
                 <div class="form-group"><label>${this.t('taskTitle')} *</label><input name="title" required value="${this.esc(t.title || '')}"></div>
+                ${projectSelectHtml}
                 <div class="form-row">
                     <div class="form-group"><label>${this.t('status')}</label>
                         <select name="status">
@@ -824,7 +901,7 @@ const App = {
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label>${this.t('deadline')}</label><input name="deadline" type="date" value="${t.deadline || ''}"></div>
+                    <div class="form-group"><label>${this.t('deadline')}</label><input name="deadline" type="date" value="${deadlineVal}"></div>
                     <div class="form-group" style="display:flex;align-items:end;padding-bottom:14px;">
                         <label class="form-check"><input type="checkbox" name="isProcedural" ${t.isProcedural?'checked':''}> ${this.t('proceduralDeadline')}</label>
                     </div>
@@ -912,10 +989,14 @@ const App = {
         if (this.editingId) {
             const addHours = parseFloat(data.addHours); delete data.addHours;
             if (addHours > 0) Store.addTimeLog({ taskId: this.editingId, hours: addHours, description: this.t('manualEntry') });
+            // projectId from selector or keep existing
+            if (!data.projectId) data.projectId = '';
             Store.updateTask(this.editingId, data);
             this.toast(this.t('saved'), 'success');
         } else {
-            data.projectId = this.currentProjectId; delete data.addHours;
+            // Use project selector value, or current project, or empty (inbox)
+            if (!data.projectId) data.projectId = this.currentProjectId || '';
+            delete data.addHours;
             Store.addTask(data);
             this.toast(`${this.t('taskCreated')}: ${data.title}`, 'success');
         }
@@ -1136,17 +1217,18 @@ const App = {
         }
 
         else {
-            // create_task
-            let projectId = this.currentProjectId || d.projectId;
+            // create_task — now supports free-floating tasks (no project required)
+            let projectId = this.currentProjectId || d.projectId || '';
             if (!projectId) {
                 const projects = Store.getProjects();
                 if (projects.length === 1) projectId = projects[0].id;
-                else { this.toast(this.t('selectProjectFirst'), 'warning'); this.closeAiPreview(); return; }
+                // else: create as inbox task (no project)
             }
             Store.addTask({ projectId, title: d.title, priority: d.priority || 'medium', deadline: d.deadline || '', isProcedural: d.isProcedural || false, notes: d.notes || '', tags: d.tagIds || [] });
             if (d.subtasks?.length) d.subtasks.forEach(sub => Store.addTask({ projectId, title: sub, priority: 'medium' }));
             this.toast(`${this.t('taskCreated')}: ${d.title}`, 'success');
             if (this.currentProjectId) this.renderProject();
+            else if (!projectId) this.showInbox();
         }
 
         this._pendingAiData = null;
@@ -1160,6 +1242,7 @@ const App = {
         this.applyI18n();
         if (this.currentView === 'dashboard') this.renderDashboard();
         else if (this.currentView === 'calendar') this.renderCalendarFull();
+        else if (this.currentView === 'inbox') this.renderInbox();
         else if (this.currentView === 'owner') this.renderOwner();
         else if (this.currentView === 'client') this.renderClient();
         else if (this.currentView === 'project') this.renderProject();

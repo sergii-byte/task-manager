@@ -656,6 +656,13 @@ body::before {
     border-radius: 50%; background: var(--accent);
 }
 .cal-day.has-procedural::after { background: var(--red); }
+.cal-day.clickable:hover {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(1.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+.cal-day.clickable:active { transform: scale(1.05); }
 
 /* ===== Sections ===== */
 .section { margin-bottom: 28px; }

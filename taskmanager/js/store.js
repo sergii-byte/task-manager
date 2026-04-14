@@ -91,6 +91,18 @@ const Store = {
         if (projectId) return this._data.tasks.filter(t => t.projectId === projectId);
         return this._data.tasks;
     },
+    getInboxTasks() {
+        return this._data.tasks.filter(t => !t.projectId);
+    },
+    getTasksForOwner(ownerId) {
+        const clientIds = this._data.clients.filter(c => c.ownerId === ownerId).map(c => c.id);
+        const projectIds = this._data.projects.filter(p => clientIds.includes(p.clientId)).map(p => p.id);
+        return this._data.tasks.filter(t => projectIds.includes(t.projectId));
+    },
+    getTasksForClient(clientId) {
+        const projectIds = this._data.projects.filter(p => p.clientId === clientId).map(p => p.id);
+        return this._data.tasks.filter(t => projectIds.includes(t.projectId));
+    },
     getTask(id) { return this._data.tasks.find(t => t.id === id); },
     addTask(data) {
         const t = { id: this.id(), created: new Date().toISOString(), status: 'todo', priority: 'medium', tags: [], hoursLogged: 0, ...data };

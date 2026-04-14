@@ -161,7 +161,8 @@ IMPORTANT: Determine the "action" based on what user says:
 
 Rules:
 - If the user mentions a specific existing client/company/project by name, match it to the IDs from context
-- If creating a task and no project exists yet, suggest create_chain with the full chain
+- Tasks CAN be created without a project (free-floating / inbox tasks). If no project is mentioned or obvious, just omit projectId — the task goes to Inbox
+- If user explicitly wants a full hierarchy, use create_chain
 - Dates: convert relative dates ("friday", "next week", "через 3 дня") to YYYY-MM-DD format
 - Priority: default to "medium" unless user indicates urgency
 - isProcedural: true if it's a court/regulatory/filing deadline
