@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LegalFlow</title>
-    <link rel="stylesheet" href="css/style.css?v=7">
+    <link rel="stylesheet" href="css/style.css?v=9">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x2696;</text></svg>">
 </head>
 <body>
@@ -50,7 +50,7 @@
                     <span data-i18n="sectionClients">Clients</span>
                     <button class="add-btn" id="add-client-btn" title="Add client">+</button>
                 </div>
-                <ul id="owners-list" class="nav-list"></ul>
+                <ul id="clients-list" class="nav-list"></ul>
             </div>
 
             <div class="sidebar-footer">
@@ -107,6 +107,16 @@
                 </div>
             </div>
 
+            <!-- Generic list view (clients / companies / overdue / in-progress / hours) -->
+            <div id="view-list" class="view">
+                <div class="view-header">
+                    <h2 id="list-title"></h2>
+                    <div class="view-actions" id="list-actions"></div>
+                </div>
+                <p id="list-subtitle" style="color:var(--text-3);font-size:13px;margin-bottom:16px"></p>
+                <div id="list-body"></div>
+            </div>
+
             <!-- Inbox view (free-floating tasks) -->
             <div id="view-inbox" class="view">
                 <div class="view-header">
@@ -131,29 +141,10 @@
                 </div>
             </div>
 
-            <!-- Client view -->
-            <div id="view-owner" class="view">
-                <div class="view-header">
-                    <h2 id="owner-name"></h2>
-                    <div class="view-actions">
-                        <button class="btn btn-sm" id="btn-add-task-owner" data-i18n="addTaskHere">+ Task</button>
-                        <button class="btn btn-sm" id="btn-add-company" data-i18n="addCompany">+ Company</button>
-                        <button class="btn btn-sm btn-glass" id="btn-edit-owner" data-i18n="edit">Edit</button>
-                        <button class="btn btn-sm btn-danger" id="btn-delete-owner" data-i18n="delete">Delete</button>
-                    </div>
-                </div>
-                <div id="owner-info" class="info-bar"></div>
-                <div id="clients-grid" class="cards-grid"></div>
-                <div id="owner-tasks-section" class="section" style="margin-top:24px"></div>
-            </div>
-
-            <!-- Company view -->
+            <!-- Client view (person, not entity) -->
             <div id="view-client" class="view">
                 <div class="view-header">
-                    <div>
-                        <span id="client-breadcrumb" class="breadcrumb"></span>
-                        <h2 id="client-name"></h2>
-                    </div>
+                    <h2 id="client-name"></h2>
                     <div class="view-actions">
                         <button class="btn btn-sm" id="btn-add-task-client" data-i18n="addTaskHere">+ Task</button>
                         <button class="btn btn-sm" id="btn-add-project" data-i18n="addProject">+ Project</button>
@@ -162,6 +153,7 @@
                     </div>
                 </div>
                 <div id="client-info" class="info-bar"></div>
+                <div id="client-companies-bar" class="companies-bar"></div>
                 <div id="projects-grid" class="cards-grid"></div>
                 <div id="client-tasks-section" class="section" style="margin-top:24px"></div>
             </div>
@@ -280,10 +272,10 @@
     <!-- Toast container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="js/store.js?v=7"></script>
-    <script src="js/i18n.js?v=7"></script>
-    <script src="js/sheets-sync.js?v=7"></script>
-    <script src="js/ai-input.js?v=7"></script>
-    <script src="js/app.js?v=7"></script>
+    <script src="js/store.js?v=9"></script>
+    <script src="js/i18n.js?v=9"></script>
+    <script src="js/sheets-sync.js?v=9"></script>
+    <script src="js/ai-input.js?v=9"></script>
+    <script src="js/app.js?v=9"></script>
 </body>
 </html>

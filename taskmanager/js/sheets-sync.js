@@ -8,7 +8,6 @@ const SheetsSync = {
     _gsiLoaded: false,
 
     SHEET_NAMES: {
-        owners: 'Owners',
         clients: 'Clients',
         projects: 'Projects',
         tasks: 'Tasks',
@@ -17,10 +16,9 @@ const SheetsSync = {
     },
 
     HEADERS: {
-        owners: ['id', 'name', 'email', 'telegram', 'notes', 'created'],
-        clients: ['id', 'ownerId', 'name', 'email', 'telegram', 'notes', 'created'],
-        projects: ['id', 'clientId', 'name', 'projectType', 'jurisdiction', 'status', 'pricingType', 'rate', 'fixedPrice', 'deadline', 'notes', 'created'],
-        tasks: ['id', 'projectId', 'title', 'status', 'priority', 'deadline', 'isProcedural', 'tags', 'hoursLogged', 'notes', 'created'],
+        clients: ['id', 'name', 'email', 'telegram', 'companies', 'notes', 'created'],
+        projects: ['id', 'clientId', 'name', 'company', 'projectType', 'jurisdiction', 'status', 'pricingType', 'rate', 'fixedPrice', 'deadline', 'notes', 'created'],
+        tasks: ['id', 'projectId', 'clientId', 'title', 'status', 'priority', 'deadline', 'isProcedural', 'tags', 'hoursLogged', 'notes', 'created'],
         tags: ['id', 'name', 'color'],
         timeLogs: ['id', 'taskId', 'hours', 'description', 'date'],
     },

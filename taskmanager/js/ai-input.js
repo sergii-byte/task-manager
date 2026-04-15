@@ -98,25 +98,22 @@ const AiInput = {
     },
 
     buildContext() {
-        const owners = Store.getOwners();
         const clients = Store.getClients();
         const projects = Store.getProjects();
         const tags = Store.getTags();
 
         let context = 'Current data structure:\n';
 
-        if (owners.length === 0) {
+        if (clients.length === 0) {
             context += '\nNo clients yet (empty system).\n';
         } else {
-            owners.forEach(o => {
-                context += `\nClient: "${o.name}" (id: ${o.id})\n`;
-                const ownerClients = clients.filter(c => c.ownerId === o.id);
-                ownerClients.forEach(c => {
-                    context += `  Company: "${c.name}" (id: ${c.id})\n`;
-                    const clientProjects = projects.filter(p => p.clientId === c.id);
-                    clientProjects.forEach(p => {
-                        context += `    Project: "${p.name}" (id: ${p.id}, type: ${p.projectType || 'not set'}, jurisdiction: ${p.jurisdiction || 'not set'})\n`;
-                    });
+            clients.forEach(c => {
+                const cos = Array.isArray(c.companies) && c.companies.length ? ` [companies: ${c.companies.join(', ')}]` : '';
+                context += `\nClient: "${c.name}" (id: ${c.id})${cos}\n`;
+                const clientProjects = projects.filter(p => p.clientId === c.id);
+                clientProjects.forEach(p => {
+                    const co = p.company ? `, company: "${p.company}"` : '';
+                    context += `  Project: "${p.name}" (id: ${p.id}${co}, type: ${p.projectType || 'not set'}, jurisdiction: ${p.jurisdiction || 'not set'})\n`;
                 });
             });
         }
@@ -126,8 +123,7 @@ const AiInput = {
         }
 
         if (App.currentProjectId) context += `\nCurrently selected project ID: ${App.currentProjectId}\n`;
-        if (App.currentClientId) context += `Currently selected company ID: ${App.currentClientId}\n`;
-        if (App.currentOwnerId) context += `Currently selected client ID: ${App.currentOwnerId}\n`;
+        if (App.currentClientId) context += `Currently selected client ID: ${App.currentClientId}\n`;
 
         const today = new Date().toISOString().split('T')[0];
         context += `\nToday: ${today}\n`;
@@ -136,41 +132,40 @@ const AiInput = {
     },
 
     async callClaude(userText, context) {
-        const systemPrompt = `You are an assistant for LegalFlow, a task manager for an international lawyer. Hierarchy: Clients (people) → Companies → Projects → Tasks. Time can be logged on Tasks.
+        const systemPrompt = `You are an assistant for LegalFlow, a task manager for an international lawyer. Hierarchy: Client (person) → Project → Task. Time is logged on tasks. A Project optionally has a "company" field — a string naming the legal entity the work is for (e.g. "Acme Ltd"). Companies are NOT separate entities; they are strings attached to a project, and each client has a list of company names aggregated from their projects.
 
 ${context}
 
-The user describes intentions in free form (Ukrainian, English, Russian — any language, often via voice transcription so may be a bit messy). Your job: figure out EVERYTHING they want done and return a JSON object describing it.
+The user describes intentions in free form (Ukrainian, English, Russian — any language, often via voice transcription so may be messy). Your job: figure out EVERYTHING they want done and return a JSON object describing it.
 
 === ACTIONS ===
 
 1. create_client — add a person (the actual paying client)
-   { "action": "create_client", "name": "...", "email"?, "telegram"?, "notes"? }
+   { "action": "create_client", "name": "...", "email"?, "telegram"?, "notes"?, "companies"?: ["Acme Ltd", ...] }
 
-2. create_company — add a legal entity belonging to a client
-   { "action": "create_company", "name": "...", "ownerId"? (existing client id), "ownerName"? (for display), "notes"? }
+2. create_project — add a project under a client
+   { "action": "create_project", "name": "...", "clientId"? (existing client id), "clientName"? (for match/create), "company"? (optional legal-entity string), "projectType"?: "licensing"|"corporate"|"contracts"|"compliance", "jurisdiction"?, "status"?: "active", "deadline"?: "YYYY-MM-DD" }
 
-3. create_project — add a project under a company
-   { "action": "create_project", "name": "...", "clientId"? (company id), "clientName"? (for display), "projectType"?: "licensing"|"corporate"|"contracts"|"compliance", "jurisdiction"?, "status"?: "active", "deadline"?: "YYYY-MM-DD" }
-
-4. create_task — add a task
+3. create_task — add a task
    { "action": "create_task", "title": "...", "notes"?, "priority"?: "low"|"medium"|"high", "deadline"?: "YYYY-MM-DD", "isProcedural"?: bool, "projectId"? (existing project id), "projectName"? (for display), "tagIds"?: [], "subtasks"?: [] }
 
-5. log_hours — log time spent on a task
+4. log_hours — log time spent on a task
    { "action": "log_hours", "hours": <number>, "taskId"? (existing task id), "taskName"? (to match an existing task by name OR the name of a task created earlier in the same chain), "description"? }
 
-6. create_chain — MULTIPLE actions in one go (USE THIS LIBERALLY!)
+5. create_chain — MULTIPLE actions in one go (USE THIS LIBERALLY!)
    { "action": "create_chain", "items": [ {each item is one of the above actions, in order} ] }
 
 === CRITICAL RULES ===
 
-- If the user packs more than one intent into a single sentence ("create project X and log Y hours", "add client A with company B and project C", "create task and set deadline tomorrow") — you MUST return create_chain with each step as a separate item. Never collapse multiple intents into a single create_task.
+- If the user packs more than one intent into a single sentence ("create project X for client Y and log Z hours", "add task and set deadline tomorrow") — you MUST return create_chain with each step as a separate item. Never collapse multiple intents into a single create_task.
 
-- Inside a chain, items can reference earlier-created entities by name. The chain runs in order, and the runtime auto-links: a create_project after a create_company uses that company; a create_task after a create_project uses that project; a log_hours after a create_task logs against that task.
+- Inside a chain, items can reference earlier-created entities by name. The chain runs in order and the runtime auto-links: a create_project after a create_client uses that client; a create_task after a create_project uses that project; a log_hours after a create_task logs against that task.
 
-- If the user names an existing entity (client, company, project, task), match it to the id from context above. If they name something NOT in context, the chain must CREATE it before referencing it.
+- If the user names an existing client/project/task, match it to the id from context above. If they name a client NOT in context, the chain must create_client for them first.
 
-- Tasks may exist without a project (Inbox) — only omit projectId if user clearly didn't tie it to anything.
+- If the user mentions a legal entity / company (e.g. "for Acme Ltd"), attach it as the "company" string field on create_project. Do NOT create a separate company entity — the company is just a field on the project.
+
+- Tasks may exist without a project (Inbox) — only omit projectId/projectName if user clearly didn't tie it to anything.
 
 - Dates: convert "tomorrow", "Friday", "next week", "через 3 дні" etc. to YYYY-MM-DD using Today from context.
 
@@ -200,12 +195,11 @@ User: "log 2.5 hours on the NDA review"
 Response:
 {"action":"log_hours","hours":2.5,"taskName":"NDA review"}
 
-User: "add client John Smith with company Acme Ltd and a licensing project for the UK"
+User: "add client John Smith with a licensing project for his company Acme Ltd in the UK"
 Response:
 {"action":"create_chain","items":[
-  {"action":"create_client","name":"John Smith"},
-  {"action":"create_company","name":"Acme Ltd","ownerName":"John Smith"},
-  {"action":"create_project","name":"Licensing","clientName":"Acme Ltd","projectType":"licensing","jurisdiction":"UK"}
+  {"action":"create_client","name":"John Smith","companies":["Acme Ltd"]},
+  {"action":"create_project","name":"Licensing","clientName":"John Smith","company":"Acme Ltd","projectType":"licensing","jurisdiction":"UK"}
 ]}`;
 
         const response = await fetch('https://api.anthropic.com/v1/messages', {

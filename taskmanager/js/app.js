@@ -1,7 +1,6 @@
 const App = {
     currentView: 'dashboard',
-    currentOwnerId: null,
-    currentClientId: null,
+    currentClientId: null,   // client = person (the paying human)
     currentProjectId: null,
     taskFilter: 'all',
     editingId: null,
@@ -80,13 +79,13 @@ const App = {
         document.getElementById('lang-uk')?.classList.toggle('active', lang === 'uk');
     },
 
-    // ===== Events (all via addEventListener, no inline onclick) =====
+    // ===== Events =====
     bindEvents() {
         // Sidebar nav
         this._on('nav-dashboard', 'click', () => this.showDashboard());
         this._on('nav-calendar', 'click', () => this.showCalendar());
         this._on('nav-inbox', 'click', () => this.showInbox());
-        this._on('add-client-btn', 'click', () => this.showModal('owner'));
+        this._on('add-client-btn', 'click', () => this.showModal('client'));
 
         // Sync
         this._on('sync-btn', 'click', () => {
@@ -115,14 +114,10 @@ const App = {
         this._on('btn-tags', 'click', () => this.showTagsManager());
 
         // View action buttons
-        this._on('btn-add-company', 'click', () => this.showModal('client'));
-        this._on('btn-edit-owner', 'click', () => this.editOwner());
-        this._on('btn-delete-owner', 'click', () => this.deleteOwner());
-        this._on('btn-add-task-owner', 'click', () => this.showModal('task'));
-        this._on('btn-add-project', 'click', () => this.showModal('project'));
         this._on('btn-edit-client', 'click', () => this.editClient());
         this._on('btn-delete-client', 'click', () => this.deleteClient());
         this._on('btn-add-task-client', 'click', () => this.showModal('task'));
+        this._on('btn-add-project', 'click', () => this.showModal('project'));
         this._on('btn-add-task', 'click', () => this.showModal('task'));
         this._on('btn-edit-project', 'click', () => this.editProject());
         this._on('btn-delete-project', 'click', () => this.deleteProject());
@@ -170,7 +165,7 @@ const App = {
             }
         });
 
-        // Delegated clicks for dynamic elements
+        // Delegated clicks for dynamic elements in main
         document.getElementById('main').addEventListener('click', (e) => {
             const target = e.target.closest('[data-action]');
             if (!target) return;
@@ -181,21 +176,21 @@ const App = {
                 case 'edit-task': this.editTask(id); break;
                 case 'delete-task': this.deleteTask(id); break;
                 case 'toggle-timer': this.toggleTimer(id); break;
-                case 'select-owner': this.selectOwner(id); break;
                 case 'select-client': this.selectClient(id); break;
                 case 'select-project': this.selectProject(id); break;
                 case 'show-modal': this.showModal(target.dataset.type); break;
                 case 'assign-project': this.editTask(id); break;
+                case 'show-list': this.showList(target.dataset.list); break;
             }
         });
 
         // Sidebar delegated clicks
-        document.getElementById('owners-list').addEventListener('click', (e) => {
+        document.getElementById('clients-list').addEventListener('click', (e) => {
             const item = e.target.closest('[data-action]');
             if (!item) return;
             e.stopPropagation();
-            if (item.dataset.action === 'select-owner') this.selectOwner(item.dataset.id);
             if (item.dataset.action === 'select-client') this.selectClient(item.dataset.id);
+            if (item.dataset.action === 'select-project') this.selectProject(item.dataset.id);
         });
     },
 
@@ -215,35 +210,35 @@ const App = {
 
     // ===== Sidebar =====
     renderSidebar() {
-        const owners = Store.getOwners();
-        const list = document.getElementById('owners-list');
+        const clients = Store.getClients();
+        const list = document.getElementById('clients-list');
 
-        if (owners.length === 0) {
+        if (clients.length === 0) {
             list.innerHTML = `<li class="nav-item" style="color:var(--text-3);font-size:12px;cursor:default;padding:8px 12px">${this.t('noClients')}</li>`;
-            return;
+        } else {
+            let html = '';
+            clients.forEach(c => {
+                const projects = Store.getProjects(c.id);
+                const isActive = this.currentClientId === c.id && this.currentView === 'client';
+                const initials = this.getInitials(c.name);
+                html += `<li class="nav-item${isActive ? ' active' : ''}" data-action="select-client" data-id="${c.id}">
+                    <span style="display:flex;align-items:center"><span class="client-avatar">${initials}</span>${this.esc(c.name)}</span>
+                    <span class="badge">${projects.length}</span>
+                </li>`;
+                if (this.currentClientId === c.id && projects.length > 0) {
+                    html += '<ul class="nav-list nav-sub">';
+                    projects.forEach(p => {
+                        const isProjActive = this.currentProjectId === p.id;
+                        const label = p.company ? `<span style="color:var(--text-3);font-size:11px">${this.esc(p.company)} \u00B7 </span>${this.esc(p.name)}` : this.esc(p.name);
+                        html += `<li class="nav-item${isProjActive ? ' active' : ''}" data-action="select-project" data-id="${p.id}">
+                            <span>${label}</span>
+                        </li>`;
+                    });
+                    html += '</ul>';
+                }
+            });
+            list.innerHTML = html;
         }
-
-        let html = '';
-        owners.forEach(o => {
-            const clients = Store.getClients(o.id);
-            const isActive = this.currentOwnerId === o.id && this.currentView === 'owner';
-            const initials = this.getInitials(o.name);
-            html += `<li class="nav-item${isActive ? ' active' : ''}" data-action="select-owner" data-id="${o.id}">
-                <span style="display:flex;align-items:center"><span class="client-avatar">${initials}</span>${this.esc(o.name)}</span>
-                <span class="badge">${clients.length}</span>
-            </li>`;
-            if (this.currentOwnerId === o.id && clients.length > 0) {
-                html += '<ul class="nav-list nav-sub">';
-                clients.forEach(c => {
-                    const isClientActive = this.currentClientId === c.id;
-                    html += `<li class="nav-item${isClientActive ? ' active' : ''}" data-action="select-client" data-id="${c.id}">
-                        <span>${this.esc(c.name)}</span>
-                    </li>`;
-                });
-                html += '</ul>';
-            }
-        });
-        list.innerHTML = html;
 
         // Update nav active states
         document.getElementById('nav-dashboard')?.classList.toggle('active', this.currentView === 'dashboard');
@@ -273,7 +268,6 @@ const App = {
 
     // ===== Dashboard =====
     showDashboard() {
-        this.currentOwnerId = null;
         this.currentClientId = null;
         this.currentProjectId = null;
         this.showView('dashboard');
@@ -285,11 +279,11 @@ const App = {
     renderDashboard() {
         const stats = Store.getStats();
         document.getElementById('dashboard-stats').innerHTML = `
-            <div class="stat-card"><div class="stat-icon">\uD83D\uDC65</div><div class="stat-value">${stats.owners}</div><div class="stat-label">${this.t('statClients')}</div></div>
-            <div class="stat-card"><div class="stat-icon">\uD83C\uDFE2</div><div class="stat-value">${stats.clients}</div><div class="stat-label">${this.t('statCompanies')}</div></div>
-            <div class="stat-card"><div class="stat-icon">\u23F3</div><div class="stat-value">${stats.inProgress}</div><div class="stat-label">${this.t('statInProgress')}</div></div>
-            <div class="stat-card"><div class="stat-icon">\u26A0</div><div class="stat-value" style="color:${stats.overdue ? 'var(--red)' : ''}">${stats.overdue}</div><div class="stat-label">${this.t('statOverdue')}</div></div>
-            <div class="stat-card"><div class="stat-icon">\u23F1</div><div class="stat-value">${stats.totalHours}h</div><div class="stat-label">${this.t('statHours')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="clients"><div class="stat-icon">\uD83D\uDC65</div><div class="stat-value">${stats.clients}</div><div class="stat-label">${this.t('statClients')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="companies"><div class="stat-icon">\uD83C\uDFE2</div><div class="stat-value">${stats.companies}</div><div class="stat-label">${this.t('statCompanies')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="in_progress"><div class="stat-icon">\u23F3</div><div class="stat-value">${stats.inProgress}</div><div class="stat-label">${this.t('statInProgress')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="overdue"><div class="stat-icon">\u26A0</div><div class="stat-value" style="color:${stats.overdue ? 'var(--red)' : ''}">${stats.overdue}</div><div class="stat-label">${this.t('statOverdue')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="hours"><div class="stat-icon">\u23F1</div><div class="stat-value">${stats.totalHours}h</div><div class="stat-label">${this.t('statHours')}</div></div>
         `;
 
         const allTasks = Store.getTasks();
@@ -308,14 +302,13 @@ const App = {
             : `<div class="empty-state"><p>${this.t('noTasksInProgress')}</p></div>`;
 
         const recent = [...allTasks].sort((a, b) => new Date(b.created) - new Date(a.created)).slice(0, 8);
-        const owners = Store.getOwners();
+        const clients = Store.getClients();
 
-        if (owners.length === 0) {
-            // Welcome state - no clients at all
+        if (clients.length === 0) {
             document.getElementById('recent-tasks').innerHTML = `<div class="empty-state">
                 <div class="empty-icon">\u2696</div>
                 <p>${this.t('welcomeMessage')}</p>
-                <button class="cta-btn" data-action="show-modal" data-type="owner">\u002B ${this.t('newClient')}</button>
+                <button class="cta-btn" data-action="show-modal" data-type="client">\u002B ${this.t('newClient')}</button>
             </div>`;
         } else if (recent.length === 0) {
             document.getElementById('recent-tasks').innerHTML = `<div class="empty-state">
@@ -329,9 +322,9 @@ const App = {
         this.renderCalendarMini('dashboard-calendar');
     },
 
-    // ===== Inbox (free-floating tasks) =====
+    // ===== Inbox =====
     showInbox() {
-        this.currentOwnerId = null; this.currentClientId = null; this.currentProjectId = null;
+        this.currentClientId = null; this.currentProjectId = null;
         this.showView('inbox');
         this.renderInbox();
         this.renderSidebar();
@@ -353,9 +346,191 @@ const App = {
         container.innerHTML = sorted.map(t => this.renderTaskItem(t, false, true)).join('');
     },
 
+    // ===== Generic list view (reached from dashboard stat cards) =====
+    showList(type) {
+        this.currentClientId = null;
+        this.currentProjectId = null;
+        this.currentListType = type;
+        this.showView('list');
+        this.renderList();
+        this.renderSidebar();
+        this.closeSidebar();
+    },
+
+    renderList() {
+        const type = this.currentListType;
+        const titleEl = document.getElementById('list-title');
+        const subtitleEl = document.getElementById('list-subtitle');
+        const bodyEl = document.getElementById('list-body');
+        const actionsEl = document.getElementById('list-actions');
+        actionsEl.innerHTML = '';
+
+        if (type === 'clients') {
+            titleEl.innerHTML = '\uD83D\uDC65 ' + this.t('allClients');
+            subtitleEl.textContent = this.t('allClientsSubtitle');
+            actionsEl.innerHTML = `<button class="btn btn-sm" data-action="show-modal" data-type="client">+ ${this.t('newClient')}</button>`;
+
+            const clients = Store.getClients();
+            if (clients.length === 0) {
+                bodyEl.innerHTML = `<div class="empty-state">
+                    <div class="empty-icon">\uD83D\uDC65</div>
+                    <p>${this.t('noClients')}</p>
+                    <button class="cta-btn" data-action="show-modal" data-type="client">+ ${this.t('newClient')}</button>
+                </div>`;
+                return;
+            }
+            bodyEl.innerHTML = '<div class="cards-grid">' + clients.map(c => {
+                const projects = Store.getProjects(c.id);
+                const tasks = Store.getTasksForClient(c.id);
+                const done = tasks.filter(t => t.status === 'done').length;
+                const companies = Array.isArray(c.companies) ? c.companies : [];
+                const initials = this.getInitials(c.name);
+                return `<div class="card" data-action="select-client" data-id="${c.id}">
+                    <h3><span class="client-avatar">${initials}</span>${this.esc(c.name)}</h3>
+                    ${companies.length ? `<div class="card-meta"><span>\uD83C\uDFE2 ${companies.slice(0, 3).map(n => this.esc(n)).join(', ')}${companies.length > 3 ? ' +' + (companies.length - 3) : ''}</span></div>` : ''}
+                    <div class="card-meta">
+                        <span>${projects.length} ${this.t('projects').toLowerCase()}</span>
+                        <span>${done}/${tasks.length} ${this.t('tasks').toLowerCase()}</span>
+                    </div>
+                </div>`;
+            }).join('') + '</div>';
+            return;
+        }
+
+        if (type === 'companies') {
+            titleEl.innerHTML = '\uD83C\uDFE2 ' + this.t('allCompanies');
+            subtitleEl.textContent = this.t('allCompaniesSubtitle');
+
+            // Aggregate: company name → [{client, projects}]
+            const map = new Map();
+            Store.getClients().forEach(c => {
+                (c.companies || []).forEach(name => {
+                    if (!name) return;
+                    const key = name.trim();
+                    if (!map.has(key)) map.set(key, { name: key, clients: [], projects: [] });
+                    map.get(key).clients.push(c);
+                });
+            });
+            Store.getProjects().forEach(p => {
+                if (!p.company) return;
+                const key = p.company.trim();
+                if (!map.has(key)) map.set(key, { name: key, clients: [], projects: [] });
+                map.get(key).projects.push(p);
+            });
+
+            const entries = [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+            if (entries.length === 0) {
+                bodyEl.innerHTML = `<div class="empty-state">
+                    <div class="empty-icon">\uD83C\uDFE2</div>
+                    <p>${this.t('noCompaniesYet')}</p>
+                </div>`;
+                return;
+            }
+            bodyEl.innerHTML = '<div class="cards-grid">' + entries.map(e => {
+                const uniqueClients = [...new Set(e.clients.map(c => c.id))].map(id => Store.getClient(id)).filter(Boolean);
+                const projList = e.projects.slice(0, 3).map(p => `<span class="pill">${this.esc(p.name)}</span>`).join(' ');
+                const moreProj = e.projects.length > 3 ? ` <span style="color:var(--text-3);font-size:11px">+${e.projects.length - 3}</span>` : '';
+                return `<div class="card">
+                    <h3>\uD83C\uDFE2 ${this.esc(e.name)}</h3>
+                    <div class="card-meta"><span>${uniqueClients.length} ${this.t('clientsLower')}</span><span>${e.projects.length} ${this.t('projects').toLowerCase()}</span></div>
+                    ${uniqueClients.length ? `<div class="card-meta" style="flex-wrap:wrap;gap:6px">${uniqueClients.map(c => `<span class="pill clickable-pill" data-action="select-client" data-id="${c.id}">${this.esc(c.name)}</span>`).join('')}</div>` : ''}
+                    ${e.projects.length ? `<div class="card-meta" style="flex-wrap:wrap;gap:6px">${projList}${moreProj}</div>` : ''}
+                </div>`;
+            }).join('') + '</div>';
+            return;
+        }
+
+        if (type === 'in_progress') {
+            titleEl.innerHTML = '\u23F3 ' + this.t('inProgress');
+            subtitleEl.textContent = this.t('inProgressSubtitle');
+            const tasks = Store.getTasks().filter(t => t.status === 'in_progress');
+            if (tasks.length === 0) {
+                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon">\u23F3</div><p>${this.t('noTasksInProgress')}</p></div>`;
+                return;
+            }
+            const sorted = [...tasks].sort((a, b) => {
+                if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+                if (a.deadline) return -1;
+                if (b.deadline) return 1;
+                return new Date(b.created) - new Date(a.created);
+            });
+            bodyEl.innerHTML = '<div class="tasks-list">' + sorted.map(t => this.renderTaskItem(t, true)).join('') + '</div>';
+            return;
+        }
+
+        if (type === 'overdue') {
+            titleEl.innerHTML = '\u26A0 ' + this.t('statOverdue');
+            subtitleEl.textContent = this.t('overdueSubtitle');
+            const now = new Date();
+            const tasks = Store.getTasks().filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'done');
+            if (tasks.length === 0) {
+                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon">\u2705</div><p>${this.t('noOverdueTasks')}</p></div>`;
+                return;
+            }
+            const sorted = [...tasks].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            bodyEl.innerHTML = '<div class="tasks-list">' + sorted.map(t => this.renderTaskItem(t, true)).join('') + '</div>';
+            return;
+        }
+
+        if (type === 'hours') {
+            titleEl.innerHTML = '\u23F1 ' + this.t('hoursLogged');
+            subtitleEl.textContent = this.t('hoursSubtitle');
+
+            // Aggregate hours per client / project / task
+            const tasks = Store.getTasks();
+            const loggedTasks = tasks.filter(t => (parseFloat(t.hoursLogged) || 0) > 0)
+                .sort((a, b) => (parseFloat(b.hoursLogged) || 0) - (parseFloat(a.hoursLogged) || 0));
+
+            // Per-client totals
+            const clientTotals = new Map();
+            tasks.forEach(t => {
+                const hours = parseFloat(t.hoursLogged) || 0;
+                if (!hours) return;
+                let clientId = t.clientId;
+                if (!clientId && t.projectId) {
+                    const p = Store.getProject(t.projectId);
+                    if (p) clientId = p.clientId;
+                }
+                if (!clientId) return;
+                clientTotals.set(clientId, (clientTotals.get(clientId) || 0) + hours);
+            });
+            const clientRows = [...clientTotals.entries()]
+                .map(([id, h]) => ({ client: Store.getClient(id), hours: h }))
+                .filter(r => r.client)
+                .sort((a, b) => b.hours - a.hours);
+
+            const stats = Store.getStats();
+
+            let html = `<div class="section">
+                <div class="section-title">${this.t('totalHoursLabel')}: <strong>${stats.totalHours}h</strong></div>
+            </div>`;
+
+            if (clientRows.length) {
+                html += `<div class="section"><div class="section-title">${this.t('byClient')}</div><div class="cards-grid">` +
+                    clientRows.map(r => `<div class="card" data-action="select-client" data-id="${r.client.id}">
+                        <h3><span class="client-avatar">${this.getInitials(r.client.name)}</span>${this.esc(r.client.name)}</h3>
+                        <div class="card-meta"><span><strong>${Math.round(r.hours * 100) / 100}h</strong></span></div>
+                    </div>`).join('') + '</div></div>';
+            }
+
+            if (loggedTasks.length) {
+                html += `<div class="section" style="margin-top:24px"><div class="section-title">${this.t('taskBreakdown')} <span class="count">${loggedTasks.length}</span></div><div class="tasks-list">` +
+                    loggedTasks.map(t => this.renderTaskItem(t, true)).join('') + '</div></div>';
+            } else {
+                html += `<div class="empty-state"><p>${this.t('noHoursLogged')}</p></div>`;
+            }
+
+            bodyEl.innerHTML = html;
+            return;
+        }
+
+        // Fallback
+        bodyEl.innerHTML = `<div class="empty-state"><p>Unknown list type: ${this.esc(type)}</p></div>`;
+    },
+
     // ===== Calendar =====
     showCalendar() {
-        this.currentOwnerId = null; this.currentClientId = null; this.currentProjectId = null;
+        this.currentClientId = null; this.currentProjectId = null;
         this.showView('calendar');
         this.renderCalendarFull();
         this.renderSidebar();
@@ -403,7 +578,6 @@ const App = {
             <div class="cal-grid">${daysHtml}</div>
         `;
 
-        // Bind calendar nav
         el.querySelector('[data-cal-prev]')?.addEventListener('click', () => {
             this.calMonth--;
             if (this.calMonth < 0) { this.calMonth = 11; this.calYear--; }
@@ -415,7 +589,6 @@ const App = {
             this.renderCalendarMini(containerId);
         });
 
-        // Click on day: show day detail (tasks + add button)
         el.querySelectorAll('.cal-day.clickable').forEach(dayEl => {
             dayEl.addEventListener('click', () => {
                 const date = dayEl.dataset.date;
@@ -475,7 +648,6 @@ const App = {
         };
         overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
-        // Wire task actions inside day detail (edit/delete/status cycle/timer)
         overlay.querySelector('.tasks-list')?.addEventListener('click', (e) => {
             const target = e.target.closest('[data-action]');
             if (!target) return;
@@ -530,67 +702,12 @@ const App = {
         return map;
     },
 
-    // ===== Client (Owner) =====
-    selectOwner(id) {
-        this.currentOwnerId = id; this.currentClientId = null; this.currentProjectId = null;
-        this.showView('owner');
-        this.renderOwner();
-        this.renderSidebar();
-        this.closeSidebar();
-    },
-
-    renderOwner() {
-        const owner = Store.getOwner(this.currentOwnerId);
-        if (!owner) return this.showDashboard();
-        document.getElementById('owner-name').textContent = owner.name;
-        const infoParts = [];
-        if (owner.email) infoParts.push(`<span>\u2709 <strong>Email:</strong> ${this.esc(owner.email)}</span>`);
-        if (owner.telegram) infoParts.push(`<span>\u2708 <strong>Telegram:</strong> ${this.esc(owner.telegram)}</span>`);
-        if (owner.notes) infoParts.push(`<span>\uD83D\uDCDD <strong>${this.t('notes')}:</strong> ${this.esc(owner.notes)}</span>`);
-        document.getElementById('owner-info').innerHTML = infoParts.join('') || `<span style="color:var(--text-3)">${this.t('noContactInfo')}</span>`;
-
-        const clients = Store.getClients(this.currentOwnerId);
-        const clientsGrid = document.getElementById('clients-grid');
-        if (clients.length === 0) {
-            clientsGrid.innerHTML = `<div class="empty-state">
-                <div class="empty-icon">\uD83C\uDFE2</div>
-                <p>${this.t('noCompanies')}</p>
-                <button class="cta-btn" data-action="show-modal" data-type="client">\u002B ${this.t('newCompany')}</button>
-            </div>`;
-        } else {
-            clientsGrid.innerHTML = clients.map(c => {
-                const allTasks = Store.getTasksForClient(c.id);
-                const done = allTasks.filter(t => t.status === 'done').length;
-                const projects = Store.getProjects(c.id);
-                const pct = allTasks.length ? Math.round(done / allTasks.length * 100) : 0;
-                return `<div class="card" data-action="select-client" data-id="${c.id}">
-                    <h3>${this.esc(c.name)}</h3>
-                    <div class="card-meta">
-                        <span>${projects.length} ${this.t('projects')}</span>
-                        <span>${done}/${allTasks.length} ${this.t('tasks')}</span>
-                    </div>
-                    <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
-                </div>`;
-            }).join('');
-        }
-
-        // Direct tasks attached to this client (not routed through companies)
-        const directTasks = Store.getDirectOwnerTasks(this.currentOwnerId);
-        const section = document.getElementById('owner-tasks-section');
-        if (directTasks.length) {
-            const sorted = [...directTasks].sort((a, b) => new Date(b.created) - new Date(a.created));
-            section.innerHTML = `<div class="section-title">${this.t('tasks')} <span class="count">${directTasks.length}</span></div>
-                <div class="tasks-list">${sorted.map(t => this.renderTaskItem(t)).join('')}</div>`;
-        } else {
-            section.innerHTML = '';
-        }
-    },
-
-    // ===== Company (Client) =====
+    // ===== Client (the person) =====
     selectClient(id) {
         const client = Store.getClient(id);
         if (!client) return;
-        this.currentClientId = id; this.currentOwnerId = client.ownerId; this.currentProjectId = null;
+        this.currentClientId = id;
+        this.currentProjectId = null;
         this.showView('client');
         this.renderClient();
         this.renderSidebar();
@@ -600,48 +717,102 @@ const App = {
     renderClient() {
         const client = Store.getClient(this.currentClientId);
         if (!client) return this.showDashboard();
-        const owner = Store.getOwner(client.ownerId);
         document.getElementById('client-name').textContent = client.name;
 
-        const bc = document.getElementById('client-breadcrumb');
-        bc.textContent = owner ? `\u2190 ${owner.name}` : '';
-        bc.onclick = () => this.selectOwner(client.ownerId);
-
+        // Contact info
         const infoParts = [];
         if (client.email) infoParts.push(`<span>\u2709 <strong>Email:</strong> ${this.esc(client.email)}</span>`);
         if (client.telegram) infoParts.push(`<span>\u2708 <strong>Telegram:</strong> ${this.esc(client.telegram)}</span>`);
         if (client.notes) infoParts.push(`<span>\uD83D\uDCDD <strong>${this.t('notes')}:</strong> ${this.esc(client.notes)}</span>`);
-        document.getElementById('client-info').innerHTML = infoParts.join('') || `<span style="color:var(--text-3)">${this.t('noInfo')}</span>`;
+        document.getElementById('client-info').innerHTML = infoParts.join('') || `<span style="color:var(--text-3)">${this.t('noContactInfo')}</span>`;
 
+        // Companies bar (chips)
+        const companies = Array.isArray(client.companies) ? client.companies : [];
+        const companiesEl = document.getElementById('client-companies-bar');
+        if (companies.length) {
+            companiesEl.innerHTML = `<span class="companies-label">\uD83C\uDFE2 ${this.t('companies')}:</span>` +
+                companies.map(name => `<span class="company-chip">${this.esc(name)}</span>`).join('');
+        } else {
+            companiesEl.innerHTML = '';
+        }
+
+        // Projects grouped by company (or ungrouped if none have company)
         const projects = Store.getProjects(this.currentClientId);
+        const grid = document.getElementById('projects-grid');
+
         if (projects.length === 0) {
-            document.getElementById('projects-grid').innerHTML = `<div class="empty-state">
+            grid.innerHTML = `<div class="empty-state">
                 <div class="empty-icon">\uD83D\uDCC1</div>
                 <p>${this.t('noProjects')}</p>
                 <button class="cta-btn" data-action="show-modal" data-type="project">\u002B ${this.t('newProject')}</button>
             </div>`;
-            return;
+        } else {
+            // Group: company name string → projects
+            const groups = new Map();
+            const NO_COMPANY = '__none__';
+            projects.forEach(p => {
+                const key = p.company && p.company.trim() ? p.company : NO_COMPANY;
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(p);
+            });
+
+            const statusL = { active: this.t('statusActive'), on_hold: this.t('statusOnHold'), completed: this.t('statusCompleted') };
+            const typeL = { licensing: this.t('typeLicensing'), corporate: this.t('typeCorporate'), contracts: this.t('typeContracts'), compliance: this.t('typeCompliance') };
+
+            const renderCard = (p) => {
+                const tasks = Store.getTasks(p.id);
+                const done = tasks.filter(t => t.status === 'done').length;
+                const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
+                return `<div class="card" data-action="select-project" data-id="${p.id}">
+                    <h3>${this.esc(p.name)}</h3>
+                    <div class="card-meta">
+                        <span><span class="status-badge ${p.status}"><span class="status-dot ${p.status}"></span> ${statusL[p.status] || p.status}</span></span>
+                        <span>${done}/${tasks.length}</span>
+                    </div>
+                    ${p.projectType ? `<div class="card-meta"><span>${typeL[p.projectType] || p.projectType}</span></div>` : ''}
+                    ${p.jurisdiction ? `<div class="card-meta"><span>\uD83C\uDF10 ${this.esc(p.jurisdiction)}</span></div>` : ''}
+                    ${p.deadline ? `<div class="card-meta"><span class="${this.deadlineClass(p.deadline)}">${this.t('deadlineLabel')}: ${this.formatDate(p.deadline)}</span></div>` : ''}
+                    <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
+                </div>`;
+            };
+
+            // If everything fits in NO_COMPANY, skip headings
+            if (groups.size === 1 && groups.has(NO_COMPANY)) {
+                grid.innerHTML = projects.map(renderCard).join('');
+            } else {
+                let html = '';
+                // Order: named companies first (in client.companies order), then NO_COMPANY
+                const orderedKeys = [];
+                (client.companies || []).forEach(name => {
+                    if (groups.has(name) && !orderedKeys.includes(name)) orderedKeys.push(name);
+                });
+                // Any groups not in client.companies list
+                for (const key of groups.keys()) {
+                    if (key !== NO_COMPANY && !orderedKeys.includes(key)) orderedKeys.push(key);
+                }
+                if (groups.has(NO_COMPANY)) orderedKeys.push(NO_COMPANY);
+
+                orderedKeys.forEach(key => {
+                    const items = groups.get(key) || [];
+                    if (!items.length) return;
+                    const label = key === NO_COMPANY ? this.t('noCompanyLabel') : this.esc(key);
+                    html += `<div class="company-group-label">\uD83C\uDFE2 ${label}</div>`;
+                    html += `<div class="cards-grid-inner">${items.map(renderCard).join('')}</div>`;
+                });
+                grid.innerHTML = html;
+            }
         }
 
-        const statusL = { active: this.t('statusActive'), on_hold: this.t('statusOnHold'), completed: this.t('statusCompleted') };
-        const typeL = { licensing: this.t('typeLicensing'), corporate: this.t('typeCorporate'), contracts: this.t('typeContracts'), compliance: this.t('typeCompliance') };
-
-        document.getElementById('projects-grid').innerHTML = projects.map(p => {
-            const tasks = Store.getTasks(p.id);
-            const done = tasks.filter(t => t.status === 'done').length;
-            const pct = tasks.length ? Math.round(done / tasks.length * 100) : 0;
-            return `<div class="card" data-action="select-project" data-id="${p.id}">
-                <h3>${this.esc(p.name)}</h3>
-                <div class="card-meta">
-                    <span><span class="status-badge ${p.status}"><span class="status-dot ${p.status}"></span> ${statusL[p.status] || p.status}</span></span>
-                    <span>${done}/${tasks.length}</span>
-                </div>
-                ${p.projectType ? `<div class="card-meta"><span>${typeL[p.projectType] || p.projectType}</span></div>` : ''}
-                ${p.jurisdiction ? `<div class="card-meta"><span>\uD83C\uDF10 ${this.esc(p.jurisdiction)}</span></div>` : ''}
-                ${p.deadline ? `<div class="card-meta"><span class="${this.deadlineClass(p.deadline)}">${this.t('deadlineLabel')}: ${this.formatDate(p.deadline)}</span></div>` : ''}
-                <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
-            </div>`;
-        }).join('');
+        // Direct client tasks
+        const directTasks = Store.getDirectClientTasks(this.currentClientId);
+        const section = document.getElementById('client-tasks-section');
+        if (directTasks.length) {
+            const sorted = [...directTasks].sort((a, b) => new Date(b.created) - new Date(a.created));
+            section.innerHTML = `<div class="section-title">${this.t('tasks')} <span class="count">${directTasks.length}</span></div>
+                <div class="tasks-list">${sorted.map(t => this.renderTaskItem(t)).join('')}</div>`;
+        } else {
+            section.innerHTML = '';
+        }
     },
 
     // ===== Project =====
@@ -650,8 +821,6 @@ const App = {
         if (!project) return;
         this.currentProjectId = id;
         this.currentClientId = project.clientId;
-        const client = Store.getClient(project.clientId);
-        if (client) this.currentOwnerId = client.ownerId;
         this.showView('project');
         this.renderProject();
         this.renderSidebar();
@@ -662,9 +831,8 @@ const App = {
         const project = Store.getProject(this.currentProjectId);
         if (!project) return this.showDashboard();
         const client = Store.getClient(project.clientId);
-        const owner = client ? Store.getOwner(client.ownerId) : null;
         document.getElementById('project-name').textContent = project.name;
-        const crumbs = [owner?.name, client?.name].filter(Boolean).join(' \u2192 ');
+        const crumbs = [client?.name, project.company].filter(Boolean).join(' \u2192 ');
 
         const bc = document.getElementById('project-breadcrumb');
         bc.textContent = crumbs ? `\u2190 ${crumbs}` : '';
@@ -673,6 +841,7 @@ const App = {
         const statusL = { active: this.t('statusActive'), on_hold: this.t('statusOnHold'), completed: this.t('statusCompleted') };
         const typeL = { licensing: this.t('typeLicensing'), corporate: this.t('typeCorporate'), contracts: this.t('typeContracts'), compliance: this.t('typeCompliance') };
         const infoParts = [`<span><span class="status-badge ${project.status}"><span class="status-dot ${project.status}"></span> ${statusL[project.status] || project.status}</span></span>`];
+        if (project.company) infoParts.push(`<span>\uD83C\uDFE2 <strong>${this.t('companyLabel')}:</strong> ${this.esc(project.company)}</span>`);
         if (project.projectType) infoParts.push(`<span><strong>${this.t('typeLabel')}:</strong> ${typeL[project.projectType] || project.projectType}</span>`);
         if (project.jurisdiction) infoParts.push(`<span><strong>${this.t('jurisdictionLabel')}:</strong> ${this.esc(project.jurisdiction)}</span>`);
         if (project.deadline) infoParts.push(`<span class="${this.deadlineClass(project.deadline)}"><strong>${this.t('deadlineLabel')}:</strong> ${this.formatDate(project.deadline)}</span>`);
@@ -714,21 +883,15 @@ const App = {
         const meta = [];
 
         if (showContext) {
-            // Build hierarchy path from whatever IDs the task has
+            // Build hierarchy path: Client (person) → [Company] → Project
             if (task.projectId) {
                 const project = Store.getProject(task.projectId);
                 const client = project ? Store.getClient(project.clientId) : null;
-                const owner = client ? Store.getOwner(client.ownerId) : null;
-                const parts = [owner?.name, client?.name, project?.name].filter(Boolean).map(n => this.esc(n));
+                const parts = [client?.name, project?.company, project?.name].filter(Boolean).map(n => this.esc(n));
                 if (parts.length) meta.push(parts.join(' \u2192 '));
             } else if (task.clientId) {
                 const client = Store.getClient(task.clientId);
-                const owner = client ? Store.getOwner(client.ownerId) : null;
-                const parts = [owner?.name, client?.name].filter(Boolean).map(n => this.esc(n));
-                if (parts.length) meta.push(parts.join(' \u2192 '));
-            } else if (task.ownerId) {
-                const owner = Store.getOwner(task.ownerId);
-                if (owner) meta.push(`\uD83D\uDC64 ${this.esc(owner.name)}`);
+                if (client) meta.push(`\uD83D\uDC64 ${this.esc(client.name)}`);
             } else {
                 meta.push(`<span style="color:var(--accent)">\uD83D\uDCE5 ${this.t('inbox')}</span>`);
             }
@@ -838,12 +1001,8 @@ const App = {
         const container = document.getElementById('search-results');
         if (!query.trim()) { container.classList.remove('open'); return; }
         let html = '';
-        if (results.owners.length) {
-            html += `<div class="search-group-title">${this.t('clients')}</div>`;
-            html += results.owners.map(o => `<div class="search-item" data-action="select-owner" data-id="${o.id}">${this.esc(o.name)}</div>`).join('');
-        }
         if (results.clients.length) {
-            html += `<div class="search-group-title">${this.t('statCompanies')}</div>`;
+            html += `<div class="search-group-title">${this.t('clients')}</div>`;
             html += results.clients.map(c => `<div class="search-item" data-action="select-client" data-id="${c.id}">${this.esc(c.name)}</div>`).join('');
         }
         if (results.projects.length) {
@@ -852,19 +1011,17 @@ const App = {
         }
         if (results.tasks.length) {
             html += `<div class="search-group-title">${this.t('tasks')}</div>`;
-            html += results.tasks.map(t => `<div class="search-item" data-action="select-project" data-id="${t.projectId}">${this.esc(t.title)}</div>`).join('');
+            html += results.tasks.map(t => `<div class="search-item" data-action="select-project" data-id="${t.projectId || ''}">${this.esc(t.title)}</div>`).join('');
         }
         container.innerHTML = html || `<div class="search-item" style="color:var(--text-3)">\u2014</div>`;
         container.classList.add('open');
 
-        // Bind clicks on search results
         container.querySelectorAll('[data-action]').forEach(el => {
             el.addEventListener('click', () => {
                 const action = el.dataset.action;
                 const id = el.dataset.id;
-                if (action === 'select-owner') this.selectOwner(id);
-                else if (action === 'select-client') this.selectClient(id);
-                else if (action === 'select-project') this.selectProject(id);
+                if (action === 'select-client') this.selectClient(id);
+                else if (action === 'select-project' && id) this.selectProject(id);
                 container.classList.remove('open');
                 document.getElementById('search-input').value = '';
             });
@@ -883,45 +1040,87 @@ const App = {
         const form = document.getElementById('modal-form');
         const isEdit = !!editId;
 
-        if (type === 'owner') {
-            const o = isEdit ? Store.getOwner(editId) : {};
+        if (type === 'client') {
+            const c = isEdit ? Store.getClient(editId) : {};
+            const companies = Array.isArray(c.companies) ? c.companies : [];
             title.textContent = isEdit ? this.t('editClient') : this.t('newClient');
             form.innerHTML = `
-                <div class="form-group"><label>${this.t('clientName')} *</label><input name="name" required value="${this.esc(o.name || '')}" placeholder="${this.t('clientNamePlaceholder') || ''}"></div>
+                <div class="form-group"><label>${this.t('clientName')}</label><input name="name" required value="${this.esc(c.name || '')}" placeholder="${this.t('clientNamePlaceholder') || ''}"></div>
                 <div class="form-row">
-                    <div class="form-group"><label>${this.t('email')}</label><input name="email" type="email" value="${this.esc(o.email || '')}" placeholder="name@example.com"></div>
-                    <div class="form-group"><label>${this.t('telegram')}</label><input name="telegram" value="${this.esc(o.telegram || '')}" placeholder="@username"></div>
-                </div>
-                <div class="form-group"><label>${this.t('notes')}</label><textarea name="notes" placeholder="${this.t('notesPlaceholder') || ''}">${this.esc(o.notes || '')}</textarea></div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-glass" data-form-cancel>${this.t('cancel')}</button>
-                    <button type="submit" class="btn">${isEdit ? this.t('save') : this.t('create')}</button>
-                </div>`;
-            form.onsubmit = (e) => { e.preventDefault(); this.saveOwner(e.target); };
-        }
-
-        else if (type === 'client') {
-            const c = isEdit ? Store.getClient(editId) : {};
-            title.textContent = isEdit ? this.t('editCompany') : this.t('newCompany');
-            form.innerHTML = `
-                <div class="form-group"><label>${this.t('companyName')} *</label><input name="name" required value="${this.esc(c.name || '')}"></div>
-                <div class="form-row">
-                    <div class="form-group"><label>${this.t('email')}</label><input name="email" type="email" value="${this.esc(c.email || '')}"></div>
+                    <div class="form-group"><label>${this.t('email')}</label><input name="email" type="email" value="${this.esc(c.email || '')}" placeholder="name@example.com"></div>
                     <div class="form-group"><label>${this.t('telegram')}</label><input name="telegram" value="${this.esc(c.telegram || '')}" placeholder="@username"></div>
                 </div>
-                <div class="form-group"><label>${this.t('notes')}</label><textarea name="notes">${this.esc(c.notes || '')}</textarea></div>
+                <div class="form-group">
+                    <label>${this.t('companiesLabel')}</label>
+                    <div class="companies-editor" id="companies-editor"></div>
+                    <input type="text" id="new-company-input" placeholder="${this.t('addCompanyPlaceholder')}" style="margin-top:6px;">
+                    <div style="font-size:11px;color:var(--text-3);margin-top:4px">${this.t('companiesHelp')}</div>
+                </div>
+                <div class="form-group"><label>${this.t('notes')}</label><textarea name="notes" placeholder="${this.t('notesPlaceholder') || ''}">${this.esc(c.notes || '')}</textarea></div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-glass" data-form-cancel>${this.t('cancel')}</button>
                     <button type="submit" class="btn">${isEdit ? this.t('save') : this.t('create')}</button>
                 </div>`;
-            form.onsubmit = (e) => { e.preventDefault(); this.saveClient_form(e.target); };
+
+            // Companies editor: chips + add/remove
+            const editor = form.querySelector('#companies-editor');
+            const workingCompanies = [...companies];
+            const renderChips = () => {
+                editor.innerHTML = workingCompanies.length
+                    ? workingCompanies.map((name, i) => `<span class="company-chip editable" data-idx="${i}">${this.esc(name)} <button type="button" class="chip-remove" data-idx="${i}">\u00D7</button></span>`).join('')
+                    : `<span style="color:var(--text-3);font-size:12px">${this.t('noCompaniesYet')}</span>`;
+                editor.querySelectorAll('.chip-remove').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        workingCompanies.splice(parseInt(btn.dataset.idx), 1);
+                        renderChips();
+                    });
+                });
+            };
+            renderChips();
+
+            const newInput = form.querySelector('#new-company-input');
+            const commitCompany = () => {
+                const v = newInput.value.trim();
+                if (!v) return;
+                if (!workingCompanies.some(n => n.toLowerCase() === v.toLowerCase())) {
+                    workingCompanies.push(v);
+                }
+                newInput.value = '';
+                renderChips();
+            };
+            newInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    commitCompany();
+                }
+            });
+
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                // Commit any pending text in the company input
+                if (newInput.value.trim()) commitCompany();
+                this.saveClient_form(e.target, workingCompanies);
+            };
         }
 
         else if (type === 'project') {
             const p = isEdit ? Store.getProject(editId) : {};
+            const clientId = isEdit ? p.clientId : this.currentClientId;
+            const client = clientId ? Store.getClient(clientId) : null;
+            const clientCompanies = client && Array.isArray(client.companies) ? client.companies : [];
             title.textContent = isEdit ? this.t('editProject') : this.t('newProject');
+
+            const companyOptions = [`<option value=""${!p.company ? ' selected' : ''}>${this.t('noCompanyOption')}</option>`]
+                .concat(clientCompanies.map(name => `<option value="${this.esc(name)}"${p.company === name ? ' selected' : ''}>${this.esc(name)}</option>`))
+                .concat([`<option value="__new__">${this.t('addNewCompanyOption')}</option>`])
+                .join('');
+
             form.innerHTML = `
-                <div class="form-group"><label>${this.t('projectName')} *</label><input name="name" required value="${this.esc(p.name || '')}"></div>
+                <div class="form-group"><label>${this.t('projectName')}</label><input name="name" required value="${this.esc(p.name || '')}"></div>
+                <div class="form-group"><label>${this.t('companyLabel')}</label>
+                    <select name="companySelect" id="project-company-select">${companyOptions}</select>
+                    <input type="text" name="companyNew" id="project-company-new" placeholder="${this.t('newCompanyName') || 'New company name'}" style="display:none;margin-top:6px;">
+                </div>
                 <div class="form-row">
                     <div class="form-group"><label>${this.t('projectType')}</label>
                         <select name="projectType">
@@ -949,6 +1148,20 @@ const App = {
                     <button type="button" class="btn btn-glass" data-form-cancel>${this.t('cancel')}</button>
                     <button type="submit" class="btn">${isEdit ? this.t('save') : this.t('create')}</button>
                 </div>`;
+
+            // Toggle the "new company" input when the user picks __new__
+            const selectEl = form.querySelector('#project-company-select');
+            const newEl = form.querySelector('#project-company-new');
+            selectEl.addEventListener('change', () => {
+                if (selectEl.value === '__new__') {
+                    newEl.style.display = '';
+                    newEl.focus();
+                } else {
+                    newEl.style.display = 'none';
+                    newEl.value = '';
+                }
+            });
+
             form.onsubmit = (e) => { e.preventDefault(); this.saveProject_form(e.target); };
         }
 
@@ -961,32 +1174,25 @@ const App = {
                 `<label class="form-check"><input type="checkbox" name="tag_${tag.id}" ${taskTags.includes(tag.id)?'checked':''}> <span class="tag" style="background:${tag.color}22;color:${tag.color}">${this.esc(tag.name)}</span></label>`
             ).join(' ');
 
-            // Unified target selector: value encodes "kind:id" so we can tell which level was picked.
-            // kind: inbox | owner | client | project
+            // Unified target selector: "inbox:" | "client:<id>" | "project:<id>"
             let currentTarget = 'inbox:';
             if (isEdit) {
                 if (t.projectId) currentTarget = 'project:' + t.projectId;
                 else if (t.clientId) currentTarget = 'client:' + t.clientId;
-                else if (t.ownerId) currentTarget = 'owner:' + t.ownerId;
             } else if (this.currentProjectId) currentTarget = 'project:' + this.currentProjectId;
             else if (this.currentClientId) currentTarget = 'client:' + this.currentClientId;
-            else if (this.currentOwnerId) currentTarget = 'owner:' + this.currentOwnerId;
 
-            const owners = Store.getOwners();
+            const clients = Store.getClients();
             let targetOpts = `<option value="inbox:"${currentTarget === 'inbox:' ? ' selected' : ''}>${this.t('noProject')}</option>`;
-            owners.forEach(o => {
-                targetOpts += `<optgroup label="\uD83D\uDC64 ${this.esc(o.name)}">`;
-                const ownerVal = 'owner:' + o.id;
-                targetOpts += `<option value="${ownerVal}"${currentTarget === ownerVal ? ' selected' : ''}>${this.t('clientLabel')}: ${this.esc(o.name)}</option>`;
-                const clients = Store.getClients(o.id);
-                clients.forEach(c => {
-                    const clientVal = 'client:' + c.id;
-                    targetOpts += `<option value="${clientVal}"${currentTarget === clientVal ? ' selected' : ''}>\u00A0\u00A0\u00A0\u00A0${this.t('companyLabel')}: ${this.esc(c.name)}</option>`;
-                    const projects = Store.getProjects(c.id);
-                    projects.forEach(p => {
-                        const projectVal = 'project:' + p.id;
-                        targetOpts += `<option value="${projectVal}"${currentTarget === projectVal ? ' selected' : ''}>\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0${this.esc(p.name)}</option>`;
-                    });
+            clients.forEach(c => {
+                targetOpts += `<optgroup label="\uD83D\uDC64 ${this.esc(c.name)}">`;
+                const clientVal = 'client:' + c.id;
+                targetOpts += `<option value="${clientVal}"${currentTarget === clientVal ? ' selected' : ''}>${this.t('clientLabel')}: ${this.esc(c.name)}</option>`;
+                const projects = Store.getProjects(c.id);
+                projects.forEach(p => {
+                    const projectVal = 'project:' + p.id;
+                    const labelPrefix = p.company ? `${p.company} \u00B7 ` : '';
+                    targetOpts += `<option value="${projectVal}"${currentTarget === projectVal ? ' selected' : ''}>\u00A0\u00A0\u00A0\u00A0${this.esc(labelPrefix + p.name)}</option>`;
                 });
                 targetOpts += `</optgroup>`;
             });
@@ -996,7 +1202,7 @@ const App = {
 
             title.textContent = isEdit ? this.t('editTask') : this.t('newTask');
             form.innerHTML = `
-                <div class="form-group"><label>${this.t('taskTitle')} *</label><input name="title" required value="${this.esc(t.title || '')}"></div>
+                <div class="form-group"><label>${this.t('taskTitle')}</label><input name="title" required value="${this.esc(t.title || '')}"></div>
                 ${projectSelectHtml}
                 <div class="form-row">
                     <div class="form-group"><label>${this.t('status')}</label>
@@ -1032,12 +1238,10 @@ const App = {
 
         overlay.classList.add('open');
 
-        // Bind cancel buttons in form
         form.querySelectorAll('[data-form-cancel]').forEach(btn => {
             btn.addEventListener('click', () => this.closeModal());
         });
 
-        // Focus first input
         setTimeout(() => form.querySelector('input:not([type=checkbox]), select')?.focus(), 100);
     },
 
@@ -1048,43 +1252,42 @@ const App = {
     },
 
     // ===== Save =====
-    saveOwner(form) {
+    saveClient_form(form, companies) {
         const data = Object.fromEntries(new FormData(form));
-        if (this.editingId) {
-            Store.updateOwner(this.editingId, data);
-            this.toast(this.t('saved'), 'success');
-        } else {
-            const o = Store.addOwner(data);
-            this.toast(`${this.t('clientCreated')}: ${data.name}`, 'success');
-            this.selectOwner(o.id);
-        }
-        this.closeModal(); this.renderSidebar();
-        if (this.currentView === 'owner') this.renderOwner();
-    },
-
-    saveClient_form(form) {
-        const data = Object.fromEntries(new FormData(form));
+        data.companies = Array.isArray(companies) ? companies : [];
         if (this.editingId) {
             Store.updateClient(this.editingId, data);
             this.toast(this.t('saved'), 'success');
         } else {
-            data.ownerId = this.currentOwnerId;
             const c = Store.addClient(data);
-            this.toast(`${this.t('companyCreated')}: ${data.name}`, 'success');
+            this.toast(`${this.t('clientCreated')}: ${data.name}`, 'success');
             this.selectClient(c.id);
         }
         this.closeModal(); this.renderSidebar();
         if (this.currentView === 'client') this.renderClient();
-        if (this.currentView === 'owner') this.renderOwner();
     },
 
     saveProject_form(form) {
-        const data = Object.fromEntries(new FormData(form));
+        const fd = new FormData(form);
+        const data = Object.fromEntries(fd);
+        // Resolve company selector
+        let company = data.companySelect || '';
+        if (company === '__new__') {
+            company = (data.companyNew || '').trim();
+        }
+        delete data.companySelect;
+        delete data.companyNew;
+        data.company = company;
+
         if (this.editingId) {
             Store.updateProject(this.editingId, data);
             this.toast(this.t('saved'), 'success');
         } else {
             data.clientId = this.currentClientId;
+            if (!data.clientId) {
+                this.toast(this.t('selectClientFirst'), 'warning');
+                return;
+            }
             Store.addProject(data);
             this.toast(`${this.t('projectCreated')}: ${data.name}`, 'success');
         }
@@ -1101,25 +1304,17 @@ const App = {
         data.tags = tags;
         data.isProcedural = !!fd.get('isProcedural');
 
-        // Parse unified target selector ("kind:id") into ownerId/clientId/projectId
+        // Parse unified target selector
         const target = data.taskTarget || '';
         delete data.taskTarget;
         const [kind, targetId] = target.split(':');
-        data.ownerId = ''; data.clientId = ''; data.projectId = '';
+        data.clientId = ''; data.projectId = '';
         if (kind === 'project' && targetId) {
             data.projectId = targetId;
             const proj = Store.getProject(targetId);
-            if (proj) {
-                data.clientId = proj.clientId;
-                const client = Store.getClient(proj.clientId);
-                if (client) data.ownerId = client.ownerId;
-            }
+            if (proj) data.clientId = proj.clientId;
         } else if (kind === 'client' && targetId) {
             data.clientId = targetId;
-            const client = Store.getClient(targetId);
-            if (client) data.ownerId = client.ownerId;
-        } else if (kind === 'owner' && targetId) {
-            data.ownerId = targetId;
         }
 
         if (this.editingId) {
@@ -1136,18 +1331,13 @@ const App = {
     },
 
     // ===== Edit / Delete =====
-    editOwner() { this.showModal('owner', this.currentOwnerId); },
     editClient() { this.showModal('client', this.currentClientId); },
     editProject() { this.showModal('project', this.currentProjectId); },
     editTask(id) { this.showModal('task', id); },
 
-    async deleteOwner() {
-        const ok = await this.confirm(this.t('confirmDeleteClient'), this.t('confirmDeleteClientText'));
-        if (ok) { Store.deleteOwner(this.currentOwnerId); this.toast(this.t('deleted'), 'success'); this.showDashboard(); }
-    },
     async deleteClient() {
-        const ok = await this.confirm(this.t('confirmDeleteCompany'), this.t('confirmDeleteCompanyText'));
-        if (ok) { Store.deleteClient(this.currentClientId); this.toast(this.t('deleted'), 'success'); this.selectOwner(this.currentOwnerId); }
+        const ok = await this.confirm(this.t('confirmDeleteClient'), this.t('confirmDeleteClientText'));
+        if (ok) { Store.deleteClient(this.currentClientId); this.toast(this.t('deleted'), 'success'); this.showDashboard(); }
     },
     async deleteProject() {
         const ok = await this.confirm(this.t('confirmDeleteProject'), this.t('confirmDeleteProjectText'));
@@ -1189,7 +1379,6 @@ const App = {
             </div>`).join('')
             : `<p style="color:var(--text-3);font-size:13px">${this.t('noTags')}</p>`;
 
-        // Bind delete buttons
         container.querySelectorAll('.tag-delete').forEach(btn => {
             btn.addEventListener('click', () => {
                 Store.deleteTag(btn.dataset.tagId);
@@ -1197,6 +1386,7 @@ const App = {
             });
         });
     },
+
     addTag() {
         const name = document.getElementById('new-tag-name').value.trim();
         const color = document.getElementById('new-tag-color').value;
@@ -1219,18 +1409,14 @@ const App = {
                 <div class="ai-field"><span class="ai-field-label">${this.t('clientName')}:</span> <strong>${this.esc(data.name)}</strong></div>
                 ${data.email ? `<div class="ai-field"><span class="ai-field-label">Email:</span> ${this.esc(data.email)}</div>` : ''}
                 ${data.telegram ? `<div class="ai-field"><span class="ai-field-label">Telegram:</span> ${this.esc(data.telegram)}</div>` : ''}
-                ${data.notes ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.notes)}</div>` : ''}`;
-        } else if (action === 'create_company') {
-            fieldsHtml = `
-                <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newCompany')}</strong></div>
-                <div class="ai-field"><span class="ai-field-label">${this.t('companyName')}:</span> <strong>${this.esc(data.name)}</strong></div>
-                ${data.ownerName ? `<div class="ai-field"><span class="ai-field-label">${this.t('statClients')}:</span> ${this.esc(data.ownerName)}</div>` : ''}
+                ${data.companies?.length ? `<div class="ai-field"><span class="ai-field-label">${this.t('companies')}:</span> ${data.companies.map(c => this.esc(c)).join(', ')}</div>` : ''}
                 ${data.notes ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.notes)}</div>` : ''}`;
         } else if (action === 'create_project') {
             fieldsHtml = `
                 <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newProject')}</strong></div>
                 <div class="ai-field"><span class="ai-field-label">${this.t('projectName')}:</span> <strong>${this.esc(data.name)}</strong></div>
-                ${data.clientName ? `<div class="ai-field"><span class="ai-field-label">${this.t('statCompanies')}:</span> ${this.esc(data.clientName)}</div>` : ''}
+                ${data.clientName ? `<div class="ai-field"><span class="ai-field-label">${this.t('clientLabel')}:</span> ${this.esc(data.clientName)}</div>` : ''}
+                ${data.company ? `<div class="ai-field"><span class="ai-field-label">${this.t('companyLabel')}:</span> ${this.esc(data.company)}</div>` : ''}
                 ${data.projectType ? `<div class="ai-field"><span class="ai-field-label">${this.t('typeLabel')}:</span> ${data.projectType}</div>` : ''}
                 ${data.jurisdiction ? `<div class="ai-field"><span class="ai-field-label">${this.t('jurisdictionLabel')}:</span> ${this.esc(data.jurisdiction)}</div>` : ''}
                 ${data.deadline ? `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${data.deadline}</div>` : ''}`;
@@ -1241,8 +1427,8 @@ const App = {
                 ${data.taskName ? `<div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> ${this.esc(data.taskName)}</div>` : ''}
                 ${data.description ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.description)}</div>` : ''}`;
         } else if (action === 'create_chain') {
-            const icons = { create_client: '\uD83D\uDC64', create_company: '\uD83C\uDFE2', create_project: '\uD83D\uDCC1', create_task: '\u2705', log_hours: '\u23F1' };
-            const labels = { create_client: this.t('newClient'), create_company: this.t('newCompany'), create_project: this.t('newProject'), create_task: this.t('newTask'), log_hours: this.t('logHours') };
+            const icons = { create_client: '\uD83D\uDC64', create_project: '\uD83D\uDCC1', create_task: '\u2705', log_hours: '\u23F1' };
+            const labels = { create_client: this.t('newClient'), create_project: this.t('newProject'), create_task: this.t('newTask'), log_hours: this.t('logHours') };
             fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')} (${(data.items || []).length})</strong></div>`;
             (data.items || []).forEach((item, i) => {
                 const icon = icons[item.action] || '\u2022';
@@ -1256,7 +1442,7 @@ const App = {
                     const name = item.name || item.title || '';
                     if (name) fieldsHtml += ` &mdash; <strong>${this.esc(name)}</strong>`;
                     if (item.clientName) fieldsHtml += ` <span style="color:var(--text-3)">(${this.esc(item.clientName)})</span>`;
-                    if (item.ownerName) fieldsHtml += ` <span style="color:var(--text-3)">(${this.esc(item.ownerName)})</span>`;
+                    if (item.company) fieldsHtml += ` <span style="color:var(--text-3)">\uD83C\uDFE2 ${this.esc(item.company)}</span>`;
                     if (item.projectName) fieldsHtml += ` <span style="color:var(--text-3)">(\u2192 ${this.esc(item.projectName)})</span>`;
                     if (item.deadline) fieldsHtml += ` <span style="color:var(--text-3)">${this.t('deadline')}: ${item.deadline}</span>`;
                     if (item.priority && item.priority !== 'medium') fieldsHtml += ` <span style="color:var(--text-3)">${item.priority}</span>`;
@@ -1264,7 +1450,7 @@ const App = {
                 fieldsHtml += `</div>`;
             });
         } else {
-            // create_task (default)
+            // create_task
             fieldsHtml = `
                 <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newTask')}</strong></div>
                 <div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> <strong>${this.esc(data.title)}</strong></div>
@@ -1297,19 +1483,11 @@ const App = {
     _pendingAiData: null,
 
     // ===== AI chain helpers =====
-    _findOwnerByName(name) {
+    _findClientByName(name) {
         if (!name) return null;
         const n = name.toLowerCase().trim();
-        return Store.getOwners().find(o => (o.name || '').toLowerCase() === n)
-            || Store.getOwners().find(o => (o.name || '').toLowerCase().includes(n))
-            || null;
-    },
-    _findClientByName(name, ownerId) {
-        if (!name) return null;
-        const n = name.toLowerCase().trim();
-        const all = Store.getClients(ownerId || undefined);
-        return all.find(c => (c.name || '').toLowerCase() === n)
-            || all.find(c => (c.name || '').toLowerCase().includes(n))
+        return Store.getClients().find(c => (c.name || '').toLowerCase() === n)
+            || Store.getClients().find(c => (c.name || '').toLowerCase().includes(n))
             || null;
     },
     _findProjectByName(name, clientId) {
@@ -1333,97 +1511,95 @@ const App = {
         const found = this._findTaskByName(d.taskName);
         return found ? found.id : null;
     },
+
     // Run a chain of AI items in order, auto-linking by name.
-    // Returns: { lastOwnerId, lastClientId, lastProjectId, lastTaskId, created: {...counters}, skipped: [labels] }
     _runChain(items) {
-        let lastOwnerId = this.currentOwnerId;
         let lastClientId = this.currentClientId;
         let lastProjectId = this.currentProjectId;
         let lastTaskId = null;
-        const created = { client: 0, company: 0, project: 0, task: 0, hours: 0 };
+        const created = { client: 0, project: 0, task: 0, hours: 0 };
         const skipped = [];
 
         items.forEach(item => {
-            if (item.action === 'create_client') {
-                const existing = this._findOwnerByName(item.name);
-                if (existing) { lastOwnerId = existing.id; return; }
-                const o = Store.addOwner({ name: item.name, email: item.email || '', telegram: item.telegram || '', notes: item.notes || '' });
-                lastOwnerId = o.id;
-                created.client++;
-            }
-            else if (item.action === 'create_company') {
-                // Try resolve owner: explicit id → ownerName → lastOwnerId
-                let oid = item.ownerId && Store.getOwner(item.ownerId) ? item.ownerId : null;
-                if (!oid && item.ownerName) {
-                    const o = this._findOwnerByName(item.ownerName);
-                    if (o) oid = o.id;
+            // Tolerate legacy AI responses that still emit create_company
+            if (item.action === 'create_company') {
+                // Treat as: ensure the client exists and add company string to them
+                let cid = null;
+                if (item.ownerName) {
+                    const c = this._findClientByName(item.ownerName);
+                    if (c) cid = c.id;
                     else {
-                        // Auto-create owner from name
-                        const newO = Store.addOwner({ name: item.ownerName });
-                        oid = newO.id;
+                        const newC = Store.addClient({ name: item.ownerName, companies: [] });
+                        cid = newC.id;
                         created.client++;
                     }
+                } else if (lastClientId) {
+                    cid = lastClientId;
                 }
-                if (!oid) oid = lastOwnerId;
-                if (!oid) { skipped.push(`company "${item.name}" (no client)`); return; }
+                if (cid && item.name) Store.addCompanyToClient(cid, item.name);
+                if (cid) lastClientId = cid;
+                return;
+            }
 
-                // Reuse existing company with same name under that owner
-                const existing = this._findClientByName(item.name, oid);
-                if (existing) { lastClientId = existing.id; lastOwnerId = oid; return; }
-                const c = Store.addClient({ name: item.name, ownerId: oid, notes: item.notes || '' });
+            if (item.action === 'create_client') {
+                const existing = this._findClientByName(item.name);
+                if (existing) {
+                    lastClientId = existing.id;
+                    // If AI supplied extra companies, fold them in
+                    (item.companies || []).forEach(co => Store.addCompanyToClient(existing.id, co));
+                    return;
+                }
+                const c = Store.addClient({
+                    name: item.name,
+                    email: item.email || '',
+                    telegram: item.telegram || '',
+                    notes: item.notes || '',
+                    companies: Array.isArray(item.companies) ? item.companies : [],
+                });
                 lastClientId = c.id;
-                lastOwnerId = oid;
-                created.company++;
+                created.client++;
             }
             else if (item.action === 'create_project') {
-                // Resolve company: explicit id → clientName → lastClientId
+                // Resolve client: explicit id → clientName → lastClientId
                 let cid = item.clientId && Store.getClient(item.clientId) ? item.clientId : null;
                 if (!cid && item.clientName) {
                     const c = this._findClientByName(item.clientName);
                     if (c) cid = c.id;
                     else {
-                        // Try matching as a client (person) name first — common case where user says "for client X"
-                        const owner = this._findOwnerByName(item.clientName);
-                        let ownerId;
-                        if (owner) {
-                            ownerId = owner.id;
-                            // Look for any company under that owner
-                            const companies = Store.getClients(ownerId);
-                            if (companies.length === 1) cid = companies[0].id;
-                        } else {
-                            // Auto-create client + company with same name
-                            const newO = Store.addOwner({ name: item.clientName });
-                            ownerId = newO.id;
-                            created.client++;
-                        }
-                        if (!cid) {
-                            const newC = Store.addClient({ name: item.clientName, ownerId });
-                            cid = newC.id;
-                            created.company++;
-                        }
-                        lastOwnerId = ownerId;
+                        // Auto-create client with that name
+                        const newC = Store.addClient({ name: item.clientName, companies: [] });
+                        cid = newC.id;
+                        created.client++;
                     }
                 }
                 if (!cid) cid = lastClientId;
-                if (!cid && lastOwnerId) {
-                    // Fallback: create implicit company under last owner
-                    const newC = Store.addClient({ name: item.name, ownerId: lastOwnerId });
-                    cid = newC.id;
-                    created.company++;
-                }
-                if (!cid) { skipped.push(`project "${item.name}" (no company)`); return; }
+                if (!cid) { skipped.push(`project "${item.name}" (no client)`); return; }
 
                 const existing = this._findProjectByName(item.name, cid);
-                if (existing) { lastProjectId = existing.id; lastClientId = cid; return; }
-                const p = Store.addProject({ name: item.name, clientId: cid, projectType: item.projectType || '', jurisdiction: item.jurisdiction || '', status: item.status || 'active', deadline: item.deadline || '' });
+                if (existing) {
+                    lastProjectId = existing.id;
+                    lastClientId = cid;
+                    // If AI supplied a company, make sure it's on the client
+                    if (item.company) {
+                        Store.addCompanyToClient(cid, item.company);
+                        if (!existing.company) Store.updateProject(existing.id, { company: item.company });
+                    }
+                    return;
+                }
+                const p = Store.addProject({
+                    name: item.name,
+                    clientId: cid,
+                    company: item.company || '',
+                    projectType: item.projectType || '',
+                    jurisdiction: item.jurisdiction || '',
+                    status: item.status || 'active',
+                    deadline: item.deadline || '',
+                });
                 lastProjectId = p.id;
                 lastClientId = cid;
-                const cl = Store.getClient(cid);
-                if (cl) lastOwnerId = cl.ownerId;
                 created.project++;
             }
             else if (item.action === 'create_task') {
-                // Resolve project: explicit id → projectName → lastProjectId
                 let pid = item.projectId && Store.getProject(item.projectId) ? item.projectId : null;
                 if (!pid && item.projectName) {
                     const p = this._findProjectByName(item.projectName);
@@ -1431,8 +1607,7 @@ const App = {
                 }
                 if (!pid) pid = lastProjectId;
 
-                // Dedup: if a task with the same title already exists in the same project, reuse it
-                // (so a re-run of the same chain doesn't pile up duplicate tasks)
+                // Dedup: reuse existing same-title task in that project
                 const existing = pid
                     ? Store.getTasks(pid).find(t => (t.title || '').toLowerCase() === (item.title || '').toLowerCase())
                     : null;
@@ -1441,11 +1616,10 @@ const App = {
                     return;
                 }
 
-                // pid may still be empty → free-floating task is OK
+                // Fall back: attach to current client directly, else inbox
                 const t = Store.addTask({
                     projectId: pid || '',
                     clientId: !pid && lastClientId ? lastClientId : '',
-                    ownerId: !pid && !lastClientId && lastOwnerId ? lastOwnerId : '',
                     title: item.title,
                     priority: item.priority || 'medium',
                     deadline: item.deadline || '',
@@ -1460,8 +1634,6 @@ const App = {
                 }
             }
             else if (item.action === 'log_hours') {
-                // In a chain, prefer the task we just created (lastTaskId) over a name lookup,
-                // because the chain is acting on what it just made.
                 let tid = item.taskId && Store.getTask(item.taskId) ? item.taskId : null;
                 if (!tid) tid = lastTaskId;
                 if (!tid && item.taskName) {
@@ -1475,7 +1647,7 @@ const App = {
             }
         });
 
-        return { lastOwnerId, lastClientId, lastProjectId, lastTaskId, created, skipped };
+        return { lastClientId, lastProjectId, lastTaskId, created, skipped };
     },
 
     acceptAiResult() {
@@ -1484,31 +1656,41 @@ const App = {
         const action = d.action || 'create_task';
 
         if (action === 'create_client') {
-            const o = Store.addOwner({ name: d.name, email: d.email || '', telegram: d.telegram || '', notes: d.notes || '' });
+            const c = Store.addClient({
+                name: d.name,
+                email: d.email || '',
+                telegram: d.telegram || '',
+                notes: d.notes || '',
+                companies: Array.isArray(d.companies) ? d.companies : [],
+            });
             this.toast(`${this.t('clientCreated')}: ${d.name}`, 'success');
-            this.selectOwner(o.id);
-        }
-
-        else if (action === 'create_company') {
-            let ownerId = d.ownerId || this.currentOwnerId;
-            if (!ownerId) {
-                const owners = Store.getOwners();
-                if (owners.length === 1) ownerId = owners[0].id;
-                else { this.toast(this.t('selectClientFirst'), 'warning'); this.closeAiPreview(); return; }
-            }
-            const c = Store.addClient({ name: d.name, ownerId, notes: d.notes || '' });
-            this.toast(`${this.t('companyCreated')}: ${d.name}`, 'success');
             this.selectClient(c.id);
         }
 
         else if (action === 'create_project') {
             let clientId = d.clientId || this.currentClientId;
+            if (!clientId && d.clientName) {
+                const found = this._findClientByName(d.clientName);
+                if (found) clientId = found.id;
+                else {
+                    const newC = Store.addClient({ name: d.clientName, companies: [] });
+                    clientId = newC.id;
+                }
+            }
             if (!clientId) {
                 const clients = Store.getClients();
                 if (clients.length === 1) clientId = clients[0].id;
-                else { this.toast(this.t('selectCompanyFirst'), 'warning'); this.closeAiPreview(); return; }
+                else { this.toast(this.t('selectClientFirst'), 'warning'); this.closeAiPreview(); return; }
             }
-            const p = Store.addProject({ name: d.name, clientId, projectType: d.projectType || '', jurisdiction: d.jurisdiction || '', status: d.status || 'active', deadline: d.deadline || '' });
+            const p = Store.addProject({
+                name: d.name,
+                clientId,
+                company: d.company || '',
+                projectType: d.projectType || '',
+                jurisdiction: d.jurisdiction || '',
+                status: d.status || 'active',
+                deadline: d.deadline || '',
+            });
             this.toast(`${this.t('projectCreated')}: ${d.name}`, 'success');
             this.selectProject(p.id);
         }
@@ -1534,7 +1716,6 @@ const App = {
             const summary = this._runChain(d.items || []);
             const parts = [];
             if (summary.created.client) parts.push(`${summary.created.client} ${this.t('newClient').toLowerCase()}`);
-            if (summary.created.company) parts.push(`${summary.created.company} ${this.t('newCompany').toLowerCase()}`);
             if (summary.created.project) parts.push(`${summary.created.project} ${this.t('newProject').toLowerCase()}`);
             if (summary.created.task) parts.push(`${summary.created.task} ${this.t('newTask').toLowerCase()}`);
             if (summary.created.hours) parts.push(`${summary.created.hours}h ${this.t('hoursLogged').toLowerCase()}`);
@@ -1542,23 +1723,26 @@ const App = {
             if (summary.skipped.length) this.toast(this.t('chainPartial') + ': ' + summary.skipped.join(', '), 'warning');
             if (summary.lastProjectId) this.selectProject(summary.lastProjectId);
             else if (summary.lastClientId) this.selectClient(summary.lastClientId);
-            else if (summary.lastOwnerId) this.selectOwner(summary.lastOwnerId);
             else this.showDashboard();
         }
 
         else {
-            // create_task — supports free-floating tasks (no project required)
+            // create_task
             let projectId = this.currentProjectId || d.projectId || '';
             if (!projectId && d.projectName) {
                 const match = Store.getProjects().find(p => p.name.toLowerCase() === d.projectName.toLowerCase());
                 if (match) projectId = match.id;
             }
-            if (!projectId) {
-                const projects = Store.getProjects();
-                if (projects.length === 1) projectId = projects[0].id;
-                // else: create as inbox task (no project)
-            }
-            Store.addTask({ projectId, title: d.title, priority: d.priority || 'medium', deadline: d.deadline || '', isProcedural: d.isProcedural || false, notes: d.notes || '', tags: d.tagIds || [] });
+            Store.addTask({
+                projectId,
+                clientId: !projectId && this.currentClientId ? this.currentClientId : '',
+                title: d.title,
+                priority: d.priority || 'medium',
+                deadline: d.deadline || '',
+                isProcedural: d.isProcedural || false,
+                notes: d.notes || '',
+                tags: d.tagIds || [],
+            });
             if (d.subtasks?.length) d.subtasks.forEach(sub => Store.addTask({ projectId, title: sub, priority: 'medium' }));
             this.toast(`${this.t('taskCreated')}: ${d.title}`, 'success');
             if (this.currentProjectId) this.renderProject();
@@ -1577,7 +1761,6 @@ const App = {
         if (this.currentView === 'dashboard') this.renderDashboard();
         else if (this.currentView === 'calendar') this.renderCalendarFull();
         else if (this.currentView === 'inbox') this.renderInbox();
-        else if (this.currentView === 'owner') this.renderOwner();
         else if (this.currentView === 'client') this.renderClient();
         else if (this.currentView === 'project') this.renderProject();
         this.renderSidebar();
