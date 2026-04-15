@@ -14,6 +14,7 @@ const Icons = {
     globe(s)     { return this._svg('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>', s); },
     user(s)      { return this._svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', s); },
     inbox(s)     { return this._svg('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>', s); },
+    checklist(s) { return this._svg('<path d="M20 11.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/><polyline points="9 11 12 14 21 5"/>', s); },
     edit(s)      { return this._svg('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>', s); },
     trash(s)     { return this._svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', s); },
     calendar(s)  { return this._svg('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>', s); },
@@ -301,9 +302,10 @@ const App = {
 
     renderDashboard() {
         const stats = Store.getStats();
+        const activeTasks = stats.totalTasks - stats.done;
         document.getElementById('dashboard-stats').innerHTML = `
             <div class="stat-card clickable" data-action="show-list" data-list="clients"><div class="stat-icon">${Icons.users(18)}</div><div class="stat-value">${stats.clients}</div><div class="stat-label">${this.t('statClients')}</div></div>
-            <div class="stat-card clickable" data-action="show-list" data-list="companies"><div class="stat-icon">${Icons.building(18)}</div><div class="stat-value">${stats.companies}</div><div class="stat-label">${this.t('statCompanies')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="active"><div class="stat-icon">${Icons.checklist(18)}</div><div class="stat-value">${activeTasks}</div><div class="stat-label">${this.t('statTasks')}</div></div>
             <div class="stat-card clickable" data-action="show-list" data-list="in_progress"><div class="stat-icon">${Icons.hourglass(18)}</div><div class="stat-value">${stats.inProgress}</div><div class="stat-label">${this.t('statInProgress')}</div></div>
             <div class="stat-card clickable" data-action="show-list" data-list="overdue"><div class="stat-icon ${stats.overdue ? 'stat-icon-alert' : ''}">${Icons.alert(18)}</div><div class="stat-value" style="color:${stats.overdue ? 'var(--red)' : ''}">${stats.overdue}</div><div class="stat-label">${this.t('statOverdue')}</div></div>
             <div class="stat-card clickable" data-action="show-list" data-list="hours"><div class="stat-icon">${Icons.clock(18)}</div><div class="stat-value">${stats.totalHours}h</div><div class="stat-label">${this.t('statHours')}</div></div>
@@ -460,6 +462,34 @@ const App = {
                     ${e.projects.length ? `<div class="card-meta" style="flex-wrap:wrap;gap:6px">${projList}${moreProj}</div>` : ''}
                 </div>`;
             }).join('') + '</div>';
+            return;
+        }
+
+        if (type === 'active') {
+            titleEl.textContent = this.t('allTasks');
+            subtitleEl.textContent = this.t('allTasksSubtitle');
+            actionsEl.innerHTML = `<button class="btn btn-sm" data-action="show-modal" data-type="task">+ ${this.t('newTask')}</button>`;
+            const now = new Date();
+            const tasks = Store.getTasks().filter(t => t.status !== 'done');
+            if (tasks.length === 0) {
+                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon" style="color:var(--green,#6a8e5e)">${Icons.check(40)}</div><p>${this.t('noActiveTasks')}</p></div>`;
+                return;
+            }
+            // Sort: overdue first, then by deadline asc, then in_progress before todo, then newest
+            const statusRank = { in_progress: 0, todo: 1 };
+            const sorted = [...tasks].sort((a, b) => {
+                const aOver = a.deadline && new Date(a.deadline) < now ? 0 : 1;
+                const bOver = b.deadline && new Date(b.deadline) < now ? 0 : 1;
+                if (aOver !== bOver) return aOver - bOver;
+                if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+                if (a.deadline) return -1;
+                if (b.deadline) return 1;
+                const sa = statusRank[a.status] ?? 9;
+                const sb = statusRank[b.status] ?? 9;
+                if (sa !== sb) return sa - sb;
+                return new Date(b.created) - new Date(a.created);
+            });
+            bodyEl.innerHTML = '<div class="tasks-list">' + sorted.map(t => this.renderTaskItem(t, true)).join('') + '</div>';
             return;
         }
 
