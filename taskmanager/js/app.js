@@ -936,15 +936,17 @@ const App = {
         const meta = [];
 
         if (showContext) {
-            // Build hierarchy path: Client (person) → [Company] → Project
+            // Build hierarchy path: Client (person) → [Company] → [Project]
             if (task.projectId) {
                 const project = Store.getProject(task.projectId);
                 const client = project ? Store.getClient(project.clientId) : null;
                 const parts = [client?.name, project?.company, project?.name].filter(Boolean).map(n => this.esc(n));
                 if (parts.length) meta.push(parts.join(' \u2192 '));
-            } else if (task.clientId) {
-                const client = Store.getClient(task.clientId);
-                if (client) meta.push(this.esc(client.name));
+            } else if (task.clientId || task.company) {
+                const client = task.clientId ? Store.getClient(task.clientId) : null;
+                const parts = [client?.name, task.company].filter(Boolean).map(n => this.esc(n));
+                if (parts.length) meta.push(parts.join(' \u2192 '));
+                else meta.push(`<span style="color:var(--accent)">${this.t('inbox')}</span>`);
             } else {
                 meta.push(`<span style="color:var(--accent)">${this.t('inbox')}</span>`);
             }
@@ -1227,29 +1229,70 @@ const App = {
                 `<label class="form-check"><input type="checkbox" name="tag_${tag.id}" ${taskTags.includes(tag.id)?'checked':''}> <span class="tag" style="background:${tag.color}22;color:${tag.color}">${this.esc(tag.name)}</span></label>`
             ).join(' ');
 
-            // Unified target selector: "inbox:" | "client:<id>" | "project:<id>"
-            let currentTarget = 'inbox:';
-            if (isEdit) {
-                if (t.projectId) currentTarget = 'project:' + t.projectId;
-                else if (t.clientId) currentTarget = 'client:' + t.clientId;
-            } else if (this.currentProjectId) currentTarget = 'project:' + this.currentProjectId;
-            else if (this.currentClientId) currentTarget = 'client:' + this.currentClientId;
+            // Three independent optional selectors: Client | Company | Project.
+            // All optional. Cascading behavior wired up after innerHTML is set.
+            const allClients = Store.getClients();
+            const allProjects = Store.getProjects();
 
-            const clients = Store.getClients();
-            let targetOpts = `<option value="inbox:"${currentTarget === 'inbox:' ? ' selected' : ''}>${this.t('noProject')}</option>`;
-            clients.forEach(c => {
-                targetOpts += `<optgroup label="${this.esc(c.name)}">`;
-                const clientVal = 'client:' + c.id;
-                targetOpts += `<option value="${clientVal}"${currentTarget === clientVal ? ' selected' : ''}>${this.t('clientLabel')}: ${this.esc(c.name)}</option>`;
-                const projects = Store.getProjects(c.id);
-                projects.forEach(p => {
-                    const projectVal = 'project:' + p.id;
-                    const labelPrefix = p.company ? `${p.company} \u00B7 ` : '';
-                    targetOpts += `<option value="${projectVal}"${currentTarget === projectVal ? ' selected' : ''}>\u00A0\u00A0\u00A0\u00A0${this.esc(labelPrefix + p.name)}</option>`;
-                });
-                targetOpts += `</optgroup>`;
-            });
-            const projectSelectHtml = `<div class="form-group"><label>${this.t('assignToProject')}</label><select name="taskTarget">${targetOpts}</select></div>`;
+            // Figure out initial values
+            let initClientId = '';
+            let initCompany = '';
+            let initProjectId = '';
+            if (isEdit) {
+                initClientId = t.clientId || '';
+                initCompany = t.company || '';
+                initProjectId = t.projectId || '';
+                if (t.projectId) {
+                    const proj = Store.getProject(t.projectId);
+                    if (proj) {
+                        initClientId = proj.clientId || initClientId;
+                        initCompany = proj.company || initCompany;
+                    }
+                }
+            } else {
+                if (this.currentProjectId) {
+                    const proj = Store.getProject(this.currentProjectId);
+                    if (proj) {
+                        initProjectId = proj.id;
+                        initClientId = proj.clientId || '';
+                        initCompany = proj.company || '';
+                    }
+                } else if (this.currentClientId) {
+                    initClientId = this.currentClientId;
+                }
+            }
+
+            // Build initial company list (depends on initClientId)
+            const gatherAllCompanies = () => {
+                const set = new Set();
+                Store.getClients().forEach(c => (c.companies || []).forEach(x => x && set.add(x)));
+                Store.getProjects().forEach(p => p.company && set.add(p.company));
+                return Array.from(set).sort();
+            };
+            const initCompanyList = initClientId
+                ? ((Store.getClient(initClientId)?.companies) || [])
+                : gatherAllCompanies();
+
+            // Build initial project list (depends on initClientId + initCompany)
+            let initProjectList = allProjects;
+            if (initClientId) initProjectList = initProjectList.filter(p => p.clientId === initClientId);
+            if (initCompany) initProjectList = initProjectList.filter(p => (p.company || '') === initCompany);
+
+            const clientOpts = `<option value="">\u2014</option>` +
+                allClients.map(c => `<option value="${c.id}"${c.id === initClientId ? ' selected' : ''}>${this.esc(c.name)}</option>`).join('');
+            const companyOpts = `<option value="">\u2014</option>` +
+                initCompanyList.map(co => `<option value="${this.esc(co)}"${co === initCompany ? ' selected' : ''}>${this.esc(co)}</option>`).join('');
+            const projectOpts = `<option value="">\u2014</option>` +
+                initProjectList.map(p => {
+                    const label = p.company ? `${p.company} \u00B7 ${p.name}` : p.name;
+                    return `<option value="${p.id}"${p.id === initProjectId ? ' selected' : ''}>${this.esc(label)}</option>`;
+                }).join('');
+
+            const projectSelectHtml = `<div class="form-row">
+                <div class="form-group"><label>${this.t('clientLabel')}</label><select name="taskClient" id="task-client-select">${clientOpts}</select></div>
+                <div class="form-group"><label>${this.t('companyLabel')}</label><select name="taskCompany" id="task-company-select">${companyOpts}</select></div>
+                <div class="form-group"><label>${this.t('projectLabelShort')}</label><select name="taskProject" id="task-project-select">${projectOpts}</select></div>
+            </div>`;
 
             const deadlineVal = pf.deadline || t.deadline || '';
 
@@ -1286,6 +1329,75 @@ const App = {
                     <button type="button" class="btn btn-glass" data-form-cancel>${this.t('cancel')}</button>
                     <button type="submit" class="btn">${isEdit ? this.t('save') : this.t('create')}</button>
                 </div>`;
+
+            // Cascading logic for Client / Company / Project (all optional)
+            const clientSel  = form.querySelector('#task-client-select');
+            const companySel = form.querySelector('#task-company-select');
+            const projectSel = form.querySelector('#task-project-select');
+
+            const esc = (s) => this.esc(s);
+
+            const repopulateCompany = () => {
+                const cid = clientSel.value;
+                const prev = companySel.value;
+                const list = cid
+                    ? ((Store.getClient(cid)?.companies) || [])
+                    : gatherAllCompanies();
+                companySel.innerHTML = '<option value="">\u2014</option>' +
+                    list.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+                if (prev && list.includes(prev)) companySel.value = prev;
+                else companySel.value = '';
+            };
+
+            const repopulateProject = () => {
+                const cid = clientSel.value;
+                const co  = companySel.value;
+                const prev = projectSel.value;
+                let list = Store.getProjects();
+                if (cid) list = list.filter(p => p.clientId === cid);
+                if (co)  list = list.filter(p => (p.company || '') === co);
+                projectSel.innerHTML = '<option value="">\u2014</option>' +
+                    list.map(p => {
+                        const label = p.company ? `${p.company} \u00B7 ${p.name}` : p.name;
+                        return `<option value="${p.id}">${esc(label)}</option>`;
+                    }).join('');
+                if (prev && list.some(p => p.id === prev)) projectSel.value = prev;
+                else projectSel.value = '';
+            };
+
+            clientSel.addEventListener('change', () => {
+                repopulateCompany();
+                repopulateProject();
+            });
+
+            companySel.addEventListener('change', () => {
+                repopulateProject();
+            });
+
+            projectSel.addEventListener('change', () => {
+                const pid = projectSel.value;
+                if (!pid) return;
+                const proj = Store.getProject(pid);
+                if (!proj) return;
+                // Auto-fill client + company from the chosen project
+                if (proj.clientId && clientSel.value !== proj.clientId) {
+                    clientSel.value = proj.clientId;
+                    repopulateCompany();
+                }
+                if (proj.company) {
+                    // Ensure company is selectable even if list didn't include it
+                    if (!Array.from(companySel.options).some(o => o.value === proj.company)) {
+                        const opt = document.createElement('option');
+                        opt.value = proj.company;
+                        opt.textContent = proj.company;
+                        companySel.appendChild(opt);
+                    }
+                    companySel.value = proj.company;
+                }
+                repopulateProject();
+                projectSel.value = pid;
+            });
+
             form.onsubmit = (e) => { e.preventDefault(); this.saveTask_form(e.target); };
         }
 
@@ -1357,17 +1469,30 @@ const App = {
         data.tags = tags;
         data.isProcedural = !!fd.get('isProcedural');
 
-        // Parse unified target selector
-        const target = data.taskTarget || '';
-        delete data.taskTarget;
-        const [kind, targetId] = target.split(':');
-        data.clientId = ''; data.projectId = '';
-        if (kind === 'project' && targetId) {
-            data.projectId = targetId;
-            const proj = Store.getProject(targetId);
-            if (proj) data.clientId = proj.clientId;
-        } else if (kind === 'client' && targetId) {
-            data.clientId = targetId;
+        // Parse three independent optional selectors: Client / Company / Project
+        const pickedClient  = (data.taskClient  || '').trim();
+        const pickedCompany = (data.taskCompany || '').trim();
+        const pickedProject = (data.taskProject || '').trim();
+        delete data.taskClient;
+        delete data.taskCompany;
+        delete data.taskProject;
+
+        data.clientId  = pickedClient;
+        data.company   = pickedCompany;
+        data.projectId = pickedProject;
+
+        // Project picked — it's the source of truth; derive client/company from it
+        if (data.projectId) {
+            const proj = Store.getProject(data.projectId);
+            if (proj) {
+                data.clientId = proj.clientId || data.clientId;
+                data.company  = proj.company  || data.company;
+            }
+        }
+
+        // If company named but not yet registered on the client, auto-add
+        if (data.clientId && data.company) {
+            Store.addCompanyToClient(data.clientId, data.company);
         }
 
         if (this.editingId) {

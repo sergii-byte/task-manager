@@ -18,7 +18,7 @@ const SheetsSync = {
     HEADERS: {
         clients: ['id', 'name', 'email', 'telegram', 'companies', 'notes', 'created'],
         projects: ['id', 'clientId', 'name', 'company', 'projectType', 'jurisdiction', 'status', 'pricingType', 'rate', 'fixedPrice', 'deadline', 'notes', 'created'],
-        tasks: ['id', 'projectId', 'clientId', 'title', 'status', 'priority', 'deadline', 'isProcedural', 'tags', 'hoursLogged', 'notes', 'created'],
+        tasks: ['id', 'projectId', 'clientId', 'company', 'title', 'status', 'priority', 'deadline', 'isProcedural', 'tags', 'hoursLogged', 'notes', 'created'],
         tags: ['id', 'name', 'color'],
         timeLogs: ['id', 'taskId', 'hours', 'description', 'date'],
     },
