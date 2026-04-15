@@ -100,6 +100,7 @@ const AiInput = {
     buildContext() {
         const clients = Store.getClients();
         const projects = Store.getProjects();
+        const tasks = Store.getTasks();
         const tags = Store.getTags();
 
         let context = 'Current data structure:\n';
@@ -114,8 +115,22 @@ const AiInput = {
                 clientProjects.forEach(p => {
                     const co = p.company ? `, company: "${p.company}"` : '';
                     context += `  Project: "${p.name}" (id: ${p.id}${co}, type: ${p.projectType || 'not set'}, jurisdiction: ${p.jurisdiction || 'not set'})\n`;
+                    // Include open tasks so the AI can match task names accurately
+                    const projTasks = tasks.filter(t => t.projectId === p.id && t.status !== 'done').slice(0, 10);
+                    projTasks.forEach(t => {
+                        context += `    Task: "${t.title}" (id: ${t.id}, status: ${t.status || 'todo'})\n`;
+                    });
                 });
             });
+
+            // Inbox / unassigned tasks
+            const inbox = tasks.filter(t => !t.projectId && t.status !== 'done').slice(0, 20);
+            if (inbox.length) {
+                context += `\nUnassigned open tasks:\n`;
+                inbox.forEach(t => {
+                    context += `  Task: "${t.title}" (id: ${t.id})\n`;
+                });
+            }
         }
 
         if (tags.length) {
@@ -161,7 +176,14 @@ The user describes intentions in free form (Ukrainian, English, Russian — any 
 
 - Inside a chain, items can reference earlier-created entities by name. The chain runs in order and the runtime auto-links: a create_project after a create_client uses that client; a create_task after a create_project uses that project; a log_hours after a create_task logs against that task.
 
-- If the user names an existing client/project/task, match it to the id from context above. If they name a client NOT in context, the chain must create_client for them first.
+- SMART MATCHING (voice transcripts are noisy!):
+  The input often comes from voice recognition and will contain typos, wrong letters, phonetic drift, or half-understood foreign names. When the user names a client/project/task, do NOT treat a one-character or phonetic mismatch as a new entity. Look at the context list above and find the most plausible existing match:
+    • "Syndicod" → existing "Syndicode"
+    • "Акме" → existing "Acme Ltd"
+    • "contract neg" → existing "Contract negotiation"
+  When you resolve to an existing entity, use its EXACT name from context (the runtime will fuzzy-match on your behalf, but a closer name helps). If NO existing entity seems plausible, only then treat the name as new.
+
+- If the user names a client NOT in context, the chain must create_client for them first.
 
 - If the user mentions a legal entity / company (e.g. "for Acme Ltd"), attach it as the "company" string field on create_project. Do NOT create a separate company entity — the company is just a field on the project.
 

@@ -27,6 +27,7 @@ const App = {
     currentClientId: null,   // client = person (the paying human)
     currentProjectId: null,
     taskFilter: 'all',
+    _inboxFilter: 'all',
     editingId: null,
     calMonth: new Date().getMonth(),
     calYear: new Date().getFullYear(),
@@ -109,7 +110,20 @@ const App = {
         this._on('nav-dashboard', 'click', () => this.showDashboard());
         this._on('nav-calendar', 'click', () => this.showCalendar());
         this._on('nav-inbox', 'click', () => this.showInbox());
+        this._on('nav-reports', 'click', () => this.showReports());
         this._on('add-client-btn', 'click', () => this.showModal('client'));
+        this._on('sidebar-logo-btn', 'click', () => this.showDashboard());
+        document.getElementById('sidebar-logo-btn')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.showDashboard(); }
+        });
+
+        // Inbox filter tabs
+        document.getElementById('inbox-filters')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-inbox-filter]');
+            if (!btn) return;
+            this._inboxFilter = btn.dataset.inboxFilter;
+            this.renderInbox();
+        });
 
         // Sync
         this._on('sync-btn', 'click', () => {
@@ -176,9 +190,13 @@ const App = {
             this.renderTasks();
         });
 
-        // Search
+        // Search (debounced 250ms)
         const searchInput = document.getElementById('search-input');
-        searchInput?.addEventListener('input', () => this.onSearch(searchInput.value));
+        let searchTimer = null;
+        searchInput?.addEventListener('input', () => {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => this.onSearch(searchInput.value), 250);
+        });
         searchInput?.addEventListener('focus', () => this.onSearchFocus());
         searchInput?.addEventListener('blur', () => setTimeout(() => this.onSearchBlur(), 200));
 
@@ -268,6 +286,7 @@ const App = {
         document.getElementById('nav-dashboard')?.classList.toggle('active', this.currentView === 'dashboard');
         document.getElementById('nav-calendar')?.classList.toggle('active', this.currentView === 'calendar');
         document.getElementById('nav-inbox')?.classList.toggle('active', this.currentView === 'inbox');
+        document.getElementById('nav-reports')?.classList.toggle('active', this.currentView === 'reports');
 
         // Inbox count
         const inboxCount = Store.getInboxTasks().length;
@@ -315,10 +334,78 @@ const App = {
         const procedural = allTasks.filter(t => t.isProcedural && t.deadline && t.status !== 'done')
             .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
 
+        // Prominent procedural warning strip — anything within the next 7 days
+        const alertEl = document.getElementById('procedural-alert');
+        if (alertEl) {
+            const now = new Date(); now.setHours(0, 0, 0, 0);
+            const soonCutoff = new Date(now); soonCutoff.setDate(soonCutoff.getDate() + 7);
+            const soon = procedural.filter(t => new Date(t.deadline) <= soonCutoff);
+            if (soon.length) {
+                const rows = soon.slice(0, 6).map(t => {
+                    const d = new Date(t.deadline); d.setHours(0,0,0,0);
+                    const days = Math.round((d - now) / 86400000);
+                    let when;
+                    if (days < 0) when = `<span class="proc-alert-badge overdue">${Math.abs(days)}d ${this.t('proceduralAlertOverdue')}</span>`;
+                    else if (days === 0) when = `<span class="proc-alert-badge today">${this.t('proceduralAlertToday')}</span>`;
+                    else if (days === 1) when = `<span class="proc-alert-badge soon">${this.t('proceduralAlertTomorrow')}</span>`;
+                    else when = `<span class="proc-alert-badge soon">${days}d</span>`;
+                    // Build short path
+                    let path = '';
+                    if (t.projectId) {
+                        const proj = Store.getProject(t.projectId);
+                        const client = proj ? Store.getClient(proj.clientId) : null;
+                        path = [client?.name, proj?.company, proj?.name].filter(Boolean).join(' \u2192 ');
+                    } else if (t.clientId) {
+                        const client = Store.getClient(t.clientId);
+                        path = [client?.name, t.company].filter(Boolean).join(' \u2192 ');
+                    }
+                    return `<div class="proc-alert-row" data-action="edit-task" data-id="${t.id}">
+                        ${when}
+                        <div class="proc-alert-text">
+                            <div class="proc-alert-title">${this.esc(t.title)}</div>
+                            ${path ? `<div class="proc-alert-path">${this.esc(path)}</div>` : ''}
+                        </div>
+                        <div class="proc-alert-date">${this.formatDate(t.deadline)}</div>
+                    </div>`;
+                }).join('');
+                const more = soon.length > 6 ? `<div class="proc-alert-more">+${soon.length - 6} ${this.t('moreLabel')}</div>` : '';
+                alertEl.innerHTML = `<div class="proc-alert-header">
+                        <span class="proc-alert-icon">${Icons.alert(16)}</span>
+                        <span class="proc-alert-heading">${this.t('proceduralAlertHeading')}</span>
+                        <span class="proc-alert-count">${soon.length}</span>
+                    </div>
+                    <div class="proc-alert-body">${rows}${more}</div>`;
+                alertEl.style.display = '';
+            } else {
+                alertEl.innerHTML = '';
+                alertEl.style.display = 'none';
+            }
+        }
+
         document.getElementById('proc-count').textContent = procedural.length;
         document.getElementById('procedural-tasks').innerHTML = procedural.length
             ? procedural.map(t => this.renderTaskItem(t, true)).join('')
             : `<div class="empty-state"><p>${this.t('noProceduralDeadlines')}</p></div>`;
+
+        // Upcoming tasks — non-done, has deadline, within next 14 days (includes overdue too, since those need attention most)
+        const now2 = new Date(); now2.setHours(0, 0, 0, 0);
+        const upcomingCutoff = new Date(now2); upcomingCutoff.setDate(upcomingCutoff.getDate() + 14);
+        const upcoming = allTasks
+            .filter(t => t.status !== 'done' && t.deadline && !t.isProcedural)
+            .filter(t => {
+                const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+                return d <= upcomingCutoff;
+            })
+            .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+            .slice(0, 8);
+        const upcomingCountEl = document.getElementById('upcoming-count');
+        const upcomingEl = document.getElementById('upcoming-tasks');
+        if (upcomingCountEl) upcomingCountEl.textContent = upcoming.length;
+        if (upcomingEl) {
+            upcomingEl.innerHTML = upcoming.length
+                ? upcoming.map(t => this.renderTaskItem(t, true)).join('')
+                : `<div class="empty-state"><p>${this.t('noUpcomingTasks')}</p></div>`;
+        }
 
         const inProgress = allTasks.filter(t => t.status === 'in_progress');
         document.getElementById('inprog-count').textContent = inProgress.length;
@@ -357,18 +444,65 @@ const App = {
     },
 
     renderInbox() {
-        const tasks = Store.getInboxTasks();
+        const all = Store.getTasks();
+        const active = all.filter(t => t.status !== 'done');
+        const filter = this._inboxFilter || 'all';
+
+        const now = new Date(); now.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() + 7);
+
+        let tasks;
+        if (filter === 'unassigned') {
+            tasks = active.filter(t => !t.projectId && !t.clientId);
+        } else if (filter === 'today') {
+            tasks = active.filter(t => {
+                if (!t.deadline) return false;
+                const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+                return d.getTime() === now.getTime();
+            });
+        } else if (filter === 'week') {
+            tasks = active.filter(t => {
+                if (!t.deadline) return false;
+                const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+                return d >= now && d <= weekEnd;
+            });
+        } else if (filter === 'overdue') {
+            tasks = active.filter(t => t.deadline && new Date(t.deadline) < now);
+        } else {
+            tasks = active;
+        }
+
+        // Sort: overdue first, then by deadline asc, then by created desc
+        tasks = [...tasks].sort((a, b) => {
+            const aOver = a.deadline && new Date(a.deadline) < now ? 0 : 1;
+            const bOver = b.deadline && new Date(b.deadline) < now ? 0 : 1;
+            if (aOver !== bOver) return aOver - bOver;
+            if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+            if (a.deadline) return -1;
+            if (b.deadline) return 1;
+            return new Date(b.created) - new Date(a.created);
+        });
+
+        // Update filter button active state
+        document.querySelectorAll('#inbox-filters [data-inbox-filter]').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.inboxFilter === filter);
+        });
+
         const container = document.getElementById('inbox-tasks');
         if (tasks.length === 0) {
+            const emptyMsg = filter === 'unassigned'
+                ? this.t('noInboxTasks')
+                : filter === 'all'
+                    ? this.t('noActiveTasks')
+                    : this.t('noTasksInFilter');
             container.innerHTML = `<div class="empty-state">
                 <div class="empty-icon">${Icons.inbox(40)}</div>
-                <p>${this.t('noInboxTasks')}</p>
+                <p>${emptyMsg}</p>
                 <button class="cta-btn" data-action="show-modal" data-type="task">\u002B ${this.t('newTask')}</button>
             </div>`;
             return;
         }
-        const sorted = [...tasks].sort((a, b) => new Date(b.created) - new Date(a.created));
-        container.innerHTML = sorted.map(t => this.renderTaskItem(t, false, true)).join('');
+        container.innerHTML = tasks.map(t => this.renderTaskItem(t, true, true)).join('');
     },
 
     // ===== Generic list view (reached from dashboard stat cards) =====
@@ -1051,32 +1185,94 @@ const App = {
     },
 
     // ===== Search =====
+    // Wrap a matched substring in <mark> for preview snippets; escapes surrounding text.
+    _highlight(text, q) {
+        if (!text) return '';
+        const escaped = this.esc(text);
+        if (!q) return escaped;
+        const idx = text.toLowerCase().indexOf(q.toLowerCase());
+        if (idx === -1) return escaped;
+        // Snippet: up to 40 chars before/after the match
+        const start = Math.max(0, idx - 40);
+        const end = Math.min(text.length, idx + q.length + 40);
+        const prefix = start > 0 ? '\u2026' : '';
+        const suffix = end < text.length ? '\u2026' : '';
+        const slice = text.slice(start, end);
+        const localIdx = idx - start;
+        const before = this.esc(slice.slice(0, localIdx));
+        const match = this.esc(slice.slice(localIdx, localIdx + q.length));
+        const after = this.esc(slice.slice(localIdx + q.length));
+        return `${prefix}${before}<mark>${match}</mark>${after}${suffix}`;
+    },
+
     onSearch(query) {
-        const results = Store.search(query);
+        const q = (query || '').trim();
         const container = document.getElementById('search-results');
-        if (!query.trim()) { container.classList.remove('open'); return; }
+        if (!q) { container.classList.remove('open'); return; }
+        const results = Store.search(q);
         let html = '';
         if (results.clients.length) {
             html += `<div class="search-group-title">${this.t('clients')}</div>`;
-            html += results.clients.map(c => `<div class="search-item" data-action="select-client" data-id="${c.id}">${this.esc(c.name)}</div>`).join('');
+            html += results.clients.map(c => {
+                const notesHit = c.notes && c.notes.toLowerCase().includes(q.toLowerCase());
+                return `<div class="search-item" data-search-kind="client" data-id="${c.id}">
+                    <div>${this._highlight(c.name, q)}</div>
+                    ${notesHit ? `<div class="search-snippet">${this._highlight(c.notes, q)}</div>` : ''}
+                </div>`;
+            }).join('');
         }
         if (results.projects.length) {
             html += `<div class="search-group-title">${this.t('projects')}</div>`;
-            html += results.projects.map(p => `<div class="search-item" data-action="select-project" data-id="${p.id}">${this.esc(p.name)}</div>`).join('');
+            html += results.projects.map(p => {
+                const notesHit = p.notes && p.notes.toLowerCase().includes(q.toLowerCase());
+                return `<div class="search-item" data-search-kind="project" data-id="${p.id}">
+                    <div>${this._highlight(p.name, q)}${p.company ? ` <span class="search-path">${this.esc(p.company)}</span>` : ''}</div>
+                    ${notesHit ? `<div class="search-snippet">${this._highlight(p.notes, q)}</div>` : ''}
+                </div>`;
+            }).join('');
         }
         if (results.tasks.length) {
             html += `<div class="search-group-title">${this.t('tasks')}</div>`;
-            html += results.tasks.map(t => `<div class="search-item" data-action="select-project" data-id="${t.projectId || ''}">${this.esc(t.title)}</div>`).join('');
+            html += results.tasks.map(t => {
+                const notesHit = t.notes && t.notes.toLowerCase().includes(q.toLowerCase());
+                // Build context path so the user knows where the task lives
+                let path = '';
+                if (t.projectId) {
+                    const proj = Store.getProject(t.projectId);
+                    const client = proj ? Store.getClient(proj.clientId) : null;
+                    path = [client?.name, proj?.company, proj?.name].filter(Boolean).join(' \u2192 ');
+                } else if (t.clientId) {
+                    const client = Store.getClient(t.clientId);
+                    path = [client?.name, t.company].filter(Boolean).join(' \u2192 ');
+                } else {
+                    path = this.t('inbox');
+                }
+                return `<div class="search-item" data-search-kind="task" data-id="${t.id}">
+                    <div>${this._highlight(t.title, q)} <span class="search-path">${this.esc(path)}</span></div>
+                    ${notesHit ? `<div class="search-snippet">${this._highlight(t.notes, q)}</div>` : ''}
+                </div>`;
+            }).join('');
         }
         container.innerHTML = html || `<div class="search-item" style="color:var(--text-3)">\u2014</div>`;
         container.classList.add('open');
 
-        container.querySelectorAll('[data-action]').forEach(el => {
-            el.addEventListener('click', () => {
-                const action = el.dataset.action;
+        container.querySelectorAll('[data-search-kind]').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+                // Use mousedown so blur doesn't fire first
+                e.preventDefault();
+                const kind = el.dataset.searchKind;
                 const id = el.dataset.id;
-                if (action === 'select-client') this.selectClient(id);
-                else if (action === 'select-project' && id) this.selectProject(id);
+                if (kind === 'client') this.selectClient(id);
+                else if (kind === 'project') this.selectProject(id);
+                else if (kind === 'task') {
+                    // Navigate to the task's context, then open the edit modal
+                    const t = Store.getTask(id);
+                    if (!t) return;
+                    if (t.projectId) this.selectProject(t.projectId);
+                    else if (t.clientId) this.selectClient(t.clientId);
+                    else this.showInbox();
+                    setTimeout(() => this.editTask(id), 50);
+                }
                 container.classList.remove('open');
                 document.getElementById('search-input').value = '';
             });
@@ -1577,6 +1773,8 @@ const App = {
 
     // ===== AI Preview =====
     showAiPreview(data) {
+        // Attach fuzzy match candidates + default choices before rendering
+        this._annotateAiRefs(data);
         const container = document.getElementById('ai-preview-content');
         const action = data.action || 'create_task';
         let fieldsHtml = '';
@@ -1593,7 +1791,7 @@ const App = {
             fieldsHtml = `
                 <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newProject')}</strong></div>
                 <div class="ai-field"><span class="ai-field-label">${this.t('projectName')}:</span> <strong>${this.esc(data.name)}</strong></div>
-                ${data.clientName ? `<div class="ai-field"><span class="ai-field-label">${this.t('clientLabel')}:</span> ${this.esc(data.clientName)}</div>` : ''}
+                ${data._clientMatches ? this._renderAiPicker('client', 0, 'clientName', data.clientName, data._clientMatches, data._clientChoice) : (data.clientName ? `<div class="ai-field"><span class="ai-field-label">${this.t('clientLabel')}:</span> ${this.esc(data.clientName)} <span class="ai-confidence-badge new">${this.t('aiCreateNew')}</span></div>` : '')}
                 ${data.company ? `<div class="ai-field"><span class="ai-field-label">${this.t('companyLabel')}:</span> ${this.esc(data.company)}</div>` : ''}
                 ${data.projectType ? `<div class="ai-field"><span class="ai-field-label">${this.t('typeLabel')}:</span> ${data.projectType}</div>` : ''}
                 ${data.jurisdiction ? `<div class="ai-field"><span class="ai-field-label">${this.t('jurisdictionLabel')}:</span> ${this.esc(data.jurisdiction)}</div>` : ''}
@@ -1602,27 +1800,45 @@ const App = {
             fieldsHtml = `
                 <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('logHours')}</strong></div>
                 <div class="ai-field"><span class="ai-field-label">${this.t('hours')}:</span> <strong>${this.esc(data.hours)}h</strong></div>
-                ${data.taskName ? `<div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> ${this.esc(data.taskName)}</div>` : ''}
+                ${data._taskMatches ? this._renderAiPicker('task', 0, 'taskName', data.taskName, data._taskMatches, data._taskChoice) : (data.taskName ? `<div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> ${this.esc(data.taskName)} <span class="ai-confidence-badge warn">${this.t('aiNoMatch')}</span></div>` : '')}
                 ${data.description ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.description)}</div>` : ''}`;
         } else if (action === 'create_chain') {
             const labels = { create_client: this.t('newClient'), create_project: this.t('newProject'), create_task: this.t('newTask'), log_hours: this.t('logHours') };
             fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')} (${(data.items || []).length})</strong></div>`;
             (data.items || []).forEach((item, i) => {
                 const label = labels[item.action] || item.action;
-                fieldsHtml += `<div style="margin:10px 0 2px;padding:6px 10px;background:var(--input-bg);border-radius:6px;font-size:12px">
-                    <strong>${i+1}. ${label}</strong>`;
+                fieldsHtml += `<div class="ai-chain-item">
+                    <div class="ai-chain-head"><span class="ai-chain-num">${i + 1}</span><strong>${label}</strong>`;
                 if (item.action === 'log_hours') {
                     fieldsHtml += ` &mdash; <strong>${this.esc(item.hours)}h</strong>`;
-                    if (item.taskName) fieldsHtml += ` on "${this.esc(item.taskName)}"`;
                 } else {
                     const name = item.name || item.title || '';
                     if (name) fieldsHtml += ` &mdash; <strong>${this.esc(name)}</strong>`;
-                    if (item.clientName) fieldsHtml += ` <span style="color:var(--text-3)">(${this.esc(item.clientName)})</span>`;
                     if (item.company) fieldsHtml += ` <span style="color:var(--text-3)">${this.esc(item.company)}</span>`;
-                    if (item.projectName) fieldsHtml += ` <span style="color:var(--text-3)">(\u2192 ${this.esc(item.projectName)})</span>`;
                     if (item.deadline) fieldsHtml += ` <span style="color:var(--text-3)">${this.t('deadline')}: ${item.deadline}</span>`;
                     if (item.priority && item.priority !== 'medium') fieldsHtml += ` <span style="color:var(--text-3)">${item.priority}</span>`;
                 }
+                fieldsHtml += `</div>`;
+
+                // Interactive pickers for references
+                if (item.action === 'create_project' && item._clientMatches) {
+                    fieldsHtml += this._renderAiPicker('client', i, 'clientName', item.clientName, item._clientMatches, item._clientChoice);
+                } else if (item.action === 'create_project' && item.clientName) {
+                    fieldsHtml += `<div class="ai-field-row"><span class="ai-field-label">${this.t('aiClientRef')}:</span> <span class="ai-field-rawname">"${this.esc(item.clientName)}"</span> <span class="ai-confidence-badge new">${this.t('aiCreateNew')}</span></div>`;
+                }
+
+                if (item.action === 'create_task' && item._projectMatches) {
+                    fieldsHtml += this._renderAiPicker('project', i, 'projectName', item.projectName, item._projectMatches, item._projectChoice);
+                } else if (item.action === 'create_task' && item.projectName) {
+                    fieldsHtml += `<div class="ai-field-row"><span class="ai-field-label">${this.t('aiProjectRef')}:</span> <span class="ai-field-rawname">"${this.esc(item.projectName)}"</span></div>`;
+                }
+
+                if (item.action === 'log_hours' && item._taskMatches) {
+                    fieldsHtml += this._renderAiPicker('task', i, 'taskName', item.taskName, item._taskMatches, item._taskChoice);
+                } else if (item.action === 'log_hours' && item.taskName) {
+                    fieldsHtml += `<div class="ai-field-row"><span class="ai-field-label">${this.t('aiTaskRef')}:</span> <span class="ai-field-rawname">"${this.esc(item.taskName)}"</span></div>`;
+                }
+
                 fieldsHtml += `</div>`;
             });
         } else {
@@ -1630,7 +1846,7 @@ const App = {
             fieldsHtml = `
                 <div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('newTask')}</strong></div>
                 <div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> <strong>${this.esc(data.title)}</strong></div>
-                ${data.projectName ? `<div class="ai-field"><span class="ai-field-label">Project:</span> ${this.esc(data.projectName)}</div>` : ''}
+                ${data._projectMatches ? this._renderAiPicker('project', 0, 'projectName', data.projectName, data._projectMatches, data._projectChoice) : (data.projectName ? `<div class="ai-field"><span class="ai-field-label">Project:</span> ${this.esc(data.projectName)}</div>` : '')}
                 ${data.priority ? `<div class="ai-field"><span class="ai-field-label">${this.t('priority')}:</span> ${data.priority}</div>` : ''}
                 ${data.deadline ? `<div class="ai-field"><span class="ai-field-label">${this.t('deadline')}:</span> ${data.deadline}</div>` : ''}
                 ${data.isProcedural ? `<div class="ai-field"><span class="procedural-badge">${this.t('procedural')}</span></div>` : ''}
@@ -1642,6 +1858,20 @@ const App = {
             <div class="ai-preview-label">\u2728 ${this.t('aiSuggestion')}</div>
             <div class="ai-preview-content">${fieldsHtml}</div>
         </div>`;
+
+        // Wire picker changes back into the pending data
+        container.querySelectorAll('.ai-ref-picker').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const idx = parseInt(sel.dataset.aiItem, 10) || 0;
+                const type = sel.dataset.aiType;
+                const val = sel.value;
+                const target = data.action === 'create_chain' ? (data.items || [])[idx] : data;
+                if (!target) return;
+                if (type === 'client') target._clientChoice = val;
+                else if (type === 'project') target._projectChoice = val;
+                else if (type === 'task') target._taskChoice = val;
+            });
+        });
 
         const actionsEl = document.getElementById('ai-preview-actions');
         actionsEl.innerHTML = `
@@ -1659,33 +1889,220 @@ const App = {
     _pendingAiData: null,
 
     // ===== AI chain helpers =====
+    // Levenshtein distance (small strings, O(m*n) is fine)
+    _levenshtein(a, b) {
+        a = (a || '').toLowerCase();
+        b = (b || '').toLowerCase();
+        if (a === b) return 0;
+        if (!a.length) return b.length;
+        if (!b.length) return a.length;
+        const m = a.length, n = b.length;
+        const dp = Array(n + 1);
+        for (let j = 0; j <= n; j++) dp[j] = j;
+        for (let i = 1; i <= m; i++) {
+            let prev = dp[0];
+            dp[0] = i;
+            for (let j = 1; j <= n; j++) {
+                const tmp = dp[j];
+                dp[j] = a[i - 1] === b[j - 1]
+                    ? prev
+                    : 1 + Math.min(prev, dp[j - 1], dp[j]);
+                prev = tmp;
+            }
+        }
+        return dp[n];
+    },
+
+    _similarity(a, b) {
+        if (!a || !b) return 0;
+        a = String(a).toLowerCase().trim();
+        b = String(b).toLowerCase().trim();
+        if (a === b) return 1;
+        // Substring match boost — common with partial voice transcripts
+        if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) {
+            return 0.92;
+        }
+        const max = Math.max(a.length, b.length);
+        if (max === 0) return 1;
+        return 1 - this._levenshtein(a, b) / max;
+    },
+
+    // Return up to 5 best candidates, scored, above the minimum threshold
+    _fuzzyCandidates(query, list, nameFn) {
+        if (!query) return [];
+        const scored = list
+            .map(item => ({ item, score: this._similarity(query, nameFn(item)) }))
+            .filter(s => s.score >= 0.55)
+            .sort((a, b) => b.score - a.score);
+        return scored.slice(0, 5);
+    },
+
+    // Name-based lookup used by _runChain (exact → fuzzy fallback)
     _findClientByName(name) {
         if (!name) return null;
         const n = name.toLowerCase().trim();
-        return Store.getClients().find(c => (c.name || '').toLowerCase() === n)
-            || Store.getClients().find(c => (c.name || '').toLowerCase().includes(n))
-            || null;
+        const all = Store.getClients();
+        const exact = all.find(c => (c.name || '').toLowerCase() === n);
+        if (exact) return exact;
+        const cands = this._fuzzyCandidates(name, all, c => c.name || '');
+        return cands.length && cands[0].score >= 0.82 ? cands[0].item : null;
     },
     _findProjectByName(name, clientId) {
         if (!name) return null;
         const n = name.toLowerCase().trim();
         const all = Store.getProjects(clientId || undefined);
-        return all.find(p => (p.name || '').toLowerCase() === n)
-            || all.find(p => (p.name || '').toLowerCase().includes(n))
-            || null;
+        const exact = all.find(p => (p.name || '').toLowerCase() === n);
+        if (exact) return exact;
+        const cands = this._fuzzyCandidates(name, all, p => p.name || '');
+        return cands.length && cands[0].score >= 0.82 ? cands[0].item : null;
     },
     _findTaskByName(name) {
         if (!name) return null;
         const n = name.toLowerCase().trim();
         const all = Store.getTasks();
-        return all.find(t => (t.title || '').toLowerCase() === n)
-            || all.find(t => (t.title || '').toLowerCase().includes(n))
-            || null;
+        const exact = all.find(t => (t.title || '').toLowerCase() === n);
+        if (exact) return exact;
+        const cands = this._fuzzyCandidates(name, all, t => t.title || '');
+        return cands.length && cands[0].score >= 0.82 ? cands[0].item : null;
     },
     _resolveTaskId(d) {
         if (d.taskId && Store.getTask(d.taskId)) return d.taskId;
+        // Prefer user's explicit resolution if present
+        if (d._resolvedTaskId !== undefined) return d._resolvedTaskId || null;
         const found = this._findTaskByName(d.taskName);
         return found ? found.id : null;
+    },
+
+    // Walk the AI data (single item or chain) and attach fuzzy match candidates
+    // to each client/project/task reference. Track names created earlier in the
+    // same chain so we don't try to match against existing entities.
+    _annotateAiRefs(data) {
+        const items = data.action === 'create_chain' ? (data.items || []) : [data];
+        const clients = Store.getClients();
+        const projects = Store.getProjects();
+        const tasks = Store.getTasks();
+
+        const newClientNames = new Set();
+        const newProjectNames = new Set();
+        const newTaskNames = new Set();
+        const norm = (s) => (s || '').toLowerCase().trim();
+
+        items.forEach(item => {
+            if (!item || !item.action) return;
+
+            if (item.action === 'create_client') {
+                newClientNames.add(norm(item.name));
+                return;
+            }
+
+            if (item.action === 'create_project') {
+                if (item.clientName && !newClientNames.has(norm(item.clientName))) {
+                    const cands = this._fuzzyCandidates(item.clientName, clients, c => c.name || '');
+                    if (cands.length) {
+                        item._clientMatches = cands.map(s => ({ id: s.item.id, name: s.item.name, score: s.score }));
+                        // Pre-select high-confidence match by default
+                        if (cands[0].score >= 0.92) item._clientChoice = cands[0].item.id;
+                        else if (cands[0].score >= 0.7) item._clientChoice = '__ambiguous__';
+                        else item._clientChoice = '__new__';
+                    }
+                }
+                newProjectNames.add(norm(item.name));
+                return;
+            }
+
+            if (item.action === 'create_task') {
+                if (item.projectName && !newProjectNames.has(norm(item.projectName))) {
+                    const cands = this._fuzzyCandidates(item.projectName, projects, p => p.name || '');
+                    if (cands.length) {
+                        item._projectMatches = cands.map(s => ({
+                            id: s.item.id,
+                            name: s.item.name,
+                            company: s.item.company || '',
+                            clientName: (Store.getClient(s.item.clientId) || {}).name || '',
+                            score: s.score,
+                        }));
+                        if (cands[0].score >= 0.92) item._projectChoice = cands[0].item.id;
+                        else if (cands[0].score >= 0.7) item._projectChoice = '__ambiguous__';
+                        else item._projectChoice = '__none__';
+                    }
+                }
+                newTaskNames.add(norm(item.title));
+                return;
+            }
+
+            if (item.action === 'log_hours') {
+                if (item.taskName && !newTaskNames.has(norm(item.taskName))) {
+                    const cands = this._fuzzyCandidates(item.taskName, tasks, t => t.title || '');
+                    if (cands.length) {
+                        item._taskMatches = cands.map(s => {
+                            const proj = s.item.projectId ? Store.getProject(s.item.projectId) : null;
+                            const client = proj ? Store.getClient(proj.clientId) : (s.item.clientId ? Store.getClient(s.item.clientId) : null);
+                            return {
+                                id: s.item.id,
+                                title: s.item.title,
+                                projectName: proj ? proj.name : '',
+                                clientName: client ? client.name : '',
+                                score: s.score,
+                            };
+                        });
+                        if (cands[0].score >= 0.92) item._taskChoice = cands[0].item.id;
+                        else if (cands[0].score >= 0.7) item._taskChoice = '__ambiguous__';
+                        else item._taskChoice = null;
+                    }
+                }
+                return;
+            }
+        });
+
+        return data;
+    },
+
+    // Render a picker <select> for an AI entity reference. Returns HTML string.
+    // type: 'client' | 'project' | 'task'; key identifies the item inside the pending data.
+    _renderAiPicker(type, itemIdx, field, rawName, candidates, selected) {
+        const labels = {
+            client: this.t('aiClientRef'),
+            project: this.t('aiProjectRef'),
+            task: this.t('aiTaskRef'),
+        };
+        const createOpt = type === 'task' ? '' :
+            `<option value="__new__"${selected === '__new__' ? ' selected' : ''}>${this.t('aiCreateNew')}: ${this.esc(rawName || '')}</option>`;
+        const noneOpt = type === 'project'
+            ? `<option value="__none__"${(!selected || selected === '__none__') ? ' selected' : ''}>${this.t('noProject') || '— No project —'}</option>`
+            : '';
+        const matchOpts = (candidates || []).map(m => {
+            const label = type === 'project' && m.clientName
+                ? `${m.clientName} \u2192 ${m.company ? m.company + ' \u00B7 ' : ''}${m.name}`
+                : type === 'task'
+                    ? `${m.title}${m.projectName ? ' (' + m.projectName + ')' : ''}${m.clientName ? ' \u2014 ' + m.clientName : ''}`
+                    : m.name;
+            const pct = Math.round((m.score || 0) * 100);
+            return `<option value="${this.esc(m.id)}"${selected === m.id ? ' selected' : ''}>${this.esc(label)} \u00B7 ${pct}%</option>`;
+        }).join('');
+
+        const topScore = candidates && candidates.length ? candidates[0].score : 0;
+        const confidenceBadge = selected === '__ambiguous__' || (topScore > 0 && topScore < 0.92)
+            ? `<span class="ai-confidence-badge" title="${this.t('aiConfidenceLow')}">${this.t('aiLikelyMatch')}</span>`
+            : (selected && selected !== '__new__' && selected !== '__none__' && selected !== '__ambiguous__')
+                ? `<span class="ai-confidence-badge match">${this.t('aiExactMatch')}</span>`
+                : '';
+
+        // When ambiguous, the first option is a "please pick" placeholder
+        const placeholder = selected === '__ambiguous__'
+            ? `<option value="__ambiguous__" selected disabled>— ${this.t('aiLikelyMatch')} —</option>`
+            : '';
+
+        return `<div class="ai-field-row">
+            <span class="ai-field-label">${labels[type]}:</span>
+            <span class="ai-field-rawname">"${this.esc(rawName || '')}"</span>
+            ${confidenceBadge}
+            <select class="ai-ref-picker" data-ai-item="${itemIdx}" data-ai-field="${field}" data-ai-type="${type}">
+                ${placeholder}
+                ${matchOpts}
+                ${noneOpt}
+                ${createOpt}
+            </select>
+        </div>`;
     },
 
     // Run a chain of AI items in order, auto-linking by name.
@@ -1736,17 +2153,25 @@ const App = {
                 created.client++;
             }
             else if (item.action === 'create_project') {
-                // Resolve client: explicit id → clientName → lastClientId
-                let cid = item.clientId && Store.getClient(item.clientId) ? item.clientId : null;
-                if (!cid && item.clientName) {
+                // Resolve client — picker choice wins, then explicit id, clientName, lastClientId
+                let cid = null;
+                if (item._clientChoice && item._clientChoice !== '__new__' && item._clientChoice !== '__ambiguous__') {
+                    if (Store.getClient(item._clientChoice)) cid = item._clientChoice;
+                }
+                if (!cid && item._clientChoice === '__ambiguous__') {
+                    skipped.push(`project "${item.name}" (${this.t('aiConfidenceLow')})`);
+                    return;
+                }
+                if (!cid && item.clientId && Store.getClient(item.clientId)) cid = item.clientId;
+                if (!cid && item.clientName && item._clientChoice !== '__new__') {
                     const c = this._findClientByName(item.clientName);
                     if (c) cid = c.id;
-                    else {
-                        // Auto-create client with that name
-                        const newC = Store.addClient({ name: item.clientName, companies: [] });
-                        cid = newC.id;
-                        created.client++;
-                    }
+                }
+                if (!cid && item.clientName) {
+                    // Auto-create client with that name
+                    const newC = Store.addClient({ name: item.clientName, companies: [] });
+                    cid = newC.id;
+                    created.client++;
                 }
                 if (!cid) cid = lastClientId;
                 if (!cid) { skipped.push(`project "${item.name}" (no client)`); return; }
@@ -1776,12 +2201,25 @@ const App = {
                 created.project++;
             }
             else if (item.action === 'create_task') {
-                let pid = item.projectId && Store.getProject(item.projectId) ? item.projectId : null;
-                if (!pid && item.projectName) {
-                    const p = this._findProjectByName(item.projectName);
-                    if (p) pid = p.id;
+                let pid = null;
+                // Picker choice first
+                if (item._projectChoice && item._projectChoice !== '__none__' && item._projectChoice !== '__ambiguous__') {
+                    if (Store.getProject(item._projectChoice)) pid = item._projectChoice;
                 }
-                if (!pid) pid = lastProjectId;
+                if (!pid && item._projectChoice === '__ambiguous__') {
+                    skipped.push(`task "${item.title}" (${this.t('aiConfidenceLow')})`);
+                    return;
+                }
+                if (!pid && item._projectChoice === '__none__') {
+                    // User explicitly asked for no project — skip name-based lookup
+                } else {
+                    if (!pid && item.projectId && Store.getProject(item.projectId)) pid = item.projectId;
+                    if (!pid && item.projectName) {
+                        const p = this._findProjectByName(item.projectName);
+                        if (p) pid = p.id;
+                    }
+                    if (!pid) pid = lastProjectId;
+                }
 
                 // Dedup: reuse existing same-title task in that project
                 const existing = pid
@@ -1810,7 +2248,16 @@ const App = {
                 }
             }
             else if (item.action === 'log_hours') {
-                let tid = item.taskId && Store.getTask(item.taskId) ? item.taskId : null;
+                let tid = null;
+                // Picker choice first
+                if (item._taskChoice && item._taskChoice !== '__ambiguous__') {
+                    if (Store.getTask(item._taskChoice)) tid = item._taskChoice;
+                }
+                if (!tid && item._taskChoice === '__ambiguous__') {
+                    skipped.push(`${item.hours}h log (${this.t('aiConfidenceLow')})`);
+                    return;
+                }
+                if (!tid && item.taskId && Store.getTask(item.taskId)) tid = item.taskId;
                 if (!tid) tid = lastTaskId;
                 if (!tid && item.taskName) {
                     const t = this._findTaskByName(item.taskName);
@@ -1844,14 +2291,23 @@ const App = {
         }
 
         else if (action === 'create_project') {
-            let clientId = d.clientId || this.currentClientId;
-            if (!clientId && d.clientName) {
+            let clientId = null;
+            // Picker choice first
+            if (d._clientChoice && d._clientChoice !== '__new__' && d._clientChoice !== '__ambiguous__') {
+                if (Store.getClient(d._clientChoice)) clientId = d._clientChoice;
+            }
+            if (!clientId && d._clientChoice === '__ambiguous__') {
+                this.toast(this.t('aiConfidenceLow'), 'warning');
+                return;
+            }
+            if (!clientId) clientId = d.clientId || this.currentClientId;
+            if (!clientId && d.clientName && d._clientChoice !== '__new__') {
                 const found = this._findClientByName(d.clientName);
                 if (found) clientId = found.id;
-                else {
-                    const newC = Store.addClient({ name: d.clientName, companies: [] });
-                    clientId = newC.id;
-                }
+            }
+            if (!clientId && d.clientName) {
+                const newC = Store.addClient({ name: d.clientName, companies: [] });
+                clientId = newC.id;
             }
             if (!clientId) {
                 const clients = Store.getClients();
@@ -1872,7 +2328,14 @@ const App = {
         }
 
         else if (action === 'log_hours') {
-            const tid = this._resolveTaskId(d);
+            // Picker choice takes precedence
+            let tid = null;
+            if (d._taskChoice === '__ambiguous__') {
+                this.toast(this.t('aiConfidenceLow'), 'warning');
+                return;
+            }
+            if (d._taskChoice && Store.getTask(d._taskChoice)) tid = d._taskChoice;
+            if (!tid) tid = this._resolveTaskId(d);
             if (!tid) {
                 this.toast(this.t('taskNotFound'), 'warning');
                 this.closeAiPreview();
@@ -1904,10 +2367,21 @@ const App = {
 
         else {
             // create_task
-            let projectId = this.currentProjectId || d.projectId || '';
-            if (!projectId && d.projectName) {
-                const match = Store.getProjects().find(p => p.name.toLowerCase() === d.projectName.toLowerCase());
-                if (match) projectId = match.id;
+            let projectId = '';
+            // Picker choice first
+            if (d._projectChoice === '__ambiguous__') {
+                this.toast(this.t('aiConfidenceLow'), 'warning');
+                return;
+            }
+            if (d._projectChoice && d._projectChoice !== '__none__' && Store.getProject(d._projectChoice)) {
+                projectId = d._projectChoice;
+            }
+            if (!projectId && d._projectChoice !== '__none__') {
+                projectId = this.currentProjectId || d.projectId || '';
+                if (!projectId && d.projectName) {
+                    const fuzzy = this._findProjectByName(d.projectName);
+                    if (fuzzy) projectId = fuzzy.id;
+                }
             }
             Store.addTask({
                 projectId,
