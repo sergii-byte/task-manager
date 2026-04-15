@@ -95,7 +95,7 @@ const SheetsSync = {
     async createSpreadsheet() {
         const sheets = Object.values(this.SHEET_NAMES).map(name => ({ properties: { title: name } }));
         const response = await gapi.client.sheets.spreadsheets.create({
-            resource: { properties: { title: 'LegalFlow Data' }, sheets },
+            resource: { properties: { title: 'Ordify Data' }, sheets },
         });
 
         this.SHEET_ID = response.result.spreadsheetId;

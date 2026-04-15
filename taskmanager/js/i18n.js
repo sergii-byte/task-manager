@@ -4,7 +4,7 @@ const I18n = {
     translations: {
         en: {
             // Sidebar
-            logo: 'LegalFlow',
+            logo: 'Ordify',
             search: 'Search...',
             menu: 'Menu',
             dashboard: 'Dashboard',
@@ -154,7 +154,7 @@ const I18n = {
             light: 'Light',
             dark: 'Dark',
             // Welcome
-            welcomeMessage: 'Welcome to LegalFlow! Start by adding your first client.',
+            welcomeMessage: 'Welcome to Ordify! Start by adding your first client.',
             // Toast messages
             clientCreated: 'Client created',
             companyCreated: 'Company created',
@@ -208,7 +208,7 @@ const I18n = {
             newCompanyName: 'New company name',
         },
         uk: {
-            logo: 'LegalFlow',
+            logo: 'Ordify',
             search: 'Пошук...',
             menu: 'Меню',
             dashboard: 'Дашборд',
@@ -342,7 +342,7 @@ const I18n = {
             theme: 'Тема',
             light: 'Світла',
             dark: 'Темна',
-            welcomeMessage: 'Ласкаво просимо до LegalFlow! Почніть з додавання першого клієнта.',
+            welcomeMessage: 'Ласкаво просимо до Ordify! Почніть з додавання першого клієнта.',
             clientCreated: 'Клієнта створено',
             companyCreated: 'Компанію створено',
             projectCreated: 'Проєкт створено',
