@@ -1,3 +1,25 @@
+// Inline SVG icons — stroke-based, currentColor, matches existing sync/search style
+const Icons = {
+    _svg: (body, size = 14) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
+    users(s)     { return this._svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', s); },
+    building(s)  { return this._svg('<path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/>', s); },
+    clock(s)     { return this._svg('<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>', s); },
+    hourglass(s) { return this._svg('<path d="M6 2h12M6 22h12M6 2v4a6 6 0 0 0 12 0V2M6 22v-4a6 6 0 0 1 12 0v4"/>', s); },
+    alert(s)     { return this._svg('<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>', s); },
+    check(s)     { return this._svg('<polyline points="20 6 9 17 4 12"/>', s); },
+    folder(s)    { return this._svg('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>', s); },
+    mail(s)      { return this._svg('<path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1 .9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>', s); },
+    send(s)      { return this._svg('<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>', s); },
+    note(s)      { return this._svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>', s); },
+    globe(s)     { return this._svg('<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>', s); },
+    user(s)      { return this._svg('<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>', s); },
+    inbox(s)     { return this._svg('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>', s); },
+    edit(s)      { return this._svg('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>', s); },
+    trash(s)     { return this._svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>', s); },
+    calendar(s)  { return this._svg('<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>', s); },
+    scale(s)     { return this._svg('<path d="M12 3v18"/><path d="M5 8h14"/><path d="M8 14L5 8l-3 6a4 4 0 0 0 6 0Z"/><path d="M22 14l-3-6-3 6a4 4 0 0 0 6 0Z"/>', s); },
+};
+
 const App = {
     currentView: 'dashboard',
     currentClientId: null,   // client = person (the paying human)
@@ -279,11 +301,11 @@ const App = {
     renderDashboard() {
         const stats = Store.getStats();
         document.getElementById('dashboard-stats').innerHTML = `
-            <div class="stat-card clickable" data-action="show-list" data-list="clients"><div class="stat-icon">\uD83D\uDC65</div><div class="stat-value">${stats.clients}</div><div class="stat-label">${this.t('statClients')}</div></div>
-            <div class="stat-card clickable" data-action="show-list" data-list="companies"><div class="stat-icon">\uD83C\uDFE2</div><div class="stat-value">${stats.companies}</div><div class="stat-label">${this.t('statCompanies')}</div></div>
-            <div class="stat-card clickable" data-action="show-list" data-list="in_progress"><div class="stat-icon">\u23F3</div><div class="stat-value">${stats.inProgress}</div><div class="stat-label">${this.t('statInProgress')}</div></div>
-            <div class="stat-card clickable" data-action="show-list" data-list="overdue"><div class="stat-icon">\u26A0</div><div class="stat-value" style="color:${stats.overdue ? 'var(--red)' : ''}">${stats.overdue}</div><div class="stat-label">${this.t('statOverdue')}</div></div>
-            <div class="stat-card clickable" data-action="show-list" data-list="hours"><div class="stat-icon">\u23F1</div><div class="stat-value">${stats.totalHours}h</div><div class="stat-label">${this.t('statHours')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="clients"><div class="stat-icon">${Icons.users(18)}</div><div class="stat-value">${stats.clients}</div><div class="stat-label">${this.t('statClients')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="companies"><div class="stat-icon">${Icons.building(18)}</div><div class="stat-value">${stats.companies}</div><div class="stat-label">${this.t('statCompanies')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="in_progress"><div class="stat-icon">${Icons.hourglass(18)}</div><div class="stat-value">${stats.inProgress}</div><div class="stat-label">${this.t('statInProgress')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="overdue"><div class="stat-icon ${stats.overdue ? 'stat-icon-alert' : ''}">${Icons.alert(18)}</div><div class="stat-value" style="color:${stats.overdue ? 'var(--red)' : ''}">${stats.overdue}</div><div class="stat-label">${this.t('statOverdue')}</div></div>
+            <div class="stat-card clickable" data-action="show-list" data-list="hours"><div class="stat-icon">${Icons.clock(18)}</div><div class="stat-value">${stats.totalHours}h</div><div class="stat-label">${this.t('statHours')}</div></div>
         `;
 
         const allTasks = Store.getTasks();
@@ -306,13 +328,13 @@ const App = {
 
         if (clients.length === 0) {
             document.getElementById('recent-tasks').innerHTML = `<div class="empty-state">
-                <div class="empty-icon">\u2696</div>
+                <div class="empty-icon">${Icons.scale(40)}</div>
                 <p>${this.t('welcomeMessage')}</p>
                 <button class="cta-btn" data-action="show-modal" data-type="client">\u002B ${this.t('newClient')}</button>
             </div>`;
         } else if (recent.length === 0) {
             document.getElementById('recent-tasks').innerHTML = `<div class="empty-state">
-                <div class="empty-icon">\u2696</div>
+                <div class="empty-icon">${Icons.scale(40)}</div>
                 <p>${this.t('noTasksYet')}</p>
             </div>`;
         } else {
@@ -336,7 +358,7 @@ const App = {
         const container = document.getElementById('inbox-tasks');
         if (tasks.length === 0) {
             container.innerHTML = `<div class="empty-state">
-                <div class="empty-icon">\uD83D\uDCE5</div>
+                <div class="empty-icon">${Icons.inbox(40)}</div>
                 <p>${this.t('noInboxTasks')}</p>
                 <button class="cta-btn" data-action="show-modal" data-type="task">\u002B ${this.t('newTask')}</button>
             </div>`;
@@ -366,14 +388,14 @@ const App = {
         actionsEl.innerHTML = '';
 
         if (type === 'clients') {
-            titleEl.innerHTML = '\uD83D\uDC65 ' + this.t('allClients');
+            titleEl.textContent = this.t('allClients');
             subtitleEl.textContent = this.t('allClientsSubtitle');
             actionsEl.innerHTML = `<button class="btn btn-sm" data-action="show-modal" data-type="client">+ ${this.t('newClient')}</button>`;
 
             const clients = Store.getClients();
             if (clients.length === 0) {
                 bodyEl.innerHTML = `<div class="empty-state">
-                    <div class="empty-icon">\uD83D\uDC65</div>
+                    <div class="empty-icon">${Icons.users(40)}</div>
                     <p>${this.t('noClients')}</p>
                     <button class="cta-btn" data-action="show-modal" data-type="client">+ ${this.t('newClient')}</button>
                 </div>`;
@@ -387,7 +409,7 @@ const App = {
                 const initials = this.getInitials(c.name);
                 return `<div class="card" data-action="select-client" data-id="${c.id}">
                     <h3><span class="client-avatar">${initials}</span>${this.esc(c.name)}</h3>
-                    ${companies.length ? `<div class="card-meta"><span>\uD83C\uDFE2 ${companies.slice(0, 3).map(n => this.esc(n)).join(', ')}${companies.length > 3 ? ' +' + (companies.length - 3) : ''}</span></div>` : ''}
+                    ${companies.length ? `<div class="card-meta"><span class="meta-label">${this.t('companies')}:</span> <span>${companies.slice(0, 3).map(n => this.esc(n)).join(', ')}${companies.length > 3 ? ' +' + (companies.length - 3) : ''}</span></div>` : ''}
                     <div class="card-meta">
                         <span>${projects.length} ${this.t('projects').toLowerCase()}</span>
                         <span>${done}/${tasks.length} ${this.t('tasks').toLowerCase()}</span>
@@ -398,7 +420,7 @@ const App = {
         }
 
         if (type === 'companies') {
-            titleEl.innerHTML = '\uD83C\uDFE2 ' + this.t('allCompanies');
+            titleEl.textContent = this.t('allCompanies');
             subtitleEl.textContent = this.t('allCompaniesSubtitle');
 
             // Aggregate: company name → [{client, projects}]
@@ -421,7 +443,7 @@ const App = {
             const entries = [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
             if (entries.length === 0) {
                 bodyEl.innerHTML = `<div class="empty-state">
-                    <div class="empty-icon">\uD83C\uDFE2</div>
+                    <div class="empty-icon">${Icons.building(40)}</div>
                     <p>${this.t('noCompaniesYet')}</p>
                 </div>`;
                 return;
@@ -431,7 +453,7 @@ const App = {
                 const projList = e.projects.slice(0, 3).map(p => `<span class="pill">${this.esc(p.name)}</span>`).join(' ');
                 const moreProj = e.projects.length > 3 ? ` <span style="color:var(--text-3);font-size:11px">+${e.projects.length - 3}</span>` : '';
                 return `<div class="card">
-                    <h3>\uD83C\uDFE2 ${this.esc(e.name)}</h3>
+                    <h3>${this.esc(e.name)}</h3>
                     <div class="card-meta"><span>${uniqueClients.length} ${this.t('clientsLower')}</span><span>${e.projects.length} ${this.t('projects').toLowerCase()}</span></div>
                     ${uniqueClients.length ? `<div class="card-meta" style="flex-wrap:wrap;gap:6px">${uniqueClients.map(c => `<span class="pill clickable-pill" data-action="select-client" data-id="${c.id}">${this.esc(c.name)}</span>`).join('')}</div>` : ''}
                     ${e.projects.length ? `<div class="card-meta" style="flex-wrap:wrap;gap:6px">${projList}${moreProj}</div>` : ''}
@@ -441,11 +463,11 @@ const App = {
         }
 
         if (type === 'in_progress') {
-            titleEl.innerHTML = '\u23F3 ' + this.t('inProgress');
+            titleEl.textContent = this.t('inProgress');
             subtitleEl.textContent = this.t('inProgressSubtitle');
             const tasks = Store.getTasks().filter(t => t.status === 'in_progress');
             if (tasks.length === 0) {
-                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon">\u23F3</div><p>${this.t('noTasksInProgress')}</p></div>`;
+                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon">${Icons.hourglass(40)}</div><p>${this.t('noTasksInProgress')}</p></div>`;
                 return;
             }
             const sorted = [...tasks].sort((a, b) => {
@@ -459,12 +481,12 @@ const App = {
         }
 
         if (type === 'overdue') {
-            titleEl.innerHTML = '\u26A0 ' + this.t('statOverdue');
+            titleEl.textContent = this.t('statOverdue');
             subtitleEl.textContent = this.t('overdueSubtitle');
             const now = new Date();
             const tasks = Store.getTasks().filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'done');
             if (tasks.length === 0) {
-                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon">\u2705</div><p>${this.t('noOverdueTasks')}</p></div>`;
+                bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon" style="color:var(--green,#6a8e5e)">${Icons.check(40)}</div><p>${this.t('noOverdueTasks')}</p></div>`;
                 return;
             }
             const sorted = [...tasks].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
@@ -473,7 +495,7 @@ const App = {
         }
 
         if (type === 'hours') {
-            titleEl.innerHTML = '\u23F1 ' + this.t('hoursLogged');
+            titleEl.textContent = this.t('hoursLogged');
             subtitleEl.textContent = this.t('hoursSubtitle');
 
             // Aggregate hours per client / project / task
@@ -626,7 +648,7 @@ const App = {
 
         overlay.innerHTML = `<div class="modal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3>\uD83D\uDCC5 ${this.esc(dateLabel)}</h3>
+                <h3>${this.esc(dateLabel)}</h3>
                 <button class="icon-btn" id="day-detail-close">\u00D7</button>
             </div>
             <div class="modal-body">
@@ -721,16 +743,16 @@ const App = {
 
         // Contact info
         const infoParts = [];
-        if (client.email) infoParts.push(`<span>\u2709 <strong>Email:</strong> ${this.esc(client.email)}</span>`);
-        if (client.telegram) infoParts.push(`<span>\u2708 <strong>Telegram:</strong> ${this.esc(client.telegram)}</span>`);
-        if (client.notes) infoParts.push(`<span>\uD83D\uDCDD <strong>${this.t('notes')}:</strong> ${this.esc(client.notes)}</span>`);
+        if (client.email) infoParts.push(`<span><strong>Email:</strong> ${this.esc(client.email)}</span>`);
+        if (client.telegram) infoParts.push(`<span><strong>Telegram:</strong> ${this.esc(client.telegram)}</span>`);
+        if (client.notes) infoParts.push(`<span><strong>${this.t('notes')}:</strong> ${this.esc(client.notes)}</span>`);
         document.getElementById('client-info').innerHTML = infoParts.join('') || `<span style="color:var(--text-3)">${this.t('noContactInfo')}</span>`;
 
         // Companies bar (chips)
         const companies = Array.isArray(client.companies) ? client.companies : [];
         const companiesEl = document.getElementById('client-companies-bar');
         if (companies.length) {
-            companiesEl.innerHTML = `<span class="companies-label">\uD83C\uDFE2 ${this.t('companies')}:</span>` +
+            companiesEl.innerHTML = `<span class="companies-label">${this.t('companies')}</span>` +
                 companies.map(name => `<span class="company-chip">${this.esc(name)}</span>`).join('');
         } else {
             companiesEl.innerHTML = '';
@@ -742,7 +764,7 @@ const App = {
 
         if (projects.length === 0) {
             grid.innerHTML = `<div class="empty-state">
-                <div class="empty-icon">\uD83D\uDCC1</div>
+                <div class="empty-icon">${Icons.folder(40)}</div>
                 <p>${this.t('noProjects')}</p>
                 <button class="cta-btn" data-action="show-modal" data-type="project">\u002B ${this.t('newProject')}</button>
             </div>`;
@@ -770,7 +792,7 @@ const App = {
                         <span>${done}/${tasks.length}</span>
                     </div>
                     ${p.projectType ? `<div class="card-meta"><span>${typeL[p.projectType] || p.projectType}</span></div>` : ''}
-                    ${p.jurisdiction ? `<div class="card-meta"><span>\uD83C\uDF10 ${this.esc(p.jurisdiction)}</span></div>` : ''}
+                    ${p.jurisdiction ? `<div class="card-meta"><span class="meta-label">${this.t('jurisdiction')}:</span> <span>${this.esc(p.jurisdiction)}</span></div>` : ''}
                     ${p.deadline ? `<div class="card-meta"><span class="${this.deadlineClass(p.deadline)}">${this.t('deadlineLabel')}: ${this.formatDate(p.deadline)}</span></div>` : ''}
                     <div class="progress-bar"><div class="fill" style="width:${pct}%"></div></div>
                 </div>`;
@@ -796,7 +818,7 @@ const App = {
                     const items = groups.get(key) || [];
                     if (!items.length) return;
                     const label = key === NO_COMPANY ? this.t('noCompanyLabel') : this.esc(key);
-                    html += `<div class="company-group-label">\uD83C\uDFE2 ${label}</div>`;
+                    html += `<div class="company-group-label">${label}</div>`;
                     html += `<div class="cards-grid-inner">${items.map(renderCard).join('')}</div>`;
                 });
                 grid.innerHTML = html;
@@ -841,7 +863,7 @@ const App = {
         const statusL = { active: this.t('statusActive'), on_hold: this.t('statusOnHold'), completed: this.t('statusCompleted') };
         const typeL = { licensing: this.t('typeLicensing'), corporate: this.t('typeCorporate'), contracts: this.t('typeContracts'), compliance: this.t('typeCompliance') };
         const infoParts = [`<span><span class="status-badge ${project.status}"><span class="status-dot ${project.status}"></span> ${statusL[project.status] || project.status}</span></span>`];
-        if (project.company) infoParts.push(`<span>\uD83C\uDFE2 <strong>${this.t('companyLabel')}:</strong> ${this.esc(project.company)}</span>`);
+        if (project.company) infoParts.push(`<span><strong>${this.t('companyLabel')}:</strong> ${this.esc(project.company)}</span>`);
         if (project.projectType) infoParts.push(`<span><strong>${this.t('typeLabel')}:</strong> ${typeL[project.projectType] || project.projectType}</span>`);
         if (project.jurisdiction) infoParts.push(`<span><strong>${this.t('jurisdictionLabel')}:</strong> ${this.esc(project.jurisdiction)}</span>`);
         if (project.deadline) infoParts.push(`<span class="${this.deadlineClass(project.deadline)}"><strong>${this.t('deadlineLabel')}:</strong> ${this.formatDate(project.deadline)}</span>`);
@@ -891,9 +913,9 @@ const App = {
                 if (parts.length) meta.push(parts.join(' \u2192 '));
             } else if (task.clientId) {
                 const client = Store.getClient(task.clientId);
-                if (client) meta.push(`\uD83D\uDC64 ${this.esc(client.name)}`);
+                if (client) meta.push(this.esc(client.name));
             } else {
-                meta.push(`<span style="color:var(--accent)">\uD83D\uDCE5 ${this.t('inbox')}</span>`);
+                meta.push(`<span style="color:var(--accent)">${this.t('inbox')}</span>`);
             }
         }
 
@@ -909,7 +931,7 @@ const App = {
         }).filter(Boolean).join('');
 
         const timerHtml = this.activeTimer?.taskId === task.id
-            ? `<span class="task-timer active" id="timer-display">\u23F1 ${this.formatTimerElapsed()}</span>`
+            ? `<span class="task-timer active" id="timer-display">${this.formatTimerElapsed()}</span>`
             : (task.hoursLogged ? `<span class="task-timer">${task.hoursLogged}h</span>` : '');
 
         return `<div class="task-item${task.status === 'done' ? ' done' : ''}" data-id="${task.id}">
@@ -927,8 +949,8 @@ const App = {
                 <button class="icon-btn" data-action="toggle-timer" data-id="${task.id}" title="Timer">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${this.activeTimer?.taskId === task.id ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>' : '<polygon points="5 3 19 12 5 21 5 3"/>'}</svg>
                 </button>
-                <button class="icon-btn" data-action="edit-task" data-id="${task.id}" title="Edit">\u270E</button>
-                <button class="icon-btn" data-action="delete-task" data-id="${task.id}" title="Delete">\u2715</button>
+                <button class="icon-btn" data-action="edit-task" data-id="${task.id}" title="Edit">${Icons.edit(14)}</button>
+                <button class="icon-btn" data-action="delete-task" data-id="${task.id}" title="Delete">${Icons.trash(14)}</button>
             </div>
         </div>`;
     },
@@ -985,7 +1007,7 @@ const App = {
 
     updateTimerDisplay() {
         const el = document.getElementById('timer-display');
-        if (el && this.activeTimer) el.textContent = '\u23F1 ' + this.formatTimerElapsed();
+        if (el && this.activeTimer) el.textContent = this.formatTimerElapsed();
     },
 
     formatTimerElapsed() {
@@ -1185,7 +1207,7 @@ const App = {
             const clients = Store.getClients();
             let targetOpts = `<option value="inbox:"${currentTarget === 'inbox:' ? ' selected' : ''}>${this.t('noProject')}</option>`;
             clients.forEach(c => {
-                targetOpts += `<optgroup label="\uD83D\uDC64 ${this.esc(c.name)}">`;
+                targetOpts += `<optgroup label="${this.esc(c.name)}">`;
                 const clientVal = 'client:' + c.id;
                 targetOpts += `<option value="${clientVal}"${currentTarget === clientVal ? ' selected' : ''}>${this.t('clientLabel')}: ${this.esc(c.name)}</option>`;
                 const projects = Store.getProjects(c.id);
@@ -1427,14 +1449,12 @@ const App = {
                 ${data.taskName ? `<div class="ai-field"><span class="ai-field-label">${this.t('taskTitle')}:</span> ${this.esc(data.taskName)}</div>` : ''}
                 ${data.description ? `<div class="ai-field"><span class="ai-field-label">${this.t('notes')}:</span> ${this.esc(data.description)}</div>` : ''}`;
         } else if (action === 'create_chain') {
-            const icons = { create_client: '\uD83D\uDC64', create_project: '\uD83D\uDCC1', create_task: '\u2705', log_hours: '\u23F1' };
             const labels = { create_client: this.t('newClient'), create_project: this.t('newProject'), create_task: this.t('newTask'), log_hours: this.t('logHours') };
             fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')} (${(data.items || []).length})</strong></div>`;
             (data.items || []).forEach((item, i) => {
-                const icon = icons[item.action] || '\u2022';
                 const label = labels[item.action] || item.action;
                 fieldsHtml += `<div style="margin:10px 0 2px;padding:6px 10px;background:var(--input-bg);border-radius:6px;font-size:12px">
-                    <strong>${icon} ${i+1}. ${label}</strong>`;
+                    <strong>${i+1}. ${label}</strong>`;
                 if (item.action === 'log_hours') {
                     fieldsHtml += ` &mdash; <strong>${this.esc(item.hours)}h</strong>`;
                     if (item.taskName) fieldsHtml += ` on "${this.esc(item.taskName)}"`;
@@ -1442,7 +1462,7 @@ const App = {
                     const name = item.name || item.title || '';
                     if (name) fieldsHtml += ` &mdash; <strong>${this.esc(name)}</strong>`;
                     if (item.clientName) fieldsHtml += ` <span style="color:var(--text-3)">(${this.esc(item.clientName)})</span>`;
-                    if (item.company) fieldsHtml += ` <span style="color:var(--text-3)">\uD83C\uDFE2 ${this.esc(item.company)}</span>`;
+                    if (item.company) fieldsHtml += ` <span style="color:var(--text-3)">${this.esc(item.company)}</span>`;
                     if (item.projectName) fieldsHtml += ` <span style="color:var(--text-3)">(\u2192 ${this.esc(item.projectName)})</span>`;
                     if (item.deadline) fieldsHtml += ` <span style="color:var(--text-3)">${this.t('deadline')}: ${item.deadline}</span>`;
                     if (item.priority && item.priority !== 'medium') fieldsHtml += ` <span style="color:var(--text-3)">${item.priority}</span>`;

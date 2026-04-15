@@ -4,7 +4,7 @@ const I18n = {
     translations: {
         en: {
             // Sidebar
-            logo: '⚖ LegalFlow',
+            logo: 'LegalFlow',
             search: 'Search...',
             menu: 'Menu',
             dashboard: 'Dashboard',
@@ -208,7 +208,7 @@ const I18n = {
             newCompanyName: 'New company name',
         },
         uk: {
-            logo: '⚖ LegalFlow',
+            logo: 'LegalFlow',
             search: 'Пошук...',
             menu: 'Меню',
             dashboard: 'Дашборд',

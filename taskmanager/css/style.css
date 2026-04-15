@@ -171,8 +171,11 @@ body::before {
     justify-content: center;
     width: 20px;
     margin-right: 10px;
-    font-size: 14px;
+    color: var(--text-3);
+    transition: color .15s;
 }
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon { color: var(--accent); }
 .nav-label { flex: 1; }
 
 .sidebar-footer {
@@ -306,6 +309,33 @@ body::before {
 }
 .text-btn:hover { color: var(--text); background: var(--glass-hover); }
 .text-btn:active { transform: scale(0.95); }
+
+/* Icon buttons in sidebar footer */
+.icon-text-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    width: 28px;
+    height: 28px;
+}
+.icon-text-btn svg { display: block; }
+
+/* Toggle group SVG button (theme switcher) */
+.toggle-group button svg { display: block; }
+
+/* Meta label in cards (replaces emoji prefixes like 🌐, 🏢) */
+.meta-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--text-3);
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+/* Clean up hardcoded emoji badges left over — noop safety */
+.stat-icon-alert { color: var(--red); }
 
 /* Add button in sidebar */
 .add-btn {
@@ -493,10 +523,22 @@ body::before {
 .stat-card:hover::before { opacity: 1; }
 
 .stat-card .stat-icon {
-    font-size: 20px;
-    margin-bottom: 8px;
-    opacity: 0.7;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 10px;
+    border-radius: 8px;
+    background: var(--glass-hover, rgba(255,255,255,0.04));
+    color: var(--text-2);
+    transition: all .2s;
 }
+.stat-card.clickable:hover .stat-icon {
+    color: var(--accent);
+    background: rgba(218, 119, 86, 0.08);
+}
+.stat-card .stat-icon-alert { color: var(--red); background: rgba(196, 75, 68, 0.08); }
 
 .stat-card .stat-value {
     font-size: 28px; font-weight: 700; letter-spacing: -1px;
@@ -698,7 +740,16 @@ body::before {
     text-align: center; padding: 48px 20px; color: var(--text-3);
     animation: viewIn .4s ease;
 }
-.empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
+.empty-state .empty-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+}
+.empty-state .empty-icon svg { display: block; }
 .empty-state p { font-size: 13px; line-height: 1.6; max-width: 300px; margin: 0 auto; }
 
 /* Onboarding CTA */
@@ -985,7 +1036,10 @@ kbd {
 }
 .companies-bar:empty { display: none; }
 .companies-label {
-    font-weight: 500;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
     color: var(--text-3);
     margin-right: 4px;
 }
