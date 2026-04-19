@@ -15,12 +15,14 @@ const SheetsSync = {
         timeLogs: 'TimeLogs',
     },
 
+    // `updated` column MUST be present for timestamp-aware merge. Without it, mergeAll
+     // treats remote as older and remote edits silently lose. Same for `created` on timeLogs.
     HEADERS: {
-        clients: ['id', 'name', 'email', 'telegram', 'companies', 'notes', 'created'],
-        projects: ['id', 'clientId', 'name', 'company', 'projectType', 'jurisdiction', 'status', 'pricingType', 'rate', 'fixedPrice', 'deadline', 'notes', 'created'],
-        tasks: ['id', 'projectId', 'clientId', 'company', 'title', 'status', 'priority', 'deadline', 'isProcedural', 'tags', 'hoursLogged', 'notes', 'created'],
-        tags: ['id', 'name', 'color'],
-        timeLogs: ['id', 'taskId', 'hours', 'description', 'date'],
+        clients: ['id', 'name', 'email', 'telegram', 'companies', 'notes', 'created', 'updated'],
+        projects: ['id', 'clientId', 'name', 'company', 'projectType', 'jurisdiction', 'status', 'pricingType', 'rate', 'fixedPrice', 'deadline', 'notes', 'created', 'updated'],
+        tasks: ['id', 'projectId', 'clientId', 'company', 'title', 'status', 'priority', 'deadline', 'isProcedural', 'tags', 'hoursLogged', 'notes', 'dependsOn', 'completedAt', 'created', 'updated'],
+        tags: ['id', 'name', 'color', 'created', 'updated'],
+        timeLogs: ['id', 'taskId', 'hours', 'description', 'date', 'created', 'updated'],
     },
 
     init() {
@@ -50,13 +52,20 @@ const SheetsSync = {
         }
     },
 
+    // i18n helper: read from I18n if the key exists, else use the fallback literal
+    _t(key, fallback) {
+        const s = (typeof I18n !== 'undefined' && typeof I18n.t === 'function') ? I18n.t(key) : '';
+        if (s && s !== key) return s;
+        return fallback;
+    },
+
     async authorize() {
         if (!this.CLIENT_ID) {
-            this.setStatus('Укажите Client ID в настройках', 'error');
+            this.setStatus(this._t('syncNeedClientId', 'Set Client ID in settings'), 'error');
             return;
         }
 
-        this.setStatus('Загрузка Google API...');
+        this.setStatus(this._t('syncLoadingApi', 'Loading Google API...'));
         await this._ensureLoaded();
 
         this.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -64,11 +73,11 @@ const SheetsSync = {
             scope: this.SCOPES,
             callback: (response) => {
                 if (response.error) {
-                    this.setStatus('Ошибка авторизации: ' + response.error, 'error');
+                    this.setStatus(this._t('syncAuthError', 'Authorization error') + ': ' + response.error, 'error');
                     return;
                 }
                 this.isAuthorized = true;
-                this.setStatus('Подключено к Google!', 'success');
+                this.setStatus(this._t('syncConnected', 'Connected to Google'), 'success');
                 this.loadGapi();
             },
         });
@@ -80,7 +89,7 @@ const SheetsSync = {
         gapi.load('client', async () => {
             await gapi.client.init({});
             await gapi.client.load('sheets', 'v4');
-            this.setStatus('Google Sheets API готов', 'success');
+            this.setStatus(this._t('syncApiReady', 'Google Sheets API ready'), 'success');
         });
     },
 
@@ -124,11 +133,11 @@ const SheetsSync = {
 
     async _ensureGapiReady() {
         if (!this.isAuthorized) {
-            this.setStatus('Сначала подключите Google (Connect Google)', 'error');
+            this.setStatus(this._t('syncNeedConnect', 'Connect Google first'), 'error');
             return false;
         }
         if (!window.gapi?.client?.sheets) {
-            this.setStatus('Google Sheets API загружается...', 'info');
+            this.setStatus(this._t('syncApiLoading', 'Google Sheets API loading...'), 'info');
             try {
                 await this._ensureLoaded();
                 await new Promise((resolve, reject) => {
@@ -141,7 +150,7 @@ const SheetsSync = {
                     });
                 });
             } catch (e) {
-                this.setStatus('Не удалось загрузить Google Sheets API: ' + this._getErrorMessage(e), 'error');
+                this.setStatus(this._t('syncApiLoadFail', 'Failed to load Google Sheets API') + ': ' + this._getErrorMessage(e), 'error');
                 return false;
             }
         }
@@ -157,7 +166,7 @@ const SheetsSync = {
         try {
             if (!this.SHEET_ID) {
                 await this.createSpreadsheet();
-                this.setStatus('Создана новая таблица', 'success');
+                this.setStatus(this._t('syncCreated', 'New spreadsheet created'), 'success');
             }
 
             const data = Store.getAll();
@@ -186,9 +195,9 @@ const SheetsSync = {
             }
 
             const counts = Object.keys(this.SHEET_NAMES).map(k => `${(data[k]||[]).length} ${k}`).join(', ');
-            this.setStatus(`Выгружено: ${counts}`, 'success');
+            this.setStatus(`${this._t('syncPushed', 'Pushed')}: ${counts}`, 'success');
         } catch (e) {
-            this.setStatus('Ошибка: ' + this._getErrorMessage(e), 'error');
+            this.setStatus(this._t('syncError', 'Error') + ': ' + this._getErrorMessage(e), 'error');
             console.error('Push error:', e);
         } finally {
             syncBtn.classList.remove('syncing');
@@ -197,7 +206,7 @@ const SheetsSync = {
 
     async pullAll() {
         if (!(await this._ensureGapiReady())) return;
-        if (!this.SHEET_ID) { this.setStatus('Укажите ID таблицы', 'error'); return; }
+        if (!this.SHEET_ID) { this.setStatus(this._t('syncNeedSheetId', 'Set Sheet ID'), 'error'); return; }
 
         const syncBtn = document.getElementById('sync-btn');
         syncBtn.classList.add('syncing');
@@ -218,29 +227,40 @@ const SheetsSync = {
                 result[key] = rows.slice(1).map(row => {
                     const obj = {};
                     sheetHeaders.forEach((h, i) => {
-                        let val = row[i] || '';
-                        if (val.startsWith('[')) {
+                        // Sheets may return numbers/booleans natively — coerce to string
+                        // BEFORE any .startsWith / comparison to avoid runtime crashes.
+                        let raw = row[i];
+                        if (raw === undefined || raw === null) raw = '';
+                        let val = typeof raw === 'string' ? raw : String(raw);
+                        if (val.length && (val.charAt(0) === '[' || val.charAt(0) === '{')) {
                             try { val = JSON.parse(val); } catch(e) {}
                         }
-                        if (val === 'TRUE') val = true;
-                        if (val === 'FALSE') val = false;
-                        if (['hours', 'hoursLogged', 'rate', 'fixedPrice'].includes(h) && val !== '') {
+                        if (val === 'TRUE' || val === 'true') val = true;
+                        else if (val === 'FALSE' || val === 'false') val = false;
+                        if (['hours', 'hoursLogged', 'rate', 'fixedPrice'].includes(h) && val !== '' && typeof val !== 'boolean') {
                             val = parseFloat(val) || 0;
                         }
-                        if (val !== '') obj[h] = val;
+                        // Keep empty strings for `updated` / `created` so merge still sees them
+                        // as defined (mergeAll handles missing-updated via fallback to created).
+                        if (val !== '' || h === 'updated' || h === 'created') obj[h] = val;
                     });
                     return obj;
                 }).filter(obj => obj.id);
             }
 
-            Store.replaceAll(result);
-            const counts = Object.keys(this.SHEET_NAMES).map(k => `${(result[k]||[]).length} ${k}`).join(', ');
-            this.setStatus(`Загружено: ${counts}`, 'success');
+            // Timestamp-aware merge: remote wins only where its `updated` is newer.
+            // Previously this called replaceAll, which wiped local edits that hadn't
+            // been pushed yet and stripped merge metadata.
+            const counts = Store.mergeAll ? Store.mergeAll(result) : (Store.replaceAll(result), null);
+            const summary = counts
+                ? `+${counts.added} / \u21BB${counts.updated} / =${counts.unchanged}`
+                : Object.keys(this.SHEET_NAMES).map(k => `${(result[k]||[]).length} ${k}`).join(', ');
+            this.setStatus(`${this._t('syncPulled', 'Pulled')}: ${summary}`, 'success');
 
-            App.renderSidebar();
-            App.showDashboard();
+            // Decoupled: emit an event, let the app decide how to re-render.
+            document.dispatchEvent(new CustomEvent('ordify:synced', { detail: { counts } }));
         } catch (e) {
-            this.setStatus('Ошибка: ' + this._getErrorMessage(e), 'error');
+            this.setStatus(this._t('syncError', 'Error') + ': ' + this._getErrorMessage(e), 'error');
             console.error('Pull error:', e);
         } finally {
             syncBtn.classList.remove('syncing');

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ordify</title>
-    <link rel="stylesheet" href="css/style.css?v=15">
+    <link rel="stylesheet" href="css/style.css?v=21">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23da7756' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='4.5'/><path d='M7.5 9.5h9'/><path d='M7.5 13.5h6'/><path d='M7.5 17.5h3'/></svg>">
 </head>
 <body>
@@ -83,6 +83,9 @@
             <!-- Quick Input -->
             <div class="quick-input" id="quick-input">
                 <input type="text" id="qi-text" data-i18n-placeholder="quickInputPlaceholder">
+                <button class="mic-btn" id="qi-import" data-i18n-title="importTooltip" title="Paste plan or transcript">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                </button>
                 <button class="mic-btn" id="qi-mic" title="Voice input">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg>
                 </button>
@@ -96,6 +99,7 @@
                 <div class="view-header">
                     <h2 data-i18n="dashboardTitle">Dashboard</h2>
                 </div>
+                <div id="procedural-alert" class="procedural-alert" style="display:none" aria-live="polite"></div>
                 <div id="dashboard-stats" class="stats-grid"></div>
                 <div class="two-col">
                     <div class="two-col-main">
@@ -140,12 +144,12 @@
                         <button class="btn btn-sm" id="btn-add-task-inbox">+ Task</button>
                     </div>
                 </div>
-                <div class="tasks-filters" id="inbox-filters">
-                    <button class="filter-btn active" data-inbox-filter="all" data-i18n="filterAll">All</button>
-                    <button class="filter-btn" data-inbox-filter="today" data-i18n="filterToday">Today</button>
-                    <button class="filter-btn" data-inbox-filter="week" data-i18n="filterThisWeek">This Week</button>
-                    <button class="filter-btn" data-inbox-filter="overdue" data-i18n="filterOverdue">Overdue</button>
-                    <button class="filter-btn" data-inbox-filter="unassigned" data-i18n="filterUnassigned">Unassigned</button>
+                <div class="tasks-filters" id="inbox-filters" role="group" aria-label="Task filter">
+                    <button class="filter-btn active" data-inbox-filter="all" data-i18n="filterAll" aria-pressed="true">All</button>
+                    <button class="filter-btn" data-inbox-filter="today" data-i18n="filterToday" aria-pressed="false">Today</button>
+                    <button class="filter-btn" data-inbox-filter="week" data-i18n="filterThisWeek" aria-pressed="false">This Week</button>
+                    <button class="filter-btn" data-inbox-filter="overdue" data-i18n="filterOverdue" aria-pressed="false">Overdue</button>
+                    <button class="filter-btn" data-inbox-filter="unassigned" data-i18n="filterUnassigned" aria-pressed="false">Unassigned</button>
                 </div>
                 <div id="inbox-tasks" class="tasks-list"></div>
             </div>
@@ -193,11 +197,11 @@
                     </div>
                 </div>
                 <div id="project-info" class="info-bar"></div>
-                <div class="tasks-filters" id="tasks-filters">
-                    <button class="filter-btn active" data-filter="all" data-i18n="filterAll">All</button>
-                    <button class="filter-btn" data-filter="todo" data-i18n="filterTodo">To Do</button>
-                    <button class="filter-btn" data-filter="in_progress" data-i18n="filterInProgress">In Progress</button>
-                    <button class="filter-btn" data-filter="done" data-i18n="filterDone">Done</button>
+                <div class="tasks-filters" id="tasks-filters" role="group" aria-label="Task status filter">
+                    <button class="filter-btn active" data-filter="all" data-i18n="filterAll" aria-pressed="true">All</button>
+                    <button class="filter-btn" data-filter="todo" data-i18n="filterTodo" aria-pressed="false">To Do</button>
+                    <button class="filter-btn" data-filter="in_progress" data-i18n="filterInProgress" aria-pressed="false">In Progress</button>
+                    <button class="filter-btn" data-filter="done" data-i18n="filterDone" aria-pressed="false">Done</button>
                 </div>
                 <div id="tasks-list" class="tasks-list"></div>
             </div>
@@ -205,22 +209,57 @@
     </div>
 
     <!-- Modal -->
-    <div id="modal-overlay" class="modal-overlay">
+    <div id="modal-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true">
         <div class="modal" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <h3 id="modal-title"></h3>
-                <button class="icon-btn" id="modal-close-btn">&times;</button>
+                <button class="icon-btn" id="modal-close-btn" aria-label="Close">&times;</button>
             </div>
             <form id="modal-form" class="modal-body"></form>
         </div>
     </div>
 
+    <!-- Import Plan / Transcript Modal -->
+    <div id="import-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="import-title" aria-hidden="true">
+        <div class="modal modal-wide" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="import-title" data-i18n="importTitle">Import plan or transcript</h3>
+                <button class="icon-btn" id="import-close-btn" aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-hint" data-i18n="importHint">Paste a structured plan or a call transcript. AI will extract tasks, dependencies, and deadlines, then show a preview before anything is saved.</p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label data-i18n="importMode">Mode</label>
+                        <select id="import-mode">
+                            <option value="plan" data-i18n="importModePlan">Structured plan</option>
+                            <option value="transcript" data-i18n="importModeTranscript">Call transcript</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="importProject">Attach to project (optional)</label>
+                        <select id="import-project"><option value="" data-i18n="importNoProject">— Auto-group / none —</option></select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label data-i18n="importText">Text</label>
+                    <textarea id="import-text" rows="10" data-i18n-placeholder="importPlaceholder" placeholder="Paste here..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" id="import-cancel-btn" data-i18n="cancel">Cancel</button>
+                    <button class="btn btn-primary" id="import-process-btn" data-i18n="importProcess">Analyze</button>
+                </div>
+                <div id="import-status" class="import-status" aria-live="polite" aria-atomic="true"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- AI Preview Modal -->
-    <div id="ai-overlay" class="modal-overlay">
+    <div id="ai-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ai-title" aria-hidden="true">
         <div class="modal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 data-i18n="aiSuggestion">AI Suggestion</h3>
-                <button class="icon-btn" id="ai-close-btn">&times;</button>
+                <h3 id="ai-title" data-i18n="aiSuggestion">AI Suggestion</h3>
+                <button class="icon-btn" id="ai-close-btn" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="ai-preview-content"></div>
@@ -230,11 +269,11 @@
     </div>
 
     <!-- Settings Modal -->
-    <div id="settings-overlay" class="modal-overlay">
+    <div id="settings-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" aria-hidden="true">
         <div class="modal modal-wide" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 data-i18n="settingsTitle">Settings</h3>
-                <button class="icon-btn" id="settings-close-btn">&times;</button>
+                <h3 id="settings-title" data-i18n="settingsTitle">Settings</h3>
+                <button class="icon-btn" id="settings-close-btn" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="section">
@@ -273,11 +312,11 @@
     </div>
 
     <!-- Tags Manager Modal -->
-    <div id="tags-overlay" class="modal-overlay">
+    <div id="tags-overlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="tags-title" aria-hidden="true">
         <div class="modal" onclick="event.stopPropagation()">
             <div class="modal-header">
-                <h3 data-i18n="tagsManager">Manage Tags</h3>
-                <button class="icon-btn" id="tags-close-btn">&times;</button>
+                <h3 id="tags-title" data-i18n="tagsManager">Manage Tags</h3>
+                <button class="icon-btn" id="tags-close-btn" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="tags-list-manager"></div>
@@ -293,10 +332,10 @@
     <!-- Toast container -->
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="js/store.js?v=15"></script>
-    <script src="js/i18n.js?v=15"></script>
-    <script src="js/sheets-sync.js?v=15"></script>
-    <script src="js/ai-input.js?v=15"></script>
-    <script src="js/app.js?v=15"></script>
+    <script src="js/store.js?v=21"></script>
+    <script src="js/i18n.js?v=21"></script>
+    <script src="js/sheets-sync.js?v=21"></script>
+    <script src="js/ai-input.js?v=21"></script>
+    <script src="js/app.js?v=21"></script>
 </body>
 </html>

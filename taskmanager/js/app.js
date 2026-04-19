@@ -1,3 +1,14 @@
+// Parse "YYYY-MM-DD" as LOCAL midnight. new Date("2026-04-18") parses as UTC
+// midnight, which shifts by the timezone offset and causes same-day tasks to
+// appear "overdue" (or next-day tasks to land on the wrong calendar cell).
+// Top-level so sort comparators can use it without capturing `this`.
+function dlDate(s) {
+    if (!s) return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (!m) return new Date(s);
+    return new Date(+m[1], +m[2] - 1, +m[3]);
+}
+
 // Inline SVG icons — stroke-based, currentColor, matches existing sync/search style
 const Icons = {
     _svg: (body, size = 14) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`,
@@ -44,38 +55,207 @@ const App = {
     },
 
     // ===== Toast Notifications =====
-    toast(message, type = 'info') {
+    // Uses textContent for the message body so task titles, error strings, or
+    // tag names with `<`, `>`, quotes, or backticks can never inject HTML.
+    toast(message, type = 'info', opts = {}) {
         const container = document.getElementById('toast-container');
+        if (!container) return;
         const icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
         const el = document.createElement('div');
         el.className = 'toast ' + type;
-        el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span>`;
-        container.appendChild(el);
-        setTimeout(() => {
+        el.setAttribute('role', 'status');
+        el.setAttribute('aria-live', 'polite');
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'toast-icon';
+        iconSpan.textContent = icons[type] || icons.info;
+        const msgSpan = document.createElement('span');
+        msgSpan.className = 'toast-msg';
+        msgSpan.textContent = String(message == null ? '' : message);
+        el.appendChild(iconSpan);
+        el.appendChild(msgSpan);
+
+        let dismissed = false;
+        const dismiss = () => {
+            if (dismissed) return;
+            dismissed = true;
             el.classList.add('toast-out');
             setTimeout(() => el.remove(), 300);
-        }, 3000);
+        };
+
+        // Optional action button (e.g. "Undo") — clicking runs onAction then dismisses.
+        if (opts.actionLabel && typeof opts.onAction === 'function') {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'toast-action';
+            btn.textContent = String(opts.actionLabel);
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                try { opts.onAction(); } finally { dismiss(); }
+            });
+            el.appendChild(btn);
+        }
+
+        container.appendChild(el);
+        const duration = Number.isFinite(opts.duration) ? opts.duration : 3000;
+        setTimeout(dismiss, duration);
     },
 
     // ===== Custom Confirm Dialog =====
-    confirm(title, text) {
+    // title/text are set via textContent to prevent HTML injection from
+    // entity names (client/project/task titles) flowing into the confirm.
+    // `danger` flag lets callers pick the affirmative label; defaults to Delete.
+    confirm(title, text, opts = {}) {
         return new Promise(resolve => {
             const overlay = document.createElement('div');
             overlay.className = 'confirm-overlay';
-            overlay.innerHTML = `<div class="confirm-dialog">
-                <div class="confirm-icon">\u26A0</div>
-                <div class="confirm-title">${title}</div>
-                <div class="confirm-text">${text}</div>
-                <div class="confirm-actions">
-                    <button class="btn btn-glass" id="confirm-no">${this.t('cancel')}</button>
-                    <button class="btn btn-danger" id="confirm-yes">${this.t('delete')}</button>
-                </div>
-            </div>`;
+            const dialog = document.createElement('div');
+            dialog.className = 'confirm-dialog';
+            dialog.setAttribute('role', 'alertdialog');
+            dialog.setAttribute('aria-modal', 'true');
+            const icon = document.createElement('div');
+            icon.className = 'confirm-icon';
+            icon.textContent = '\u26A0';
+            const titleEl = document.createElement('div');
+            titleEl.className = 'confirm-title';
+            titleEl.textContent = String(title || '');
+            const textEl = document.createElement('div');
+            textEl.className = 'confirm-text';
+            textEl.textContent = String(text || '');
+            // Optional meta-info line (e.g. cascade counts). textContent prevents
+            // entity names from rendering as HTML.
+            let extraEl = null;
+            if (opts.extra) {
+                extraEl = document.createElement('div');
+                extraEl.className = 'confirm-extra';
+                extraEl.textContent = String(opts.extra);
+            }
+            const actions = document.createElement('div');
+            actions.className = 'confirm-actions';
+            const noBtn = document.createElement('button');
+            noBtn.className = 'btn btn-glass';
+            noBtn.id = 'confirm-no';
+            noBtn.textContent = this.t('cancel');
+            const yesBtn = document.createElement('button');
+            yesBtn.className = 'btn btn-danger';
+            yesBtn.id = 'confirm-yes';
+            yesBtn.textContent = opts.confirmLabel || this.t('delete');
+            actions.appendChild(noBtn);
+            actions.appendChild(yesBtn);
+            dialog.appendChild(icon);
+            dialog.appendChild(titleEl);
+            dialog.appendChild(textEl);
+            if (extraEl) dialog.appendChild(extraEl);
+            dialog.appendChild(actions);
+            overlay.appendChild(dialog);
             document.body.appendChild(overlay);
-            overlay.querySelector('#confirm-yes').onclick = () => { overlay.remove(); resolve(true); };
-            overlay.querySelector('#confirm-no').onclick = () => { overlay.remove(); resolve(false); };
+            yesBtn.onclick = () => { overlay.remove(); resolve(true); };
+            noBtn.onclick = () => { overlay.remove(); resolve(false); };
             overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } };
+            // Focus the cancel button by default (safer affirmative).
+            setTimeout(() => noBtn.focus(), 10);
         });
+    },
+
+    // ===== Prompt dialog (single text field) =====
+    // Mirrors confirm(): Promise<string|null>. Used for inline renames
+    // (e.g. company rename on client view) without resorting to window.prompt.
+    promptText(title, opts = {}) {
+        return new Promise(resolve => {
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-overlay';
+            const dialog = document.createElement('div');
+            dialog.className = 'confirm-dialog';
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+
+            const titleEl = document.createElement('div');
+            titleEl.className = 'confirm-title';
+            titleEl.textContent = String(title || '');
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'confirm-input';
+            input.value = String(opts.defaultValue || '');
+            if (opts.placeholder) input.placeholder = String(opts.placeholder);
+
+            const actions = document.createElement('div');
+            actions.className = 'confirm-actions';
+            const noBtn = document.createElement('button');
+            noBtn.className = 'btn btn-glass';
+            noBtn.textContent = this.t('cancel');
+            const yesBtn = document.createElement('button');
+            yesBtn.className = 'btn';
+            yesBtn.textContent = opts.confirmLabel || this.t('save');
+
+            actions.appendChild(noBtn);
+            actions.appendChild(yesBtn);
+            dialog.appendChild(titleEl);
+            dialog.appendChild(input);
+            dialog.appendChild(actions);
+            overlay.appendChild(dialog);
+            document.body.appendChild(overlay);
+
+            const submit = () => {
+                const v = (input.value || '').trim();
+                overlay.remove();
+                resolve(v || null);
+            };
+            const cancel = () => { overlay.remove(); resolve(null); };
+            yesBtn.onclick = submit;
+            noBtn.onclick = cancel;
+            overlay.onclick = (e) => { if (e.target === overlay) cancel(); };
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); submit(); }
+                else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+            });
+            setTimeout(() => { input.focus(); input.select(); }, 10);
+        });
+    },
+
+    // ===== Focus trap for modals =====
+    // Stack allows nested modals (e.g. Settings opened from Import flow) to
+    // pop back to the previously-trapped overlay instead of leaking focus.
+    _focusTrapStack: [],
+    _focusableSelector: 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+
+    _focusableIn(root) {
+        if (!root) return [];
+        return Array.from(root.querySelectorAll(this._focusableSelector))
+            .filter(el => el.offsetParent !== null || el === document.activeElement);
+    },
+
+    openModalA11y(overlayId) {
+        const overlay = document.getElementById(overlayId);
+        if (!overlay) return;
+        overlay.setAttribute('aria-hidden', 'false');
+        const prev = document.activeElement;
+        const handler = (e) => {
+            if (e.key !== 'Tab') return;
+            const items = this._focusableIn(overlay);
+            if (!items.length) { e.preventDefault(); return; }
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault(); last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault(); first.focus();
+            }
+        };
+        overlay.addEventListener('keydown', handler);
+        this._focusTrapStack.push({ overlayId, prev, handler });
+    },
+
+    closeModalA11y(overlayId) {
+        const overlay = document.getElementById(overlayId);
+        if (overlay) overlay.setAttribute('aria-hidden', 'true');
+        // Pop the matching entry (usually the top of stack).
+        const idx = this._focusTrapStack.findIndex(e => e.overlayId === overlayId);
+        if (idx === -1) return;
+        const entry = this._focusTrapStack.splice(idx, 1)[0];
+        if (overlay && entry.handler) overlay.removeEventListener('keydown', entry.handler);
+        if (entry.prev && typeof entry.prev.focus === 'function') {
+            try { entry.prev.focus(); } catch (_) {}
+        }
     },
 
     // ===== Theme =====
@@ -122,22 +302,37 @@ const App = {
             const btn = e.target.closest('[data-inbox-filter]');
             if (!btn) return;
             this._inboxFilter = btn.dataset.inboxFilter;
+            document.querySelectorAll('#inbox-filters .filter-btn').forEach(b => {
+                const on = b === btn;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
             this.renderInbox();
         });
 
-        // Sync
-        this._on('sync-btn', 'click', () => {
-            if (SheetsSync.isAuthorized) {
-                SheetsSync.pushAll().then(() => SheetsSync.pullAll());
-            } else {
-                this.showSettings();
-            }
+        // Sync — pull BEFORE push, so remote edits merge into local; then push the
+        // merged result back. Old order (push → pull) immediately overwrote local
+        // state with whatever had just been pushed, stripping any in-flight edits.
+        this._on('sync-btn', 'click', async () => {
+            if (!SheetsSync.isAuthorized) { this.showSettings(); return; }
+            await SheetsSync.pullAll();
+            await SheetsSync.pushAll();
         });
+
+        // React to a successful pull/merge — re-render without coupling Store to UI.
+        document.addEventListener('ordify:synced', () => { this.refresh(); });
 
         // Quick input
         this._on('qi-text', 'keydown', (e) => { if (e.key === 'Enter') AiInput.process(); });
         this._on('qi-mic', 'click', () => AiInput.toggleMic());
         this._on('qi-send', 'click', () => AiInput.process());
+        this._on('qi-import', 'click', () => this.showImport());
+        this._on('import-close-btn', 'click', () => this.closeImport());
+        this._on('import-cancel-btn', 'click', () => this.closeImport());
+        this._on('import-process-btn', 'click', () => this.processImport());
+        document.getElementById('import-overlay')?.addEventListener('click', (e) => {
+            if (e.target.id === 'import-overlay') this.closeImport();
+        });
 
         // Theme toggles
         this._on('theme-light', 'click', () => this.setTheme('light'));
@@ -184,8 +379,11 @@ const App = {
         document.getElementById('tasks-filters')?.addEventListener('click', (e) => {
             const btn = e.target.closest('.filter-btn');
             if (!btn) return;
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
+            document.querySelectorAll('#tasks-filters .filter-btn').forEach(b => {
+                const on = b === btn;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
             this.taskFilter = btn.dataset.filter;
             this.renderTasks();
         });
@@ -203,7 +401,7 @@ const App = {
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                this.closeModal(); this.closeAiPreview(); this.closeSettings(); this.closeTagsManager(); this.closeSidebar();
+                this.closeModal(); this.closeAiPreview(); this.closeSettings(); this.closeTagsManager(); this.closeSidebar(); this.closeImport();
             }
         });
 
@@ -215,6 +413,8 @@ const App = {
             const id = target.dataset.id;
             switch (action) {
                 case 'cycle-status': this.cycleTaskStatus(id); break;
+                case 'mark-done': this.markTaskDone(id); break;
+                case 'mark-todo': this.markTaskTodo(id); break;
                 case 'edit-task': this.editTask(id); break;
                 case 'delete-task': this.deleteTask(id); break;
                 case 'toggle-timer': this.toggleTimer(id); break;
@@ -223,6 +423,7 @@ const App = {
                 case 'show-modal': this.showModal(target.dataset.type); break;
                 case 'assign-project': this.editTask(id); break;
                 case 'show-list': this.showList(target.dataset.list); break;
+                case 'rename-company': this.renameCompany(target.dataset.name); break;
             }
         });
 
@@ -231,6 +432,17 @@ const App = {
             const item = e.target.closest('[data-action]');
             if (!item) return;
             e.stopPropagation();
+            if (item.dataset.action === 'select-client') this.selectClient(item.dataset.id);
+            if (item.dataset.action === 'select-project') this.selectProject(item.dataset.id);
+        });
+
+        // Sidebar keyboard activation — Enter/Space triggers the same
+        // select-client / select-project flow that clicks do.
+        document.getElementById('clients-list').addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const item = e.target.closest('[data-action]');
+            if (!item) return;
+            e.preventDefault();
             if (item.dataset.action === 'select-client') this.selectClient(item.dataset.id);
             if (item.dataset.action === 'select-project') this.selectProject(item.dataset.id);
         });
@@ -263,7 +475,7 @@ const App = {
                 const projects = Store.getProjects(c.id);
                 const isActive = this.currentClientId === c.id && this.currentView === 'client';
                 const initials = this.getInitials(c.name);
-                html += `<li class="nav-item${isActive ? ' active' : ''}" data-action="select-client" data-id="${c.id}">
+                html += `<li class="nav-item${isActive ? ' active' : ''}" data-action="select-client" data-id="${c.id}" tabindex="0" role="button" aria-label="${this.esc(c.name)}">
                     <span style="display:flex;align-items:center"><span class="client-avatar">${initials}</span>${this.esc(c.name)}</span>
                     <span class="badge">${projects.length}</span>
                 </li>`;
@@ -272,7 +484,7 @@ const App = {
                     projects.forEach(p => {
                         const isProjActive = this.currentProjectId === p.id;
                         const label = p.company ? `<span style="color:var(--text-3);font-size:11px">${this.esc(p.company)} \u00B7 </span>${this.esc(p.name)}` : this.esc(p.name);
-                        html += `<li class="nav-item${isProjActive ? ' active' : ''}" data-action="select-project" data-id="${p.id}">
+                        html += `<li class="nav-item${isProjActive ? ' active' : ''}" data-action="select-project" data-id="${p.id}" tabindex="0" role="button" aria-label="${this.esc(p.name)}">
                             <span>${label}</span>
                         </li>`;
                     });
@@ -288,8 +500,11 @@ const App = {
         document.getElementById('nav-inbox')?.classList.toggle('active', this.currentView === 'inbox');
         document.getElementById('nav-reports')?.classList.toggle('active', this.currentView === 'reports');
 
-        // Inbox count
-        const inboxCount = Store.getInboxTasks().length;
+        // Tasks badge — reflects the default "All" filter of the Tasks view
+        // (active tasks everywhere), so the sidebar count matches what the
+        // user sees on click. Previously this counted only truly-unassigned
+        // inbox tasks, which caused a confusing mismatch with the view body.
+        const inboxCount = Store.getTasks().filter(t => t.status !== 'done').length;
         const inboxBadge = document.getElementById('inbox-count');
         if (inboxBadge) {
             inboxBadge.textContent = inboxCount || '';
@@ -332,17 +547,17 @@ const App = {
 
         const allTasks = Store.getTasks();
         const procedural = allTasks.filter(t => t.isProcedural && t.deadline && t.status !== 'done')
-            .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            .sort((a, b) => dlDate(a.deadline) - dlDate(b.deadline));
 
         // Prominent procedural warning strip — anything within the next 7 days
         const alertEl = document.getElementById('procedural-alert');
         if (alertEl) {
             const now = new Date(); now.setHours(0, 0, 0, 0);
             const soonCutoff = new Date(now); soonCutoff.setDate(soonCutoff.getDate() + 7);
-            const soon = procedural.filter(t => new Date(t.deadline) <= soonCutoff);
+            const soon = procedural.filter(t => dlDate(t.deadline) <= soonCutoff);
             if (soon.length) {
                 const rows = soon.slice(0, 6).map(t => {
-                    const d = new Date(t.deadline); d.setHours(0,0,0,0);
+                    const d = dlDate(t.deadline); d.setHours(0,0,0,0);
                     const days = Math.round((d - now) / 86400000);
                     let when;
                     if (days < 0) when = `<span class="proc-alert-badge overdue">${Math.abs(days)}d ${this.t('proceduralAlertOverdue')}</span>`;
@@ -393,10 +608,10 @@ const App = {
         const upcoming = allTasks
             .filter(t => t.status !== 'done' && t.deadline && !t.isProcedural)
             .filter(t => {
-                const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+                const d = dlDate(t.deadline); d.setHours(0, 0, 0, 0);
                 return d <= upcomingCutoff;
             })
-            .sort((a, b) => new Date(a.deadline) - new Date(b.deadline))
+            .sort((a, b) => dlDate(a.deadline) - dlDate(b.deadline))
             .slice(0, 8);
         const upcomingCountEl = document.getElementById('upcoming-count');
         const upcomingEl = document.getElementById('upcoming-tasks');
@@ -451,33 +666,34 @@ const App = {
         const now = new Date(); now.setHours(0, 0, 0, 0);
         const weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() + 7);
 
+        const parse = s => this._parseDeadline(s);
         let tasks;
         if (filter === 'unassigned') {
             tasks = active.filter(t => !t.projectId && !t.clientId);
         } else if (filter === 'today') {
             tasks = active.filter(t => {
                 if (!t.deadline) return false;
-                const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+                const d = parse(t.deadline);
                 return d.getTime() === now.getTime();
             });
         } else if (filter === 'week') {
             tasks = active.filter(t => {
                 if (!t.deadline) return false;
-                const d = new Date(t.deadline); d.setHours(0, 0, 0, 0);
+                const d = parse(t.deadline);
                 return d >= now && d <= weekEnd;
             });
         } else if (filter === 'overdue') {
-            tasks = active.filter(t => t.deadline && new Date(t.deadline) < now);
+            tasks = active.filter(t => t.deadline && parse(t.deadline) < now);
         } else {
             tasks = active;
         }
 
         // Sort: overdue first, then by deadline asc, then by created desc
         tasks = [...tasks].sort((a, b) => {
-            const aOver = a.deadline && new Date(a.deadline) < now ? 0 : 1;
-            const bOver = b.deadline && new Date(b.deadline) < now ? 0 : 1;
+            const aOver = a.deadline && parse(a.deadline) < now ? 0 : 1;
+            const bOver = b.deadline && parse(b.deadline) < now ? 0 : 1;
             if (aOver !== bOver) return aOver - bOver;
-            if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+            if (a.deadline && b.deadline) return dlDate(a.deadline) - dlDate(b.deadline);
             if (a.deadline) return -1;
             if (b.deadline) return 1;
             return new Date(b.created) - new Date(a.created);
@@ -603,7 +819,8 @@ const App = {
             titleEl.textContent = this.t('allTasks');
             subtitleEl.textContent = this.t('allTasksSubtitle');
             actionsEl.innerHTML = `<button class="btn btn-sm" data-action="show-modal" data-type="task">+ ${this.t('newTask')}</button>`;
-            const now = new Date();
+            const now = new Date(); now.setHours(0, 0, 0, 0);
+            const parse = s => this._parseDeadline(s);
             const tasks = Store.getTasks().filter(t => t.status !== 'done');
             if (tasks.length === 0) {
                 bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon" style="color:var(--green,#6a8e5e)">${Icons.check(40)}</div><p>${this.t('noActiveTasks')}</p></div>`;
@@ -612,10 +829,10 @@ const App = {
             // Sort: overdue first, then by deadline asc, then in_progress before todo, then newest
             const statusRank = { in_progress: 0, todo: 1 };
             const sorted = [...tasks].sort((a, b) => {
-                const aOver = a.deadline && new Date(a.deadline) < now ? 0 : 1;
-                const bOver = b.deadline && new Date(b.deadline) < now ? 0 : 1;
+                const aOver = a.deadline && parse(a.deadline) < now ? 0 : 1;
+                const bOver = b.deadline && parse(b.deadline) < now ? 0 : 1;
                 if (aOver !== bOver) return aOver - bOver;
-                if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+                if (a.deadline && b.deadline) return parse(a.deadline) - parse(b.deadline);
                 if (a.deadline) return -1;
                 if (b.deadline) return 1;
                 const sa = statusRank[a.status] ?? 9;
@@ -636,7 +853,7 @@ const App = {
                 return;
             }
             const sorted = [...tasks].sort((a, b) => {
-                if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+                if (a.deadline && b.deadline) return dlDate(a.deadline) - dlDate(b.deadline);
                 if (a.deadline) return -1;
                 if (b.deadline) return 1;
                 return new Date(b.created) - new Date(a.created);
@@ -648,13 +865,14 @@ const App = {
         if (type === 'overdue') {
             titleEl.textContent = this.t('statOverdue');
             subtitleEl.textContent = this.t('overdueSubtitle');
-            const now = new Date();
-            const tasks = Store.getTasks().filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'done');
+            const now = new Date(); now.setHours(0, 0, 0, 0);
+            const parse = s => this._parseDeadline(s);
+            const tasks = Store.getTasks().filter(t => t.deadline && parse(t.deadline) < now && t.status !== 'done');
             if (tasks.length === 0) {
                 bodyEl.innerHTML = `<div class="empty-state"><div class="empty-icon" style="color:var(--green,#6a8e5e)">${Icons.check(40)}</div><p>${this.t('noOverdueTasks')}</p></div>`;
                 return;
             }
-            const sorted = [...tasks].sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            const sorted = [...tasks].sort((a, b) => parse(a.deadline) - parse(b.deadline));
             bodyEl.innerHTML = '<div class="tasks-list">' + sorted.map(t => this.renderTaskItem(t, true)).join('') + '</div>';
             return;
         }
@@ -747,8 +965,10 @@ const App = {
             const dl = deadlines[dateStr];
             let cls = 'cal-day clickable';
             if (isToday) cls += ' today';
+            // Apply markers independently so a day with both regular and
+            // procedural deadlines shows both dots, not just procedural.
+            if (dl?.regular)    cls += ' has-deadline';
             if (dl?.procedural) cls += ' has-procedural';
-            else if (dl?.count) cls += ' has-deadline';
             daysHtml += `<div class="${cls}" data-date="${dateStr}" title="${dl ? dl.count + ' tasks' : '+ task'}">${d}</div>`;
         }
 
@@ -846,6 +1066,16 @@ const App = {
                     overlay.remove();
                     this.showDayDetail(dateStr);
                     break;
+                case 'mark-done':
+                    this.markTaskDone(id);
+                    overlay.remove();
+                    this.showDayDetail(dateStr);
+                    break;
+                case 'mark-todo':
+                    this.markTaskTodo(id);
+                    overlay.remove();
+                    this.showDayDetail(dateStr);
+                    break;
                 case 'edit-task':
                     overlay.remove();
                     this.editTask(id);
@@ -867,7 +1097,7 @@ const App = {
         this.renderCalendarMini('calendar-full');
         const allTasks = Store.getTasks();
         const withDeadline = allTasks.filter(t => t.deadline && t.status !== 'done')
-            .sort((a, b) => new Date(a.deadline) - new Date(b.deadline));
+            .sort((a, b) => dlDate(a.deadline) - dlDate(b.deadline));
         document.getElementById('calendar-tasks').innerHTML = withDeadline.length
             ? withDeadline.map(t => this.renderTaskItem(t, true)).join('')
             : `<div class="empty-state"><p>${this.t('noDeadlines')}</p></div>`;
@@ -878,12 +1108,13 @@ const App = {
         const map = {};
         tasks.forEach(t => {
             if (!t.deadline || t.status === 'done') return;
-            const d = new Date(t.deadline);
+            const d = dlDate(t.deadline);
             if (d.getFullYear() === year && d.getMonth() === month) {
                 const key = t.deadline;
-                if (!map[key]) map[key] = { count: 0, procedural: false };
+                if (!map[key]) map[key] = { count: 0, procedural: 0, regular: 0 };
                 map[key].count++;
-                if (t.isProcedural) map[key].procedural = true;
+                if (t.isProcedural) map[key].procedural++;
+                else map[key].regular++;
             }
         });
         return map;
@@ -913,12 +1144,13 @@ const App = {
         if (client.notes) infoParts.push(`<span><strong>${this.t('notes')}:</strong> ${this.esc(client.notes)}</span>`);
         document.getElementById('client-info').innerHTML = infoParts.join('') || `<span style="color:var(--text-3)">${this.t('noContactInfo')}</span>`;
 
-        // Companies bar (chips)
+        // Companies bar (chips) — each chip is a button that renames the
+        // company across the client's projects + tasks (via renameCompanyForClient).
         const companies = Array.isArray(client.companies) ? client.companies : [];
         const companiesEl = document.getElementById('client-companies-bar');
         if (companies.length) {
             companiesEl.innerHTML = `<span class="companies-label">${this.t('companies')}</span>` +
-                companies.map(name => `<span class="company-chip">${this.esc(name)}</span>`).join('');
+                companies.map(name => `<button type="button" class="company-chip editable" data-action="rename-company" data-name="${this.esc(name)}" title="${this.esc(this.t('renameCompany') || 'Rename')}">${this.esc(name)}</button>`).join('');
         } else {
             companiesEl.innerHTML = '';
         }
@@ -1057,7 +1289,7 @@ const App = {
             if (!a.isProcedural && b.isProcedural) return 1;
             const pa = priOrder[a.priority] ?? 1, pb = priOrder[b.priority] ?? 1;
             if (pa !== pb) return pa - pb;
-            if (a.deadline && b.deadline) return new Date(a.deadline) - new Date(b.deadline);
+            if (a.deadline && b.deadline) return dlDate(a.deadline) - dlDate(b.deadline);
             if (a.deadline) return -1;
             return 1;
         });
@@ -1067,6 +1299,11 @@ const App = {
 
     renderTaskItem(task, showContext = false, showAssign = false) {
         const checkClass = task.status === 'done' ? 'checked' : task.status === 'in_progress' ? 'in-progress' : '';
+        const checkTitle = task.status === 'done'
+            ? this.t('cbTooltipDone')
+            : task.status === 'in_progress'
+                ? this.t('cbTooltipInProgress')
+                : this.t('cbTooltipTodo');
         const meta = [];
 
         if (showContext) {
@@ -1092,17 +1329,29 @@ const App = {
             meta.push(dlHtml);
         }
 
+        // Dependencies: show a blocker badge with prior task titles
+        if (Array.isArray(task.dependsOn) && task.dependsOn.length) {
+            const depTitles = task.dependsOn
+                .map(did => Store.getTask(did))
+                .filter(Boolean)
+                .filter(dt => dt.status !== 'done')
+                .map(dt => this.esc(dt.title));
+            if (depTitles.length) {
+                meta.push(`<span class="task-dep-badge" title="${this.t('importDepsLabel')} ${depTitles.join(', ')}">\u26D4 ${this.t('importDepsLabel')} ${depTitles[0]}${depTitles.length > 1 ? ` +${depTitles.length - 1}` : ''}</span>`);
+            }
+        }
+
         const tags = (task.tags || []).map(tid => {
             const tag = Store.getTags().find(t => t.id === tid);
-            return tag ? `<span class="tag" style="background:${tag.color}22;color:${tag.color}">${this.esc(tag.name)}</span>` : '';
+            return this.tagBadge(tag);
         }).filter(Boolean).join('');
 
         const timerHtml = this.activeTimer?.taskId === task.id
-            ? `<span class="task-timer active" id="timer-display">${this.formatTimerElapsed()}</span>`
+            ? `<span class="task-timer active js-timer-display">${this.formatTimerElapsed()}</span>`
             : (task.hoursLogged ? `<span class="task-timer">${task.hoursLogged}h</span>` : '');
 
         return `<div class="task-item${task.status === 'done' ? ' done' : ''}" data-id="${task.id}">
-            <div class="task-checkbox ${checkClass}" data-action="cycle-status" data-id="${task.id}"></div>
+            <div class="task-checkbox ${checkClass}" data-action="cycle-status" data-id="${task.id}" role="checkbox" aria-checked="${task.status === 'done'}" title="${checkTitle}"></div>
             <div class="priority-dot priority-${task.priority || 'medium'}"></div>
             <div class="task-body">
                 <div class="task-title" data-action="edit-task" data-id="${task.id}">${this.esc(task.title)}</div>
@@ -1110,6 +1359,7 @@ const App = {
             </div>
             ${timerHtml}
             <div class="task-actions">
+                ${task.status !== 'done' ? `<button class="icon-btn done-btn" data-action="mark-done" data-id="${task.id}" title="${this.t('markDone')}">${Icons.check(14)}</button>` : `<button class="icon-btn" data-action="mark-todo" data-id="${task.id}" title="${this.t('markTodo')}">${Icons.arrowUp ? Icons.arrowUp(14) : '\u21BA'}</button>`}
                 ${showAssign && !task.projectId ? `<button class="icon-btn" data-action="assign-project" data-id="${task.id}" title="${this.t('assignToProject')}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                 </button>` : ''}
@@ -1130,6 +1380,24 @@ const App = {
         Store.updateTask(id, { status: next });
         const statusNames = { todo: 'To Do', in_progress: this.t('statInProgress'), done: this.t('filterDone') };
         this.toast(`${this.t('taskTitle')}: ${statusNames[next]}`, next === 'done' ? 'success' : 'info');
+        this.refresh();
+    },
+
+    markTaskDone(id) {
+        const task = Store.getTask(id);
+        if (!task) return;
+        Store.updateTask(id, { status: 'done', completedAt: new Date().toISOString() });
+        // Also stop the timer if it was running on this task
+        if (this.activeTimer?.taskId === id) this.stopTimer();
+        this.toast(`✓ ${this.esc(task.title)}`, 'success');
+        this.refresh();
+    },
+
+    markTaskTodo(id) {
+        const task = Store.getTask(id);
+        if (!task) return;
+        Store.updateTask(id, { status: 'todo', completedAt: null });
+        this.toast(`${this.t('taskTitle')}: ${this.t('statTodo') || 'To Do'}`, 'info');
         this.refresh();
     },
 
@@ -1173,8 +1441,11 @@ const App = {
     },
 
     updateTimerDisplay() {
-        const el = document.getElementById('timer-display');
-        if (el && this.activeTimer) el.textContent = this.formatTimerElapsed();
+        // Tasks can render in multiple lists at once (e.g. dashboard + project view),
+        // so we use a class selector and update every instance to avoid duplicate ids.
+        if (!this.activeTimer) return;
+        const t = this.formatTimerElapsed();
+        document.querySelectorAll('.js-timer-display').forEach(el => { el.textContent = t; });
     },
 
     formatTimerElapsed() {
@@ -1422,7 +1693,7 @@ const App = {
             const allTags = Store.getTags();
             const taskTags = t.tags || [];
             const tagsHtml = allTags.map(tag =>
-                `<label class="form-check"><input type="checkbox" name="tag_${tag.id}" ${taskTags.includes(tag.id)?'checked':''}> <span class="tag" style="background:${tag.color}22;color:${tag.color}">${this.esc(tag.name)}</span></label>`
+                `<label class="form-check"><input type="checkbox" name="tag_${tag.id}" ${taskTags.includes(tag.id)?'checked':''}> ${this.tagBadge(tag)}</label>`
             ).join(' ');
 
             // Three independent optional selectors: Client | Company | Project.
@@ -1598,6 +1869,7 @@ const App = {
         }
 
         overlay.classList.add('open');
+        this.openModalA11y('modal-overlay');
 
         form.querySelectorAll('[data-form-cancel]').forEach(btn => {
             btn.addEventListener('click', () => this.closeModal());
@@ -1609,6 +1881,7 @@ const App = {
     closeModal(e) {
         if (e && e.target !== e.currentTarget) return;
         document.getElementById('modal-overlay').classList.remove('open');
+        this.closeModalA11y('modal-overlay');
         this.editingId = null;
     },
 
@@ -1709,17 +1982,122 @@ const App = {
     editProject() { this.showModal('project', this.currentProjectId); },
     editTask(id) { this.showModal('task', id); },
 
+    async renameCompany(oldName) {
+        if (!oldName || !this.currentClientId) return;
+        const newName = await this.promptText(
+            (this.t('renameCompany') || 'Rename company') + ': ' + oldName,
+            { defaultValue: oldName, placeholder: this.t('companyName') || 'Company name' }
+        );
+        if (!newName || newName === oldName) return;
+        Store.renameCompanyForClient(this.currentClientId, oldName, newName);
+        this.toast(this.t('saved'), 'success');
+        this.renderClient();
+    },
+
     async deleteClient() {
-        const ok = await this.confirm(this.t('confirmDeleteClient'), this.t('confirmDeleteClientText'));
-        if (ok) { Store.deleteClient(this.currentClientId); this.toast(this.t('deleted'), 'success'); this.showDashboard(); }
+        const cid = this.currentClientId;
+        const projCount = Store.getProjects(cid).length;
+        const taskCount = Store.getTasksForClient(cid).length;
+        const extra = `${projCount} ${this.t('cascadeProjects')} \u00B7 ${taskCount} ${this.t('cascadeTasks')}`;
+        const ok = await this.confirm(this.t('confirmDeleteClient'), this.t('confirmDeleteClientText'), { extra });
+        if (!ok) return;
+        const snap = Store.deleteClientWithSnapshot(cid);
+        this.showDashboard();
+        this.toast(this.t('deleted'), 'success', {
+            actionLabel: this.t('undo'),
+            duration: 6000,
+            onAction: () => {
+                Store.restoreSnapshot(snap);
+                this.toast(this.t('restored'), 'success');
+                this.selectClient(cid);
+            },
+        });
     },
     async deleteProject() {
-        const ok = await this.confirm(this.t('confirmDeleteProject'), this.t('confirmDeleteProjectText'));
-        if (ok) { Store.deleteProject(this.currentProjectId); this.toast(this.t('deleted'), 'success'); this.selectClient(this.currentClientId); }
+        const pid = this.currentProjectId;
+        const taskCount = Store.getTasks(pid).length;
+        const extra = `${taskCount} ${this.t('cascadeTasks')}`;
+        const ok = await this.confirm(this.t('confirmDeleteProject'), this.t('confirmDeleteProjectText'), { extra });
+        if (!ok) return;
+        const parentClient = this.currentClientId;
+        const snap = Store.deleteProjectWithSnapshot(pid);
+        this.selectClient(parentClient);
+        this.toast(this.t('deleted'), 'success', {
+            actionLabel: this.t('undo'),
+            duration: 6000,
+            onAction: () => {
+                Store.restoreSnapshot(snap);
+                this.toast(this.t('restored'), 'success');
+                this.selectProject(pid);
+            },
+        });
     },
     async deleteTask(id) {
         const ok = await this.confirm(this.t('confirmDeleteTask'), this.t('confirmDeleteTaskText'));
-        if (ok) { Store.deleteTask(id); this.toast(this.t('deleted'), 'success'); this.refresh(); }
+        if (!ok) return;
+        const snap = Store.deleteTaskWithSnapshot(id);
+        this.refresh();
+        this.toast(this.t('deleted'), 'success', {
+            actionLabel: this.t('undo'),
+            duration: 6000,
+            onAction: () => {
+                Store.restoreSnapshot(snap);
+                this.toast(this.t('restored'), 'success');
+                this.refresh();
+            },
+        });
+    },
+
+    // ===== Import (paste plan / transcript) =====
+    showImport() {
+        const select = document.getElementById('import-project');
+        if (select) {
+            const projects = Store.getProjects();
+            const clients = Store.getClients();
+            select.innerHTML = `<option value="">${this.t('importNoProject')}</option>` +
+                projects.map(p => {
+                    const c = clients.find(cc => cc.id === p.clientId);
+                    const label = [c?.name, p.company, p.name].filter(Boolean).map(s => this.esc(s)).join(' \u2192 ');
+                    return `<option value="${p.id}">${label}</option>`;
+                }).join('');
+            if (this.currentProjectId) select.value = this.currentProjectId;
+        }
+        const status = document.getElementById('import-status');
+        if (status) status.textContent = '';
+        document.getElementById('import-overlay')?.classList.add('open');
+        this.openModalA11y('import-overlay');
+        setTimeout(() => document.getElementById('import-text')?.focus(), 50);
+    },
+    closeImport() {
+        document.getElementById('import-overlay')?.classList.remove('open');
+        this.closeModalA11y('import-overlay');
+    },
+    async processImport() {
+        const textEl = document.getElementById('import-text');
+        const modeEl = document.getElementById('import-mode');
+        const projectEl = document.getElementById('import-project');
+        const statusEl = document.getElementById('import-status');
+        const btn = document.getElementById('import-process-btn');
+        const text = (textEl?.value || '').trim();
+        if (!text) { if (statusEl) statusEl.textContent = this.t('importEmpty'); return; }
+        const mode = modeEl?.value || 'plan';
+        const projectId = projectEl?.value || '';
+        if (!AiInput.apiKey) { this.toast(this.t('setApiKey'), 'warning'); this.showSettings(); return; }
+
+        btn.disabled = true; btn.classList.add('loading');
+        if (statusEl) statusEl.textContent = this.t('importAnalyzing');
+        try {
+            const parsed = await AiInput.processImport(text, mode, projectId);
+            this._pendingAiData = parsed;
+            this.closeImport();
+            this.showAiPreview(parsed);
+            if (statusEl) statusEl.textContent = '';
+        } catch (e) {
+            console.error('Import error:', e);
+            if (statusEl) statusEl.textContent = this.t('importError') + ': ' + e.message;
+        } finally {
+            btn.disabled = false; btn.classList.remove('loading');
+        }
     },
 
     // ===== Settings =====
@@ -1728,8 +2106,14 @@ const App = {
         document.getElementById('setting-client-id').value = SheetsSync.CLIENT_ID;
         document.getElementById('setting-sheet-id').value = SheetsSync.SHEET_ID;
         document.getElementById('settings-overlay').classList.add('open');
+        this.openModalA11y('settings-overlay');
+        setTimeout(() => document.getElementById('setting-claude-key')?.focus(), 50);
     },
-    closeSettings(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('settings-overlay').classList.remove('open'); },
+    closeSettings(e) {
+        if (e && e.target !== e.currentTarget) return;
+        document.getElementById('settings-overlay').classList.remove('open');
+        this.closeModalA11y('settings-overlay');
+    },
     saveSettings() {
         localStorage.setItem('taskflow_claude_key', document.getElementById('setting-claude-key').value.trim());
         localStorage.setItem('taskflow_gapi_client_id', document.getElementById('setting-client-id').value.trim());
@@ -1741,22 +2125,47 @@ const App = {
     },
 
     // ===== Tags =====
-    showTagsManager() { this.renderTagsList(); document.getElementById('tags-overlay').classList.add('open'); },
-    closeTagsManager(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('tags-overlay').classList.remove('open'); },
+    showTagsManager() {
+        this.renderTagsList();
+        document.getElementById('tags-overlay').classList.add('open');
+        this.openModalA11y('tags-overlay');
+        setTimeout(() => document.getElementById('new-tag-name')?.focus(), 50);
+    },
+    closeTagsManager(e) {
+        if (e && e.target !== e.currentTarget) return;
+        document.getElementById('tags-overlay').classList.remove('open');
+        this.closeModalA11y('tags-overlay');
+    },
     renderTagsList() {
         const tags = Store.getTags();
         const container = document.getElementById('tags-list-manager');
         container.innerHTML = tags.length
             ? tags.map(t => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;">
-                <span class="tag" style="background:${t.color}22;color:${t.color}">${this.esc(t.name)}</span>
-                <button class="icon-btn tag-delete" data-tag-id="${t.id}" style="font-size:12px">\u2715</button>
+                ${this.tagBadge(t)}
+                <button class="icon-btn tag-delete" data-tag-id="${this.esc(t.id)}" style="font-size:12px">\u2715</button>
             </div>`).join('')
             : `<p style="color:var(--text-3);font-size:13px">${this.t('noTags')}</p>`;
 
         container.querySelectorAll('.tag-delete').forEach(btn => {
-            btn.addEventListener('click', () => {
-                Store.deleteTag(btn.dataset.tagId);
+            btn.addEventListener('click', async () => {
+                const tagId = btn.dataset.tagId;
+                const usage = Store.getTasks().filter(t => (t.tags || []).includes(tagId)).length;
+                const extra = this.t('cascadeTagUsage').replace('%n', String(usage));
+                const ok = await this.confirm(this.t('confirmDeleteTag'), this.t('confirmDeleteTagText'), { extra });
+                if (!ok) return;
+                const snap = Store.deleteTagWithSnapshot(tagId);
                 this.renderTagsList();
+                this.refresh();
+                this.toast(this.t('deleted'), 'success', {
+                    actionLabel: this.t('undo'),
+                    duration: 6000,
+                    onAction: () => {
+                        Store.restoreSnapshot(snap);
+                        this.toast(this.t('restored'), 'success');
+                        this.renderTagsList();
+                        this.refresh();
+                    },
+                });
             });
         });
     },
@@ -1807,8 +2216,13 @@ const App = {
             fieldsHtml = `<div class="ai-field"><span class="ai-field-label">Action:</span> <strong>${this.t('createMultiple')} (${(data.items || []).length})</strong></div>`;
             (data.items || []).forEach((item, i) => {
                 const label = labels[item.action] || item.action;
-                fieldsHtml += `<div class="ai-chain-item">
-                    <div class="ai-chain-head"><span class="ai-chain-num">${i + 1}</span><strong>${label}</strong>`;
+                const included = item._include !== false;
+                fieldsHtml += `<div class="ai-chain-item${included ? '' : ' excluded'}" data-ai-row="${i}">
+                    <div class="ai-chain-head">
+                        <label class="ai-chain-include" title="${this.t('importInclude')}">
+                            <input type="checkbox" class="ai-include-cb" data-ai-include="${i}" ${included ? 'checked' : ''}>
+                        </label>
+                        <span class="ai-chain-num">${i + 1}</span><strong>${label}</strong>`;
                 if (item.action === 'log_hours') {
                     fieldsHtml += ` &mdash; <strong>${this.esc(item.hours)}h</strong>`;
                 } else {
@@ -1819,6 +2233,10 @@ const App = {
                     if (item.priority && item.priority !== 'medium') fieldsHtml += ` <span style="color:var(--text-3)">${item.priority}</span>`;
                 }
                 fieldsHtml += `</div>`;
+                // Dependencies badge row
+                if (Array.isArray(item.dependsOn) && item.dependsOn.length) {
+                    fieldsHtml += `<div class="ai-field-row ai-deps"><span class="ai-field-label">${this.t('importDepsLabel')}</span> ${item.dependsOn.map(n => `<span class="ai-dep-badge">${this.esc(n)}</span>`).join(' ')}</div>`;
+                }
 
                 // Interactive pickers for references
                 if (item.action === 'create_project' && item._clientMatches) {
@@ -1873,6 +2291,18 @@ const App = {
             });
         });
 
+        // Include/exclude checkboxes (chain mode)
+        container.querySelectorAll('.ai-include-cb').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const idx = parseInt(cb.dataset.aiInclude, 10) || 0;
+                const target = (data.items || [])[idx];
+                if (!target) return;
+                target._include = cb.checked;
+                const row = container.querySelector(`[data-ai-row="${idx}"]`);
+                if (row) row.classList.toggle('excluded', !cb.checked);
+            });
+        });
+
         const actionsEl = document.getElementById('ai-preview-actions');
         actionsEl.innerHTML = `
             <button class="btn btn-glass" id="ai-btn-cancel">${this.t('cancel')}</button>
@@ -1882,9 +2312,15 @@ const App = {
         actionsEl.querySelector('#ai-btn-accept').onclick = () => this.acceptAiResult();
 
         document.getElementById('ai-overlay').classList.add('open');
+        this.openModalA11y('ai-overlay');
+        setTimeout(() => actionsEl.querySelector('#ai-btn-accept')?.focus(), 50);
     },
 
-    closeAiPreview(e) { if (e && e.target !== e.currentTarget) return; document.getElementById('ai-overlay').classList.remove('open'); },
+    closeAiPreview(e) {
+        if (e && e.target !== e.currentTarget) return;
+        document.getElementById('ai-overlay').classList.remove('open');
+        this.closeModalA11y('ai-overlay');
+    },
 
     _pendingAiData: null,
 
@@ -2112,6 +2548,8 @@ const App = {
         let lastTaskId = null;
         const created = { client: 0, project: 0, task: 0, hours: 0 };
         const skipped = [];
+        // Map "task title lowercased" -> new taskId so later items can resolve dependsOn
+        const chainTaskIds = new Map();
 
         items.forEach(item => {
             // Tolerate legacy AI responses that still emit create_company
@@ -2230,6 +2668,27 @@ const App = {
                     return;
                 }
 
+                // Resolve dependsOn — look up prior chain tasks and existing tasks.
+                // Store resolved IDs on the new task + prepend "After: ..." to notes for visibility.
+                let resolvedDeps = [];
+                let depsNote = '';
+                if (Array.isArray(item.dependsOn) && item.dependsOn.length) {
+                    const labels = [];
+                    item.dependsOn.forEach(depName => {
+                        if (!depName) return;
+                        const key = String(depName).toLowerCase().trim();
+                        let depId = chainTaskIds.get(key);
+                        if (!depId) {
+                            const found = this._findTaskByName(depName);
+                            if (found) depId = found.id;
+                        }
+                        if (depId) resolvedDeps.push(depId);
+                        labels.push(depName);
+                    });
+                    if (labels.length) depsNote = `${this.t('importDepsLabel')} ${labels.join(', ')}`;
+                }
+                const notes = [depsNote, item.notes || ''].filter(Boolean).join('\n\n');
+
                 // Fall back: attach to current client directly, else inbox
                 const t = Store.addTask({
                     projectId: pid || '',
@@ -2238,10 +2697,12 @@ const App = {
                     priority: item.priority || 'medium',
                     deadline: item.deadline || '',
                     isProcedural: item.isProcedural || false,
-                    notes: item.notes || '',
+                    notes,
                     tags: item.tagIds || [],
+                    dependsOn: resolvedDeps,
                 });
                 lastTaskId = t.id;
+                chainTaskIds.set((item.title || '').toLowerCase().trim(), t.id);
                 created.task++;
                 if (item.subtasks?.length) {
                     item.subtasks.forEach(sub => Store.addTask({ projectId: pid || '', title: sub, priority: 'medium' }));
@@ -2352,7 +2813,9 @@ const App = {
         }
 
         else if (action === 'create_chain') {
-            const summary = this._runChain(d.items || []);
+            // Honor user include/exclude checkboxes
+            const items = (d.items || []).filter(i => i._include !== false);
+            const summary = this._runChain(items);
             const parts = [];
             if (summary.created.client) parts.push(`${summary.created.client} ${this.t('newClient').toLowerCase()}`);
             if (summary.created.project) parts.push(`${summary.created.project} ${this.t('newProject').toLowerCase()}`);
@@ -2418,6 +2881,30 @@ const App = {
 
     esc(str) { const div = document.createElement('div'); div.textContent = str || ''; return div.innerHTML; },
 
+    // Normalize any untrusted color value (Sheets, AI, user input) to a safe
+    // 6-digit hex. Prevents CSS injection when the color is interpolated into
+    // a style="..." attribute. Invalid input returns a neutral grey.
+    safeColor(c) {
+        const FALLBACK = '#888888';
+        if (!c || typeof c !== 'string') return FALLBACK;
+        const v = c.trim().toLowerCase();
+        const m3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+        if (m3) return '#' + m3[1] + m3[1] + m3[2] + m3[2] + m3[3] + m3[3];
+        if (/^#[0-9a-f]{6}$/.test(v)) return v;
+        // 8-digit hex — drop alpha, keep RGB
+        const m8 = /^#([0-9a-f]{6})[0-9a-f]{2}$/.exec(v);
+        if (m8) return '#' + m8[1];
+        return FALLBACK;
+    },
+
+    // Render a "tag" span with safe color. Used everywhere a tag badge is shown.
+    tagBadge(tag) {
+        if (!tag) return '';
+        const color = this.safeColor(tag.color);
+        // Alpha-suffix "22" works on any 6-digit hex — safeColor guarantees that shape.
+        return `<span class="tag" style="background:${color}22;color:${color}">${this.esc(tag.name)}</span>`;
+    },
+
     formatDate(dateStr) {
         if (!dateStr) return '';
         const d = new Date(dateStr);
@@ -2425,12 +2912,18 @@ const App = {
         return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
     },
 
+    // Delegate to the top-level dlDate helper so we have a single source of truth
+    // for deadline parsing. Kept as a method so `this._parseDeadline(...)` call sites
+    // (and lambdas `const parse = s => this._parseDeadline(s)`) don't break.
+    _parseDeadline(s) { return dlDate(s); },
     deadlineClass(dateStr) {
         if (!dateStr) return '';
-        const d = new Date(dateStr);
+        const d = this._parseDeadline(dateStr);
         const now = new Date(); now.setHours(0, 0, 0, 0);
         const diff = (d - now) / 86400000;
+        // Strictly BEFORE today is overdue. Same-day = due today, shown as "soon".
         if (diff < 0) return 'deadline-overdue';
+        if (diff === 0) return 'deadline-today';
         if (diff <= 3) return 'deadline-soon';
         return '';
     },

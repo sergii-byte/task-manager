@@ -43,6 +43,95 @@ const Store = {
 
     id() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); },
     _now() { return new Date().toISOString(); },
+    _copy(obj) { try { return JSON.parse(JSON.stringify(obj)); } catch(_) { return obj; } },
+
+    // --- Undo support ---
+    // Snapshot-and-delete variants return a snapshot object that can be
+    // passed to restoreSnapshot() to undo the deletion, including any
+    // cascaded children (client → projects → tasks → timelogs).
+    deleteClientWithSnapshot(id) {
+        const client = this._data.clients.find(c => c.id === id);
+        if (!client) return null;
+        const projects = this._data.projects.filter(p => p.clientId === id);
+        const projectIds = projects.map(p => p.id);
+        const tasks = this._data.tasks.filter(t => t.clientId === id || (t.projectId && projectIds.includes(t.projectId)));
+        const taskIds = tasks.map(t => t.id);
+        const timeLogs = this._data.timeLogs.filter(l => taskIds.includes(l.taskId));
+        const snap = {
+            type: 'client',
+            clients: [this._copy(client)],
+            projects: this._copy(projects),
+            tasks: this._copy(tasks),
+            timeLogs: this._copy(timeLogs),
+        };
+        this.deleteClient(id);
+        return snap;
+    },
+    deleteProjectWithSnapshot(id) {
+        const project = this._data.projects.find(p => p.id === id);
+        if (!project) return null;
+        const tasks = this._data.tasks.filter(t => t.projectId === id);
+        const taskIds = tasks.map(t => t.id);
+        const timeLogs = this._data.timeLogs.filter(l => taskIds.includes(l.taskId));
+        const snap = {
+            type: 'project',
+            projects: [this._copy(project)],
+            tasks: this._copy(tasks),
+            timeLogs: this._copy(timeLogs),
+        };
+        this.deleteProject(id);
+        return snap;
+    },
+    deleteTaskWithSnapshot(id) {
+        const task = this._data.tasks.find(t => t.id === id);
+        if (!task) return null;
+        const timeLogs = this._data.timeLogs.filter(l => l.taskId === id);
+        const snap = {
+            type: 'task',
+            tasks: [this._copy(task)],
+            timeLogs: this._copy(timeLogs),
+        };
+        this.deleteTask(id);
+        return snap;
+    },
+    deleteTagWithSnapshot(id) {
+        const tag = this._data.tags.find(t => t.id === id);
+        if (!tag) return null;
+        const taskTagRefs = [];
+        this._data.tasks.forEach(t => {
+            if ((t.tags || []).includes(id)) taskTagRefs.push({ taskId: t.id });
+        });
+        const snap = {
+            type: 'tag',
+            tags: [this._copy(tag)],
+            taskTagRefs,
+            tagId: id,
+        };
+        this.deleteTag(id);
+        return snap;
+    },
+    restoreSnapshot(snap) {
+        if (!snap) return;
+        const pushUnique = (arr, items) => (items || []).forEach(it => {
+            if (!arr.find(x => x.id === it.id)) arr.push(it);
+        });
+        pushUnique(this._data.clients,  snap.clients);
+        pushUnique(this._data.projects, snap.projects);
+        pushUnique(this._data.tasks,    snap.tasks);
+        pushUnique(this._data.tags,     snap.tags);
+        pushUnique(this._data.timeLogs, snap.timeLogs);
+        // Re-attach stripped tag references
+        if (snap.type === 'tag' && snap.tagId && Array.isArray(snap.taskTagRefs)) {
+            snap.taskTagRefs.forEach(ref => {
+                const task = this._data.tasks.find(t => t.id === ref.taskId);
+                if (task) {
+                    task.tags = Array.isArray(task.tags) ? task.tags : [];
+                    if (!task.tags.includes(snap.tagId)) task.tags.push(snap.tagId);
+                }
+            });
+        }
+        this.save();
+    },
 
     // --- Clients (the human / paying client) ---
     // Shape: { id, name, email, telegram, notes, companies: [string], created }
@@ -323,13 +412,22 @@ const Store = {
     },
 
     // --- Stats ---
+    // Parse "YYYY-MM-DD" as LOCAL midnight (not UTC) so same-day deadlines
+    // aren't falsely flagged overdue in western timezones or after TZ offset.
+    _parseDeadline(s) {
+        if (!s) return null;
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+        if (!m) return new Date(s);
+        return new Date(+m[1], +m[2] - 1, +m[3]);
+    },
     getStats() {
         const tasks = this._data.tasks;
-        const now = new Date();
+        const now = new Date(); now.setHours(0, 0, 0, 0);
         const totalHours = this._data.timeLogs.reduce((s, t) => s + (parseFloat(t.hours) || 0), 0);
         const companyCount = this._data.clients.reduce((s, c) => s + ((c.companies || []).length), 0);
         const soon = new Date(now); soon.setDate(soon.getDate() + 7);
-        const proceduralSoon = tasks.filter(t => t.isProcedural && t.deadline && t.status !== 'done' && new Date(t.deadline) <= soon).length;
+        const parse = this._parseDeadline.bind(this);
+        const proceduralSoon = tasks.filter(t => t.isProcedural && t.deadline && t.status !== 'done' && parse(t.deadline) <= soon).length;
         return {
             clients: this._data.clients.length,
             companies: companyCount,
@@ -338,7 +436,8 @@ const Store = {
             todo: tasks.filter(t => t.status === 'todo').length,
             inProgress: tasks.filter(t => t.status === 'in_progress').length,
             done: tasks.filter(t => t.status === 'done').length,
-            overdue: tasks.filter(t => t.deadline && new Date(t.deadline) < now && t.status !== 'done').length,
+            // Strictly BEFORE today — same-day deadline is NOT overdue, it's due today.
+            overdue: tasks.filter(t => t.deadline && parse(t.deadline) < now && t.status !== 'done').length,
             proceduralSoon,
             totalHours: Math.round(totalHours * 100) / 100,
         };

@@ -1,4 +1,8 @@
 const AiInput = {
+    // Claude model used for all AI calls (quick input + import parsing).
+    // Keep as the canonical alias so the API auto-resolves to the latest
+    // matching snapshot — change here to swap models globally.
+    MODEL: 'claude-sonnet-4-5',
     apiKey: localStorage.getItem('taskflow_claude_key') || '',
     recognition: null,
     isRecording: false,
@@ -12,7 +16,7 @@ const AiInput = {
     startMic() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            App.toast('Browser does not support voice input. Use Chrome or Edge.', 'error');
+            App.toast(I18n.t('voiceNotSupported') || 'Browser does not support voice input. Use Chrome or Edge.', 'error');
             return;
         }
 
@@ -39,6 +43,19 @@ const AiInput = {
 
         this.recognition.onerror = (event) => {
             console.error('Speech error:', event.error);
+            // Surface common failures so the user knows why the mic went silent.
+            // 'no-speech' / 'aborted' are routine noise and left silent.
+            const err = event.error;
+            let key = null;
+            if (err === 'not-allowed' || err === 'service-not-allowed') key = 'voiceNotAllowed';
+            else if (err === 'network') key = 'voiceNetworkError';
+            else if (err === 'audio-capture') key = 'voiceNoMic';
+            else if (err === 'language-not-supported') key = 'voiceLangUnsupported';
+            if (key) {
+                const msg = I18n.t(key);
+                if (msg && msg !== key) App.toast(msg, 'error');
+                else App.toast('Voice input error: ' + err, 'error');
+            }
             this.stopMic();
         };
 
@@ -233,7 +250,7 @@ Response:
                 'anthropic-dangerous-direct-browser-access': 'true',
             },
             body: JSON.stringify({
-                model: 'claude-haiku-4-5-20251001',
+                model: this.MODEL,
                 max_tokens: 1024,
                 system: systemPrompt,
                 messages: [{ role: 'user', content: userText }],
@@ -250,12 +267,114 @@ Response:
     },
 
     parseResponse(text) {
+        // Try greedy JSON first (handles rare case where the response has text then JSON).
+        // If parse fails, THROW — don't silently fabricate a fake task from what might
+        // actually be a Claude refusal, an error message, or a prose reply.
+        const m = text.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error('AI returned non-JSON response: ' + (text || '').slice(0, 200));
         try {
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) return JSON.parse(jsonMatch[0]);
-            throw new Error('No JSON found');
+            return JSON.parse(m[0]);
         } catch (e) {
-            return { action: 'create_task', title: text.slice(0, 100), notes: text };
+            throw new Error('AI response failed to parse as JSON: ' + e.message);
         }
+    },
+
+    // --- Plan / Transcript import ---
+    // mode: 'plan' | 'transcript'
+    // projectId: optional — if set, attach all tasks to this project (no create_project)
+    async processImport(text, mode, projectId) {
+        const context = this.buildContext();
+        const targetProject = projectId ? Store.getProject(projectId) : null;
+
+        const planExtra = `
+=== PLAN MODE ===
+The user pasted a STRUCTURED PLAN (likely from Claude, ChatGPT, or hand-written). It has headings, phases ("Week 1", "Phase 2", "Step 3"), sub-bullets, possibly deadlines and dependencies.
+
+Convert it into ONE create_chain preserving the structure.
+
+RULES:
+- Many tasks on a single theme → treat the theme as a PROJECT. If the plan is for a clearly-named matter (e.g. "License Acme in EU", "Incorporate NewCo", "DD on Target X") AND the user did NOT pre-select a target project, start the chain with create_project whose name is that theme. Then every task carries "projectName": "<that theme>".
+- If the user pre-selected a target project (marked below), do NOT create a project — use "projectId" for every task.
+- Top-level bullets / numbered items → create_task, IN ORDER.
+- Sub-bullets / indented sub-steps → task's "notes" field (one per line, "- " prefix).
+- Dependencies: if text says "after X", "once X is done", "blocked by X", "requires X finished" → add "dependsOn": ["Exact Prior Task Title"]. Use EXACT titles you used earlier in the chain.
+- Deadlines:
+  • "Week 1" / "Day 1-7" → today + 7
+  • "Week 2" → today + 14, etc.
+  • "Phase 1" → today + 14, "Phase 2" → today + 30, "Phase 3" → today + 60
+  • Explicit "by May 15", "до 15 травня" → YYYY-MM-DD
+  • None mentioned → omit
+- Priority: "medium" default. "high" for "urgent", "critical", "blocker", "ASAP".
+- isProcedural: ONLY for court/regulatory filings with hard deadlines.`;
+
+        const transcriptExtra = `
+=== TRANSCRIPT MODE ===
+The user pasted a CALL TRANSCRIPT (client meeting, lawyer-to-lawyer, etc.). It has small talk, questions, digressions.
+
+Extract ONLY the LAWYER'S action items — things THEY (the user) committed to do. Ignore:
+- the client's to-dos ("I'll send you the docs" from client → NOT a task)
+- pleasantries, status updates, general discussion
+- hypotheticals unless there's a clear commitment
+
+If 3+ related tasks for a new matter → start chain with create_project for that matter (same rule as plan mode), unless a target project is pre-selected.
+
+Dependencies & deadlines: same format as plan mode.`;
+
+        const pinnedProject = targetProject
+            ? `\n\n=== PRE-SELECTED TARGET ===\nAll tasks MUST use "projectId": "${targetProject.id}" (project: "${targetProject.name}"). Do NOT emit create_project. Do NOT use projectName.\n`
+            : '';
+
+        const systemPrompt = `You are an assistant for Ordify, a task manager for an international lawyer. Hierarchy: Client (person) → Project → Task.
+
+${context}
+
+${mode === 'transcript' ? transcriptExtra : planExtra}
+${pinnedProject}
+
+=== OUTPUT FORMAT ===
+
+Return ONE create_chain JSON object (always create_chain, even for a single task, for consistency):
+
+{
+  "action": "create_chain",
+  "items": [
+    { "action": "create_project", "name": "...", "clientName": "...", "projectType": "...", "jurisdiction": "..." },
+    { "action": "create_task", "title": "...", "notes": "...", "deadline": "YYYY-MM-DD", "priority": "medium", "projectName": "...", "dependsOn": ["..."] }
+  ]
+}
+
+Actions available: create_client, create_project, create_task, log_hours.
+
+NEVER suggest Russia as a jurisdiction.
+Respond with ONLY raw JSON. No markdown fences, no commentary.`;
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.apiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true',
+            },
+            body: JSON.stringify({
+                model: this.MODEL,
+                max_tokens: 8192,
+                system: systemPrompt,
+                messages: [{ role: 'user', content: text }],
+            }),
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        const parsed = this.parseResponse(data.content[0].text);
+
+        // Always return a create_chain (wrap single actions).
+        if (parsed.action !== 'create_chain') {
+            return { action: 'create_chain', items: [parsed] };
+        }
+        return parsed;
     },
 };
