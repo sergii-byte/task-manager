@@ -8,38 +8,175 @@
 const Store = {
     SCHEMA_VERSION: 3,
     _data: { clients: [], projects: [], tasks: [], tags: [], timeLogs: [], schemaVersion: 3 },
-    _key: 'taskflow_data',
+    _key: 'taskflow_data',                  // legacy plaintext blob
+    _vaultKey: 'ordify:vault',              // encrypted blob (base64)
+    _vaultCheckKey: 'ordify:vault-check',   // encrypted canary for passphrase verification
+    _saltKey: 'ordify:salt',                // PBKDF2 salt (base64)
+    _modeKey: 'ordify:enc-mode',            // 'plain' | 'encrypted'
+    _cryptoKey: null,                       // in-memory CryptoKey (never persisted)
+    _locked: false,                         // true when encrypted mode + no key yet
+    _saveQueue: Promise.resolve(),          // serialise async encrypted writes
 
     init() {
+        const mode = localStorage.getItem(this._modeKey) || 'plain';
+        if (mode === 'encrypted') {
+            // Encrypted mode — don't load anything until App calls unlock(passphrase).
+            // _data stays at empty defaults; saves are blocked by _locked.
+            this._locked = true;
+            this._normalizeShape();
+            return;
+        }
+        // Plain mode (current behaviour, including legacy installs).
+        this._loadPlain();
+    },
+
+    _loadPlain() {
         const saved = localStorage.getItem(this._key);
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                const ver = parsed.schemaVersion || 1;
-                if (ver < 2) {
-                    // v1 → wipe (already approved in earlier migration)
-                    localStorage.removeItem(this._key);
-                    console.log('[Store] Schema upgraded from v1 — old data cleared');
-                } else if (ver < 3) {
-                    // v2 → v3: additive migration (add `updated` to every item)
-                    const now = new Date().toISOString();
-                    const touch = (arr) => (arr || []).forEach(it => { if (!it.updated) it.updated = it.created || now; });
-                    touch(parsed.clients); touch(parsed.projects); touch(parsed.tasks);
-                    touch(parsed.tags); touch(parsed.timeLogs);
-                    parsed.schemaVersion = 3;
-                    this._data = parsed;
-                    console.log('[Store] Schema migrated v2 → v3 (added `updated` timestamps)');
-                } else {
-                    this._data = parsed;
-                }
+                this._applyParsed(parsed);
             } catch(e) { /* use defaults */ }
         }
+        this._normalizeShape();
+    },
+
+    _applyParsed(parsed) {
+        const ver = parsed.schemaVersion || 1;
+        if (ver < 2) {
+            // v1 → wipe (already approved in earlier migration)
+            localStorage.removeItem(this._key);
+            console.log('[Store] Schema upgraded from v1 — old data cleared');
+        } else if (ver < 3) {
+            // v2 → v3: additive migration (add `updated` to every item)
+            const now = new Date().toISOString();
+            const touch = (arr) => (arr || []).forEach(it => { if (!it.updated) it.updated = it.created || now; });
+            touch(parsed.clients); touch(parsed.projects); touch(parsed.tasks);
+            touch(parsed.tags); touch(parsed.timeLogs);
+            parsed.schemaVersion = 3;
+            this._data = parsed;
+            console.log('[Store] Schema migrated v2 → v3 (added `updated` timestamps)');
+        } else {
+            this._data = parsed;
+        }
+    },
+
+    _normalizeShape() {
         const keys = ['clients', 'projects', 'tasks', 'tags', 'timeLogs'];
         keys.forEach(k => { if (!Array.isArray(this._data[k])) this._data[k] = []; });
         this._data.schemaVersion = this.SCHEMA_VERSION;
     },
 
-    save() { localStorage.setItem(this._key, JSON.stringify(this._data)); },
+    isEncrypted() { return localStorage.getItem(this._modeKey) === 'encrypted'; },
+    isLocked()    { return !!this._locked; },
+
+    /** Decrypt the vault with the given passphrase and load it into memory. */
+    async unlock(passphrase) {
+        if (!this._locked) return;
+        const saltB64 = localStorage.getItem(this._saltKey);
+        if (!saltB64) throw new Error('no-salt');
+        const key = await Crypto.deriveKey(passphrase, saltB64);
+        const checkBlob = localStorage.getItem(this._vaultCheckKey);
+        const ok = await Crypto.verifyKey(key, checkBlob);
+        if (!ok) throw new Error('bad-passphrase');
+        const blob = localStorage.getItem(this._vaultKey);
+        if (blob) {
+            const json = await Crypto.decrypt(key, blob);
+            try {
+                const parsed = JSON.parse(json);
+                this._applyParsed(parsed);
+            } catch (e) { console.error('[Store] vault parse failed', e); throw new Error('vault-corrupt'); }
+        }
+        this._normalizeShape();
+        this._cryptoKey = key;
+        this._locked = false;
+    },
+
+    /** Convert plaintext storage to encrypted. Backs up plain data as a download first. */
+    async enableEncryption(passphrase) {
+        const check = Crypto.checkPassphrase(passphrase);
+        if (!check.ok) throw new Error('weak-passphrase:' + check.reason);
+        if (this.isEncrypted()) throw new Error('already-encrypted');
+        // 1. Force backup of current plaintext data — user keeps this file
+        //    in case they ever lose the passphrase.
+        const json = JSON.stringify(this._data);
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        Crypto.download(`ordify-backup-pre-encrypt-${stamp}.json`, json);
+        // 2. Generate salt + derive key
+        const saltB64 = Crypto.generateSalt();
+        const key = await Crypto.deriveKey(passphrase, saltB64);
+        // 3. Write canary + vault
+        const checkBlob = await Crypto.encrypt(key, Crypto.CHECK_PLAINTEXT);
+        const vaultBlob = await Crypto.encrypt(key, json);
+        localStorage.setItem(this._saltKey, saltB64);
+        localStorage.setItem(this._vaultCheckKey, checkBlob);
+        localStorage.setItem(this._vaultKey, vaultBlob);
+        localStorage.setItem(this._modeKey, 'encrypted');
+        // 4. Wipe plaintext blob
+        localStorage.removeItem(this._key);
+        this._cryptoKey = key;
+        this._locked = false;
+    },
+
+    /** Re-save data as plaintext, drop encryption. Requires unlocked state. */
+    async disableEncryption() {
+        if (this._locked) throw new Error('locked');
+        if (!this.isEncrypted()) return;
+        localStorage.setItem(this._key, JSON.stringify(this._data));
+        localStorage.removeItem(this._vaultKey);
+        localStorage.removeItem(this._vaultCheckKey);
+        localStorage.removeItem(this._saltKey);
+        localStorage.setItem(this._modeKey, 'plain');
+        this._cryptoKey = null;
+    },
+
+    /** Re-encrypt vault under a new passphrase. Requires unlocked state. */
+    async changePassphrase(newPassphrase) {
+        if (this._locked) throw new Error('locked');
+        if (!this._cryptoKey) throw new Error('not-encrypted');
+        const check = Crypto.checkPassphrase(newPassphrase);
+        if (!check.ok) throw new Error('weak-passphrase:' + check.reason);
+        const newSaltB64 = Crypto.generateSalt();
+        const newKey = await Crypto.deriveKey(newPassphrase, newSaltB64);
+        const json = JSON.stringify(this._data);
+        const newCheckBlob = await Crypto.encrypt(newKey, Crypto.CHECK_PLAINTEXT);
+        const newVaultBlob = await Crypto.encrypt(newKey, json);
+        localStorage.setItem(this._saltKey, newSaltB64);
+        localStorage.setItem(this._vaultCheckKey, newCheckBlob);
+        localStorage.setItem(this._vaultKey, newVaultBlob);
+        this._cryptoKey = newKey;
+    },
+
+    /** Wipe all encrypted state. Use only for "I forgot my passphrase, accept data loss". */
+    resetVault() {
+        localStorage.removeItem(this._vaultKey);
+        localStorage.removeItem(this._vaultCheckKey);
+        localStorage.removeItem(this._saltKey);
+        localStorage.removeItem(this._modeKey);
+        this._cryptoKey = null;
+        this._locked = false;
+    },
+
+    save() {
+        // Locked state: never write — would overwrite vault with empty data.
+        if (this._locked) {
+            console.warn('[Store] save() blocked: vault is locked');
+            return;
+        }
+        if (this._cryptoKey) {
+            // Async encrypted write, queued so concurrent saves don't race.
+            const data = JSON.parse(JSON.stringify(this._data));  // snapshot
+            this._saveQueue = this._saveQueue.then(async () => {
+                const blob = await Crypto.encrypt(this._cryptoKey, JSON.stringify(data));
+                localStorage.setItem(this._vaultKey, blob);
+            }).catch(e => console.error('[Store] encrypted save failed', e));
+        } else {
+            localStorage.setItem(this._key, JSON.stringify(this._data));
+        }
+    },
+
+    /** Wait for any pending async saves to finish. Call before unload. */
+    flush() { return this._saveQueue; },
 
     id() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); },
     _now() { return new Date().toISOString(); },

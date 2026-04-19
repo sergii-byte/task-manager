@@ -1,8 +1,9 @@
 const AiInput = {
     // Claude model used for all AI calls (quick input + import parsing).
-    // Keep as the canonical alias so the API auto-resolves to the latest
-    // matching snapshot — change here to swap models globally.
-    MODEL: 'claude-sonnet-4-5',
+    // User-selectable in Settings; this getter always reads the current
+    // choice from localStorage so swaps take effect immediately.
+    DEFAULT_MODEL: 'claude-sonnet-4-5',
+    get MODEL() { return localStorage.getItem('taskflow_ai_model') || this.DEFAULT_MODEL; },
     apiKey: localStorage.getItem('taskflow_claude_key') || '',
     recognition: null,
     isRecording: false,

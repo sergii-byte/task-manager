@@ -1489,3 +1489,111 @@ kbd {
 
 /* Card h3 with avatar prefix */
 .card h3 .client-avatar { margin-right: 8px; vertical-align: middle; }
+
+/* ===== Passphrase overlay (vault unlock) =====
+   Full-screen, blocks all interaction until decrypted. Visually anchored
+   to the brand (accent gradient + glass card) so it doesn't read as
+   "scary system error". */
+.passphrase-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(ellipse at 20% 10%, rgba(218,119,86,0.10), transparent 60%),
+        radial-gradient(ellipse at 80% 90%, rgba(91,143,212,0.08), transparent 60%),
+        var(--bg);
+    backdrop-filter: blur(20px) saturate(140%);
+    -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.passphrase-card {
+    width: 100%; max-width: 360px;
+    padding: 32px 28px;
+    background: var(--bg-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px var(--shadow-lg);
+    text-align: center;
+}
+.passphrase-icon {
+    width: 64px; height: 64px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: var(--accent-glow);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+}
+.passphrase-card h2 {
+    font-size: var(--fs-h2);
+    margin-bottom: 8px;
+    color: var(--text);
+}
+.passphrase-sub {
+    font-size: var(--fs-body);
+    color: var(--text-2);
+    margin-bottom: 20px;
+    line-height: var(--lh-normal);
+}
+.passphrase-card input[type="password"] {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--input-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: var(--fs-body-lg);
+    font-family: var(--font);
+    margin-bottom: 8px;
+    box-sizing: border-box;
+}
+.passphrase-card input[type="password"]:focus {
+    outline: none;
+    border-color: rgba(218, 119, 86, 0.5);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.passphrase-error {
+    min-height: 20px;
+    color: var(--red);
+    font-size: var(--fs-small);
+    margin-bottom: 12px;
+    text-align: left;
+}
+.passphrase-card .btn {
+    width: 100%;
+    padding: 12px;
+    font-size: var(--fs-body-lg);
+    margin-bottom: 12px;
+}
+.passphrase-link {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: var(--fs-small);
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 4px;
+}
+.passphrase-link:hover { color: var(--text-2); }
+.form-hint {
+    font-size: var(--fs-small);
+    color: var(--text-3);
+    margin-top: 6px;
+    line-height: var(--lh-normal);
+}
+.encryption-status {
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    font-size: var(--fs-body);
+    color: var(--text-2);
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+}
+.encryption-status.on  { background: rgba(45,157,94,0.1); color: var(--green); border-color: rgba(45,157,94,0.3); }
+.encryption-status.off { background: rgba(196,75,68,0.08); color: var(--text-2); border-color: rgba(196,75,68,0.2); }
+.passphrase-card.shake { animation: shake 0.4s; }
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+}

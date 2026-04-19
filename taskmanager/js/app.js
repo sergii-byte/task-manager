@@ -45,13 +45,83 @@ const App = {
     activeTimer: null,
 
     init() {
+        // i18n + theme are independent of vault state — apply early so the
+        // passphrase prompt renders in the user's language with correct theme.
         const theme = localStorage.getItem('taskflow_theme') || 'light';
         this.setTheme(theme, true);
         this.applyI18n();
+        if (Store.isLocked()) {
+            this._showPassphraseGate();
+            return;
+        }
+        this._mainBoot();
+    },
+
+    _mainBoot() {
         this.renderSidebar();
         this.showDashboard();
         this.bindEvents();
         this.restoreTimer();
+        // Make sure pending encrypted writes flush before the page closes.
+        window.addEventListener('beforeunload', () => Store.flush && Store.flush());
+    },
+
+    _showPassphraseGate() {
+        const overlay = document.getElementById('passphrase-overlay');
+        const input = document.getElementById('passphrase-input');
+        const errEl = document.getElementById('passphrase-error');
+        const btn = document.getElementById('passphrase-unlock-btn');
+        const resetBtn = document.getElementById('passphrase-reset-btn');
+        const card = overlay.querySelector('.passphrase-card');
+        if (!overlay) return;
+        overlay.style.display = 'flex';
+        setTimeout(() => input?.focus(), 50);
+
+        const tryUnlock = async () => {
+            const pass = input.value;
+            if (!pass) return;
+            errEl.textContent = '';
+            btn.disabled = true;
+            try {
+                await Store.unlock(pass);
+                overlay.style.display = 'none';
+                input.value = '';
+                this._mainBoot();
+            } catch (e) {
+                btn.disabled = false;
+                input.value = '';
+                input.focus();
+                card.classList.remove('shake');
+                void card.offsetWidth;  // restart animation
+                card.classList.add('shake');
+                if (e.message === 'bad-passphrase') {
+                    errEl.textContent = this.t('passphraseWrong');
+                } else {
+                    errEl.textContent = this.t('passphraseError') + ': ' + e.message;
+                }
+            }
+        };
+
+        btn.addEventListener('click', tryUnlock);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+        resetBtn.addEventListener('click', async () => {
+            const ok = await this.confirm(
+                this.t('passphraseResetTitle'),
+                this.t('passphraseResetText'),
+                { destructive: true }
+            );
+            if (!ok) return;
+            // Type-the-word confirmation to avoid accidents.
+            const typed = await this.promptText(this.t('passphraseResetConfirm'), {
+                placeholder: 'DELETE',
+            });
+            if (typed !== 'DELETE') {
+                this.toast(this.t('passphraseResetCancelled'), 'info');
+                return;
+            }
+            Store.resetVault();
+            location.reload();
+        });
     },
 
     // ===== Toast Notifications =====
@@ -173,10 +243,11 @@ const App = {
             titleEl.textContent = String(title || '');
 
             const input = document.createElement('input');
-            input.type = 'text';
+            input.type = opts.password ? 'password' : 'text';
             input.className = 'confirm-input';
             input.value = String(opts.defaultValue || '');
             if (opts.placeholder) input.placeholder = String(opts.placeholder);
+            if (opts.password) input.autocomplete = 'new-password';
 
             const actions = document.createElement('div');
             actions.className = 'confirm-actions';
@@ -371,6 +442,9 @@ const App = {
         this._on('btn-connect-google', 'click', () => SheetsSync.authorize());
         this._on('btn-upload', 'click', () => SheetsSync.pushAll());
         this._on('btn-download', 'click', () => SheetsSync.pullAll());
+        this._on('btn-enable-encryption', 'click', () => this.enableEncryptionFlow());
+        this._on('btn-change-passphrase', 'click', () => this.changePassphraseFlow());
+        this._on('btn-disable-encryption', 'click', () => this.disableEncryptionFlow());
 
         // Tags
         this._on('btn-add-tag', 'click', () => this.addTag());
@@ -2105,6 +2179,30 @@ const App = {
         document.getElementById('setting-claude-key').value = localStorage.getItem('taskflow_claude_key') || '';
         document.getElementById('setting-client-id').value = SheetsSync.CLIENT_ID;
         document.getElementById('setting-sheet-id').value = SheetsSync.SHEET_ID;
+        // ----- AI model picker -----
+        const stored = localStorage.getItem('taskflow_ai_model') || 'claude-sonnet-4-5';
+        const sel = document.getElementById('setting-ai-model');
+        const customInput = document.getElementById('setting-ai-model-custom');
+        const known = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-5', 'claude-opus-4-1'];
+        if (known.includes(stored)) {
+            sel.value = stored;
+            customInput.style.display = 'none';
+            customInput.value = '';
+        } else {
+            sel.value = 'custom';
+            customInput.style.display = '';
+            customInput.value = stored;
+        }
+        sel.onchange = () => {
+            if (sel.value === 'custom') {
+                customInput.style.display = '';
+                customInput.focus();
+            } else {
+                customInput.style.display = 'none';
+            }
+        };
+        // ----- Encryption status -----
+        this._renderEncryptionStatus();
         document.getElementById('settings-overlay').classList.add('open');
         this.openModalA11y('settings-overlay');
         setTimeout(() => document.getElementById('setting-claude-key')?.focus(), 50);
@@ -2118,10 +2216,116 @@ const App = {
         localStorage.setItem('taskflow_claude_key', document.getElementById('setting-claude-key').value.trim());
         localStorage.setItem('taskflow_gapi_client_id', document.getElementById('setting-client-id').value.trim());
         localStorage.setItem('taskflow_sheet_id', document.getElementById('setting-sheet-id').value.trim());
+        // AI model: pick dropdown value or custom override
+        const sel = document.getElementById('setting-ai-model');
+        const customVal = document.getElementById('setting-ai-model-custom').value.trim();
+        const model = (sel.value === 'custom' && customVal) ? customVal : sel.value;
+        if (model && model !== 'custom') {
+            localStorage.setItem('taskflow_ai_model', model);
+        }
         SheetsSync.CLIENT_ID = document.getElementById('setting-client-id').value.trim();
         SheetsSync.SHEET_ID = document.getElementById('setting-sheet-id').value.trim();
         AiInput.apiKey = document.getElementById('setting-claude-key').value.trim();
         this.toast(this.t('saved'), 'success');
+    },
+
+    _renderEncryptionStatus() {
+        const statusEl = document.getElementById('encryption-status');
+        const enableBtn = document.getElementById('btn-enable-encryption');
+        const changeBtn = document.getElementById('btn-change-passphrase');
+        const disableBtn = document.getElementById('btn-disable-encryption');
+        if (!statusEl) return;
+        if (Store.isEncrypted()) {
+            statusEl.className = 'encryption-status on';
+            statusEl.textContent = '\u{1F512} ' + this.t('encryptionOn');
+            enableBtn.style.display = 'none';
+            changeBtn.style.display = '';
+            disableBtn.style.display = '';
+        } else {
+            statusEl.className = 'encryption-status off';
+            statusEl.textContent = '\u{1F513} ' + this.t('encryptionOff');
+            enableBtn.style.display = '';
+            changeBtn.style.display = 'none';
+            disableBtn.style.display = 'none';
+        }
+    },
+
+    async enableEncryptionFlow() {
+        const pass1 = await this.promptText(this.t('passphraseSetTitle'), {
+            placeholder: this.t('passphrasePlaceholder'),
+            password: true,
+        });
+        if (!pass1) return;
+        const check = Crypto.checkPassphrase(pass1);
+        if (!check.ok) {
+            const reason = check.reason === 'too-short' ? this.t('passphraseTooShort') : this.t('passphraseTooSimple');
+            this.toast(reason, 'error');
+            return;
+        }
+        const pass2 = await this.promptText(this.t('passphraseConfirmTitle'), {
+            placeholder: this.t('passphrasePlaceholder'),
+            password: true,
+        });
+        if (pass1 !== pass2) {
+            this.toast(this.t('passphraseMismatch'), 'error');
+            return;
+        }
+        const ok = await this.confirm(
+            this.t('enableEncryption'),
+            this.t('encryptionEnableWarning')
+        );
+        if (!ok) return;
+        try {
+            await Store.enableEncryption(pass1);
+            this.toast(this.t('encryptionEnabled'), 'success');
+            this._renderEncryptionStatus();
+        } catch (e) {
+            this.toast(this.t('encryptionError') + ': ' + e.message, 'error');
+        }
+    },
+
+    async changePassphraseFlow() {
+        const pass1 = await this.promptText(this.t('passphraseNewTitle'), {
+            placeholder: this.t('passphrasePlaceholder'),
+            password: true,
+        });
+        if (!pass1) return;
+        const check = Crypto.checkPassphrase(pass1);
+        if (!check.ok) {
+            const reason = check.reason === 'too-short' ? this.t('passphraseTooShort') : this.t('passphraseTooSimple');
+            this.toast(reason, 'error');
+            return;
+        }
+        const pass2 = await this.promptText(this.t('passphraseConfirmTitle'), {
+            placeholder: this.t('passphrasePlaceholder'),
+            password: true,
+        });
+        if (pass1 !== pass2) {
+            this.toast(this.t('passphraseMismatch'), 'error');
+            return;
+        }
+        try {
+            await Store.changePassphrase(pass1);
+            this.toast(this.t('passphraseChanged'), 'success');
+        } catch (e) {
+            this.toast(this.t('encryptionError') + ': ' + e.message, 'error');
+        }
+    },
+
+    async disableEncryptionFlow() {
+        const ok = await this.confirm(
+            this.t('disableEncryption'),
+            this.t('encryptionDisableWarning'),
+            { destructive: true }
+        );
+        if (!ok) return;
+        try {
+            await Store.disableEncryption();
+            this.toast(this.t('encryptionDisabled'), 'success');
+            this._renderEncryptionStatus();
+        } catch (e) {
+            this.toast(this.t('encryptionError') + ': ' + e.message, 'error');
+        }
     },
 
     // ===== Tags =====
