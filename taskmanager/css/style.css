@@ -30,6 +30,9 @@
     --orange: #c47a2a;            /* generic warm accent (deadline-soon, etc) */
     --procedural: #b5651d;        /* procedural deadlines — darker, distinct from brand accent */
     --procedural-soft: rgba(181, 101, 29, 0.12);
+    --procedural-strong: rgba(181, 101, 29, 0.32);  /* badge bg — readable, ~4.6:1 with --procedural-text */
+    --procedural-text: #5e3309;                     /* dark-brown text on --procedural-strong */
+    --focus-ring: rgba(218, 119, 86, 0.55);         /* keyboard focus outline */
     --blue: #4a7ec4;
     --blue-soft: rgba(74, 126, 196, 0.1);
     --shadow: rgba(0,0,0,0.06);
@@ -88,6 +91,9 @@
     --orange: #d48a43;
     --procedural: #e09960;         /* dark-mode equivalent — sits between orange and accent */
     --procedural-soft: rgba(224, 153, 96, 0.15);
+    --procedural-strong: rgba(224, 153, 96, 0.30);
+    --procedural-text: #f4caa4;                  /* light-warm text on --procedural-strong, dark mode */
+    --focus-ring: rgba(218, 119, 86, 0.65);
     --blue: #5b8fd4;
     --blue-soft: rgba(91, 143, 212, 0.12);
     --shadow: rgba(0,0,0,0.2);
@@ -123,6 +129,35 @@ body::before {
 }
 
 #app { display: flex; height: 100vh; position: relative; z-index: 1; }
+
+/* ===== Keyboard focus rings =====
+   Mouse users see no outline (default), keyboard users get a clear ring.
+   Applied broadly so a11y holds even on dynamically rendered controls. */
+:focus { outline: none; }
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex="0"]:focus-visible,
+.btn:focus-visible,
+.btn-sm:focus-visible,
+.icon-btn:focus-visible,
+.icon-text-btn:focus-visible,
+.cta-btn:focus-visible,
+.sidebar-item:focus-visible,
+.toggle-group button:focus-visible,
+.cal-day.clickable:focus-visible,
+.filter-btn:focus-visible,
+.tag-pill:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px var(--focus-ring);
+    border-radius: var(--radius-sm);
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+    outline: none; /* inputs already have border-color + box-shadow rules below */
+}
 
 /* ===== Scrollbar ===== */
 ::-webkit-scrollbar { width: 6px; }
@@ -285,6 +320,16 @@ body::before {
 .icon-btn:hover { color: var(--text); background: var(--glass-hover); }
 .icon-btn:active { transform: scale(0.92); }
 .icon-btn svg { width: 18px; height: 18px; }
+
+/* Touch devices: enforce 44x44 hit area for WCAG 2.5.5 without bloating desktop UI. */
+@media (pointer: coarse) {
+    .icon-btn, .icon-text-btn { min-width: 44px; min-height: 44px; padding: 10px; }
+    .btn-sm { min-height: 44px; padding: 10px 16px; }
+    .quick-input .mic-btn, .quick-input .send-btn { width: 44px; height: 44px; }
+    .toggle-group button { min-height: 40px; }
+    .filter-btn { min-height: 40px; }
+    .task-item .icon-btn.done-btn { opacity: 1; }  /* hover doesn't exist on touch */
+}
 
 .btn {
     padding: 9px 20px;
@@ -740,18 +785,20 @@ body::before {
 /* Calendar day markers — regular (::after) and procedural (::before) are
    independent, so a day with BOTH kinds of deadlines shows two dots. */
 .cal-day.has-deadline::after {
-    content: ''; position: absolute; bottom: 1px; left: 50%;
-    transform: translateX(-50%); width: 4px; height: 4px;
+    content: ''; position: absolute; bottom: 2px; left: 50%;
+    transform: translateX(-50%); width: 6px; height: 6px;
     border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 1px var(--bg-2);
 }
 .cal-day.has-procedural::before {
-    content: ''; position: absolute; bottom: 1px; left: 50%;
-    transform: translateX(-50%); width: 4px; height: 4px;
+    content: ''; position: absolute; bottom: 2px; left: 50%;
+    transform: translateX(-50%); width: 6px; height: 6px;
     border-radius: 50%; background: var(--procedural);
+    box-shadow: 0 0 0 1px var(--bg-2);
 }
-/* When both are present, nudge them apart — procedural left, regular right. */
-.cal-day.has-deadline.has-procedural::before { transform: translateX(-150%); }
-.cal-day.has-deadline.has-procedural::after  { transform: translateX(50%); }
+/* When both are present, place them side-by-side with a clear gap. */
+.cal-day.has-deadline.has-procedural::before { transform: translateX(-110%); }
+.cal-day.has-deadline.has-procedural::after  { transform: translateX(10%); }
 .cal-day.clickable:hover {
     background: var(--accent);
     color: #fff;
@@ -1005,10 +1052,12 @@ body::before {
    the brand colour). Keeps "brand orange" and "procedural-deadline orange"
    visually & semantically distinct. */
 .procedural-badge {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
-    background: var(--procedural-soft); color: var(--procedural);
-    padding: 2px 6px; border-radius: 4px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;
+    background: var(--procedural-strong); color: var(--procedural-text);
+    padding: 3px 7px; border-radius: 4px;
+    border: 1px solid rgba(181, 101, 29, 0.45);
 }
+[data-theme="dark"] .procedural-badge { border-color: rgba(224, 153, 96, 0.4); }
 
 .deadline-overdue { color: var(--red) !important; font-weight: 600; }
 .deadline-overdue::before { content: '\26A0 '; margin-right: 2px; }
@@ -1355,7 +1404,7 @@ kbd {
     white-space: nowrap;
 }
 .proc-alert-badge.overdue { background: var(--red-soft); color: var(--red); }
-.proc-alert-badge.today   { background: var(--procedural-soft); color: var(--procedural); }
+.proc-alert-badge.today   { background: var(--procedural-strong); color: var(--procedural-text); font-weight: 700; }
 .proc-alert-badge.soon    { background: rgba(216, 144, 67, 0.18); color: var(--orange); }
 .proc-alert-text { min-width: 0; }
 .proc-alert-title {
