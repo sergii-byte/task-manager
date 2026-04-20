@@ -9,12 +9,15 @@ const AiInput = {
     isRecording: false,
 
     // --- Voice Input ---
-    toggleMic() {
+    toggleMic(opts = {}) {
         if (this.isRecording) this.stopMic();
-        else this.startMic();
+        else this.startMic(opts);
     },
 
-    startMic() {
+    startMic(opts = {}) {
+        const inputId = opts.inputId || 'qi-text';
+        const micId   = opts.micId   || 'qi-mic';
+
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
             App.toast(I18n.t('voiceNotSupported') || 'Browser does not support voice input. Use Chrome or Edge.', 'error');
@@ -26,8 +29,9 @@ const AiInput = {
         this.recognition.interimResults = true;
         this.recognition.continuous = true;
 
-        const input = document.getElementById('qi-text');
-        const micBtn = document.getElementById('qi-mic');
+        const input = document.getElementById(inputId);
+        const micBtn = document.getElementById(micId);
+        this._activeMicId = micId;
         let finalTranscript = input.value;
 
         this.recognition.onresult = (event) => {
@@ -76,12 +80,29 @@ const AiInput = {
             this.isRecording = false;
             this.recognition.stop();
         }
-        document.getElementById('qi-mic').classList.remove('recording');
+        // Remove the pulsing class from whichever mic button is active.
+        // Fall back to the legacy qi-mic if we never tracked one (defensive).
+        const id = this._activeMicId || 'qi-mic';
+        document.getElementById(id)?.classList.remove('recording');
     },
 
     // --- AI Processing ---
-    async process() {
-        const input = document.getElementById('qi-text');
+    // opts: { inputId, sendId, placeholderKey }
+    //   - inputId:        element with user text (default 'qi-text')
+    //   - sendId:         button to mark .loading + disable (default 'qi-send')
+    //   - placeholderKey: i18n key to restore on the input once done
+    //                    (default 'quickInputPlaceholder'). Passing null
+    //                    skips the swap (useful for textareas where we
+    //                    keep the placeholder stable).
+    async process(opts = {}) {
+        const inputId = opts.inputId || 'qi-text';
+        const sendId  = opts.sendId  || 'qi-send';
+        const phKey   = opts.placeholderKey === undefined
+            ? 'quickInputPlaceholder'
+            : opts.placeholderKey;
+
+        const input = document.getElementById(inputId);
+        if (!input) return;
         const text = input.value.trim();
         if (!text) return;
 
@@ -93,10 +114,12 @@ const AiInput = {
             return;
         }
 
-        const sendBtn = document.getElementById('qi-send');
-        sendBtn.disabled = true;
-        sendBtn.classList.add('loading');
-        input.placeholder = I18n.t('aiProcessing');
+        const sendBtn = document.getElementById(sendId);
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.classList.add('loading');
+        }
+        if (phKey) input.placeholder = I18n.t('aiProcessing');
 
         try {
             const context = this.buildContext();
@@ -104,14 +127,17 @@ const AiInput = {
             const parsed = this.parseResponse(response);
 
             App._pendingAiData = parsed;
+            App._lastCaptureSourceId = inputId;
             App.showAiPreview(parsed);
         } catch (e) {
             console.error('AI error:', e);
             App.toast('AI error: ' + e.message, 'error');
         } finally {
-            sendBtn.disabled = false;
-            sendBtn.classList.remove('loading');
-            input.placeholder = I18n.t('quickInputPlaceholder');
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.classList.remove('loading');
+            }
+            if (phKey) input.placeholder = I18n.t(phKey);
         }
     },
 

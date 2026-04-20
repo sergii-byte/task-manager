@@ -30,7 +30,14 @@ const App = {
 
     _mainBoot() {
         this.renderSidebar();
-        this.showDashboard();
+        // Empty state → Capture view is more welcoming than an empty dashboard.
+        // Returning users go straight to Dashboard; they can click the Capture
+        // nav item any time.
+        if (Store.getClients().length === 0) {
+            this.showCapture();
+        } else {
+            this.showDashboard();
+        }
         this.bindEvents();
         this.restoreTimer();
         // Make sure pending encrypted writes flush before the page closes.
@@ -287,6 +294,7 @@ const App = {
     // ===== Events =====
     bindEvents() {
         // Sidebar nav
+        this._on('nav-capture', 'click', () => this.showCapture());
         this._on('nav-dashboard', 'click', () => this.showDashboard());
         this._on('nav-calendar', 'click', () => this.showCalendar());
         this._on('nav-inbox', 'click', () => this.showInbox());
@@ -322,11 +330,42 @@ const App = {
         // React to a successful pull/merge — re-render without coupling Store to UI.
         document.addEventListener('ordify:synced', () => { this.refresh(); });
 
-        // Quick input
+        // Quick input (compact bar at top of content)
         this._on('qi-text', 'keydown', (e) => { if (e.key === 'Enter') AiInput.process(); });
         this._on('qi-mic', 'click', () => AiInput.toggleMic());
         this._on('qi-send', 'click', () => AiInput.process());
         this._on('qi-import', 'click', () => this.showImport());
+
+        // Capture view (hero textarea). Enter submits, Shift+Enter = newline.
+        // ⌘/Ctrl+Enter also submits — ergonomic for long captures.
+        this._on('cap-text', 'keydown', (e) => {
+            const submit = (e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey));
+            if (submit) {
+                e.preventDefault();
+                AiInput.process({ inputId: 'cap-text', sendId: 'cap-send', placeholderKey: 'capturePlaceholder' });
+            }
+        });
+        // Auto-grow textarea as the user types.
+        this._on('cap-text', 'input', (e) => {
+            const t = e.target;
+            t.style.height = 'auto';
+            t.style.height = Math.min(t.scrollHeight, 360) + 'px';
+        });
+        this._on('cap-mic',  'click', () => AiInput.toggleMic({ inputId: 'cap-text', micId: 'cap-mic' }));
+        this._on('cap-send', 'click', () =>
+            AiInput.process({ inputId: 'cap-text', sendId: 'cap-send', placeholderKey: 'capturePlaceholder' })
+        );
+        this._on('cap-import', 'click', () => this.showImport());
+        // Chip click: populate textarea + focus (user can still edit before sending).
+        document.getElementById('capture-chips')?.addEventListener('click', (e) => {
+            const chip = e.target.closest('[data-chip-text]');
+            if (!chip) return;
+            const input = document.getElementById('cap-text');
+            if (!input) return;
+            input.value = chip.dataset.chipText;
+            input.focus();
+            input.dispatchEvent(new Event('input'));  // trigger auto-grow
+        });
         this._on('import-close-btn', 'click', () => this.closeImport());
         this._on('import-cancel-btn', 'click', () => this.closeImport());
         this._on('import-process-btn', 'click', () => this.processImport());
@@ -498,6 +537,7 @@ const App = {
         }
 
         // Update nav active states
+        document.getElementById('nav-capture')?.classList.toggle('active', this.currentView === 'capture');
         document.getElementById('nav-dashboard')?.classList.toggle('active', this.currentView === 'dashboard');
         document.getElementById('nav-calendar')?.classList.toggle('active', this.currentView === 'calendar');
         document.getElementById('nav-inbox')?.classList.toggle('active', this.currentView === 'inbox');
@@ -524,7 +564,53 @@ const App = {
         document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
         const el = document.getElementById('view-' + name);
         if (el) el.classList.add('active');
+        // Body class lets CSS react per-view (e.g. hide the compact
+        // quick-input bar while the Capture hero is on screen).
+        document.body.classList.forEach(c => {
+            if (c.startsWith('view-')) document.body.classList.remove(c);
+        });
+        document.body.classList.add('view-' + name);
         this.currentView = name;
+    },
+
+    // ===== Capture (AI-first landing) =====
+    showCapture() {
+        this.currentClientId = null;
+        this.currentProjectId = null;
+        this.showView('capture');
+        this.renderCapture();
+        this.renderSidebar();
+        this.closeSidebar();
+        // Autofocus the hero textarea — the one screen where typing is THE
+        // point. Delay one frame so the view transition finishes first.
+        setTimeout(() => document.getElementById('cap-text')?.focus(), 50);
+    },
+
+    renderCapture() {
+        const g = document.getElementById('capture-greeting');
+        if (g) g.textContent = this._captureGreeting();
+
+        // Example chips: static i18n list, click populates the textarea.
+        const chipsEl = document.getElementById('capture-chips');
+        if (chipsEl) {
+            const keys = ['captureEx1', 'captureEx2', 'captureEx3', 'captureEx4'];
+            chipsEl.innerHTML = keys.map(k => {
+                const txt = this.t(k);
+                return `<button type="button" class="capture-chip" data-chip-text="${this.esc(txt)}">${this.esc(txt)}</button>`;
+            }).join('');
+        }
+    },
+
+    /** Time-of-day greeting prefix — e.g. "Good morning" / "Доброго ранку". */
+    _captureGreeting() {
+        const h = new Date().getHours();
+        let key;
+        if (h < 5) key = 'greetingNight';
+        else if (h < 12) key = 'greetingMorning';
+        else if (h < 18) key = 'greetingAfternoon';
+        else if (h < 23) key = 'greetingEvening';
+        else key = 'greetingNight';
+        return this.t(key);
     },
 
     // ===== Dashboard =====
@@ -2997,14 +3083,26 @@ const App = {
 
         this._pendingAiData = null;
         this.closeAiPreview();
-        document.getElementById('qi-text').value = '';
+        // Clear whichever input fed this capture — qi-text (compact bar) or
+        // cap-text (hero). Falling back to both is harmless if either is absent.
+        const srcId = this._lastCaptureSourceId || 'qi-text';
+        const src = document.getElementById(srcId);
+        if (src) {
+            src.value = '';
+            if (src.tagName === 'TEXTAREA') src.style.height = '';
+        }
+        // Also clear the other one if it exists and matches (cleanliness).
+        const other = document.getElementById(srcId === 'qi-text' ? 'cap-text' : 'qi-text');
+        if (other && other.value) other.value = '';
+        this._lastCaptureSourceId = null;
         this.refresh();
     },
 
     // ===== Helpers =====
     refresh() {
         this.applyI18n();
-        if (this.currentView === 'dashboard') this.renderDashboard();
+        if (this.currentView === 'capture') this.renderCapture();
+        else if (this.currentView === 'dashboard') this.renderDashboard();
         else if (this.currentView === 'calendar') this.renderCalendarFull();
         else if (this.currentView === 'inbox') this.renderInbox();
         else if (this.currentView === 'client') this.renderClient();

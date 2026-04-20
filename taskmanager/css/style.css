@@ -1597,3 +1597,177 @@ kbd {
     20%, 60% { transform: translateX(-8px); }
     40%, 80% { transform: translateX(8px); }
 }
+
+/* ===== Sprint 1: Capture view ===== */
+/* AI-first landing — big free-form textarea. When active, hide the
+   compact quick-input at the top so the user focuses on one prompt. */
+body.view-capture .quick-input { display: none; }
+
+#view-capture.view.active {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: clamp(24px, 8vh, 96px);
+}
+.capture-wrap {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.capture-hero { text-align: center; margin-bottom: 4px; }
+.capture-greeting {
+    font-size: var(--fs-body);
+    color: var(--text-3);
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+}
+.capture-prompt {
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+}
+.capture-sub {
+    font-size: var(--fs-body);
+    color: var(--text-3);
+    margin: 0;
+    line-height: var(--lh-normal);
+}
+
+.capture-field {
+    position: relative;
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 8px 32px var(--shadow);
+    transition: border-color .2s, box-shadow .2s, background .2s;
+}
+.capture-field:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow), 0 12px 40px var(--shadow);
+    background: var(--glass-hover, var(--glass));
+}
+.capture-field textarea {
+    width: 100%;
+    min-height: 120px;
+    max-height: 360px;
+    padding: 18px 56px 18px 20px;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 16px;
+    line-height: 1.55;
+    box-sizing: border-box;
+}
+.capture-field textarea::placeholder { color: var(--text-3); }
+.capture-mic {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-3);
+    border: 1px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background .15s, color .15s, transform .1s, border-color .15s;
+}
+.capture-mic:hover {
+    background: var(--glass-active);
+    color: var(--text);
+    border-color: var(--glass-border);
+}
+.capture-mic:active { transform: scale(0.92); }
+.capture-mic.recording {
+    background: var(--red);
+    color: #fff;
+    border-color: var(--red);
+    animation: pulse 1.5s infinite;
+}
+
+.capture-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.capture-send {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 999px;
+    min-width: 140px;
+    justify-content: center;
+}
+.capture-send.loading svg { animation: spin .8s linear infinite; }
+.capture-send:disabled { opacity: 0.5; cursor: default; }
+.capture-import {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 13px;
+    border-radius: 999px;
+    color: var(--text-2);
+}
+
+.capture-examples {
+    margin-top: 6px;
+    text-align: center;
+}
+.capture-examples-label {
+    font-size: 12px;
+    color: var(--text-3);
+    margin-bottom: 10px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+.capture-chips {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.capture-chip {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    color: var(--text-2);
+    padding: 7px 14px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 12.5px;
+    line-height: 1.3;
+    transition: background .15s, color .15s, border-color .15s, transform .1s;
+    max-width: 100%;
+    text-align: left;
+}
+.capture-chip:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent-glow);
+    transform: translateY(-1px);
+}
+.capture-chip:active { transform: translateY(0); }
+
+@media (max-width: 640px) {
+    #view-capture.view.active { padding-top: 24px; }
+    .capture-field textarea { font-size: 15px; padding: 14px 52px 14px 16px; min-height: 100px; }
+    .capture-send { width: 100%; }
+    .capture-import { width: 100%; justify-content: center; }
+}

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ordify</title>
-    <link rel="stylesheet" href="css/style.css?v=24">
+    <link rel="stylesheet" href="css/style.css?v=25">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23da7756' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='3' width='18' height='18' rx='4.5'/><path d='M7.5 9.5h9'/><path d='M7.5 13.5h6'/><path d='M7.5 17.5h3'/></svg>">
 </head>
 <body>
@@ -35,6 +35,9 @@
             <!-- Nav -->
             <div class="sidebar-section">
                 <ul class="nav-list nav-main">
+                    <li class="nav-item" id="nav-capture" data-view="capture">
+                        <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 5.8L20 9l-4.6 4 1.4 6-4.8-3-4.8 3 1.4-6L4 9l5.6-1.2z"/></svg></span><span class="nav-label" data-i18n="navCapture">Capture</span>
+                    </li>
                     <li class="nav-item active" id="nav-dashboard" data-view="dashboard">
                         <span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span><span class="nav-label" data-i18n="dashboard">Dashboard</span>
                     </li>
@@ -92,6 +95,40 @@
                 <button class="send-btn" id="qi-send" title="Send">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>
                 </button>
+            </div>
+
+            <!-- Capture: AI-first free-form entry. Landing for empty state. -->
+            <div id="view-capture" class="view">
+                <div class="capture-wrap">
+                    <div class="capture-hero">
+                        <div class="capture-greeting" id="capture-greeting"></div>
+                        <h1 class="capture-prompt" data-i18n="capturePrompt">What happened?</h1>
+                        <p class="capture-sub" data-i18n="captureSub">Describe freely — a meeting, a task, a deadline, an idea. AI sorts it into clients, projects and tasks.</p>
+                    </div>
+
+                    <div class="capture-field">
+                        <textarea id="cap-text" rows="4" data-i18n-placeholder="capturePlaceholder" placeholder="e.g. New client Acme Ltd — draft NDA by Friday, log 30 min of intro call"></textarea>
+                        <button class="capture-mic" id="cap-mic" type="button" data-i18n-title="voiceInput" title="Voice input" aria-label="Voice input">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="capture-actions">
+                        <button class="btn btn-primary capture-send" id="cap-send" type="button">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.4 5.8L20 9l-4.6 4 1.4 6-4.8-3-4.8 3 1.4-6L4 9l5.6-1.2z"/></svg>
+                            <span data-i18n="captureSend">Capture</span>
+                        </button>
+                        <button class="btn btn-glass capture-import" id="cap-import" type="button" data-i18n-title="importTooltip">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            <span data-i18n="capturePasteImport">Paste plan or transcript</span>
+                        </button>
+                    </div>
+
+                    <div class="capture-examples">
+                        <div class="capture-examples-label" data-i18n="captureTry">Try:</div>
+                        <div class="capture-chips" id="capture-chips"></div>
+                    </div>
+                </div>
             </div>
 
             <!-- Dashboard -->
@@ -373,17 +410,17 @@
     <div class="toast-container" id="toast-container"></div>
 
     <!-- Sprint 0.2: pure utilities load first, no dependencies between them. -->
-    <script src="js/dom.js?v=24"></script>
-    <script src="js/dates.js?v=24"></script>
-    <script src="js/icons.js?v=24"></script>
-    <script src="js/focus-trap.js?v=24"></script>
-    <script src="js/crypto.js?v=24"></script>
+    <script src="js/dom.js?v=25"></script>
+    <script src="js/dates.js?v=25"></script>
+    <script src="js/icons.js?v=25"></script>
+    <script src="js/focus-trap.js?v=25"></script>
+    <script src="js/crypto.js?v=25"></script>
     <!-- Domain layer: Store needs Crypto for encrypted mode. -->
-    <script src="js/store.js?v=24"></script>
-    <script src="js/i18n.js?v=24"></script>
-    <script src="js/sheets-sync.js?v=24"></script>
-    <script src="js/ai-input.js?v=24"></script>
+    <script src="js/store.js?v=25"></script>
+    <script src="js/i18n.js?v=25"></script>
+    <script src="js/sheets-sync.js?v=25"></script>
+    <script src="js/ai-input.js?v=25"></script>
     <!-- App must come last — uses all of the above. -->
-    <script src="js/app.js?v=24"></script>
+    <script src="js/app.js?v=25"></script>
 </body>
 </html>
