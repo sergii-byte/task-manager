@@ -206,7 +206,8 @@ The user describes intentions in free form (Ukrainian, English, Russian — any 
    { "action": "create_project", "name": "...", "clientId"? (existing client id), "clientName"? (for match/create), "company"? (optional legal-entity string), "projectType"?: "licensing"|"corporate"|"contracts"|"compliance", "jurisdiction"?, "status"?: "active", "deadline"?: "YYYY-MM-DD" }
 
 3. create_task — add a task
-   { "action": "create_task", "title": "...", "notes"?, "priority"?: "low"|"medium"|"high", "deadline"?: "YYYY-MM-DD", "isProcedural"?: bool, "projectId"? (existing project id), "projectName"? (for display), "tagIds"?: [], "subtasks"?: [] }
+   { "action": "create_task", "title": "...", "notes"?, "priority"?: "low"|"medium"|"high", "deadline"?: "YYYY-MM-DD", "isProcedural"?: bool, "projectId"? (existing project id), "projectName"? (for display), "tagIds"?: [], "subtasks"?: [], "recurrence"?: { "freq": "daily"|"weekly"|"monthly"|"yearly", "interval": N, "until"?: "YYYY-MM-DD" } }
+   - Use "recurrence" when the user says "every week", "monthly", "each Friday", "щомісяця", "раз на квартал" (interval:3 + freq:monthly), etc. "interval" defaults to 1. Don't invent recurrence if the user didn't imply it.
 
 4. log_hours — log time spent on a task
    { "action": "log_hours", "hours": <number>, "taskId"? (existing task id), "taskName"? (to match an existing task by name OR the name of a task created earlier in the same chain), "description"? }

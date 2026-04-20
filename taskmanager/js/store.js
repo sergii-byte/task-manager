@@ -470,6 +470,12 @@ const Store = {
         }
         // Auto-register standalone company on client (no project)
         if (t.clientId && t.company) this.addCompanyToClient(t.clientId, t.company);
+        // Recurrence: normalize or drop. Never store junk.
+        if (t.recurrence !== undefined) {
+            const r = (typeof Recurrence !== 'undefined') ? Recurrence.normalize(t.recurrence) : null;
+            if (r) t.recurrence = r;
+            else delete t.recurrence;
+        }
         this._data.tasks.push(t);
         this.save();
         return t;
@@ -477,7 +483,8 @@ const Store = {
     updateTask(id, data) {
         const i = this._data.tasks.findIndex(t => t.id === id);
         if (i !== -1) {
-            const merged = { ...this._data.tasks[i], ...data, updated: this._now() };
+            const prev = this._data.tasks[i];
+            const merged = { ...prev, ...data, updated: this._now() };
             // Normalize: if task has projectId, force company from project
             if (merged.projectId) {
                 const proj = this.getProject(merged.projectId);
@@ -487,9 +494,62 @@ const Store = {
                 }
             }
             if (merged.clientId && merged.company) this.addCompanyToClient(merged.clientId, merged.company);
+            // Recurrence: if the update payload touched this field, normalize
+            // or drop it. `null` from the form means "clear recurrence".
+            if (Object.prototype.hasOwnProperty.call(data, 'recurrence')) {
+                const r = (typeof Recurrence !== 'undefined') ? Recurrence.normalize(data.recurrence) : null;
+                if (r) merged.recurrence = r;
+                else delete merged.recurrence;
+            }
             this._data.tasks[i] = merged;
+
+            // Recurrence: when a recurring task transitions into 'done',
+            // spawn the next occurrence. One-shot — don't loop back if the
+            // caller happens to set status=done again on an already-done task.
+            const becameDone = prev.status !== 'done' && merged.status === 'done';
+            if (becameDone && merged.recurrence) {
+                this._spawnNextOccurrence(merged);
+            }
+
             this.save();
         }
+    },
+
+    /**
+     * Given a task that was just completed and carries a recurrence rule,
+     * create the next instance with the same fields but advanced deadline
+     * and reset status/logs. Returns the new task or null if the rule has
+     * expired (past `until`).
+     *
+     * Called from updateTask — do not call save() ourselves; updateTask does.
+     */
+    _spawnNextOccurrence(completedTask) {
+        if (typeof Recurrence === 'undefined') return null;
+        const rule = Recurrence.normalize(completedTask.recurrence);
+        if (!rule) return null;
+
+        // Anchor: the original deadline if set, else "today". This means a
+        // weekly task with deadline Monday spawns next Monday regardless of
+        // when you actually tick it done — the schedule stays on track.
+        const anchorStr = completedTask.deadline;
+        const anchor = anchorStr ? Dates.parseLocal(anchorStr) : Dates.todayLocal();
+        const next = Recurrence.nextDate(rule, anchor);
+        if (!next) return null;  // rule ended
+
+        const now = this._now();
+        const clone = {
+            ...completedTask,
+            id: this.id(),
+            created: now,
+            updated: now,
+            status: 'todo',
+            completedAt: null,
+            hoursLogged: 0,
+            deadline: Dates.toLocalKey(next),
+            recurrence: rule,
+        };
+        this._data.tasks.push(clone);
+        return clone;
     },
     deleteTask(id) {
         this._data.timeLogs = this._data.timeLogs.filter(t => t.taskId !== id);

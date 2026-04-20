@@ -1418,6 +1418,14 @@ const App = {
             meta.push(dlHtml);
         }
 
+        // Recurrence: small cycle badge with a summary ("Every week").
+        if (task.recurrence && typeof Recurrence !== 'undefined') {
+            const summary = Recurrence.describe(task.recurrence);
+            if (summary) {
+                meta.push(`<span class="task-recur-badge" title="${this.esc(summary)}">\u21BB ${this.esc(summary)}</span>`);
+            }
+        }
+
         // Dependencies: show a blocker badge with prior task titles
         if (Array.isArray(task.dependsOn) && task.dependsOn.length) {
             const depTitles = task.dependsOn
@@ -1466,20 +1474,42 @@ const App = {
         if (!task) return;
         const cycle = { todo: 'in_progress', in_progress: 'done', done: 'todo' };
         const next = cycle[task.status] || 'todo';
+        const wasRecurringTransitionToDone = task.status !== 'done' && next === 'done' && task.recurrence;
         Store.updateTask(id, { status: next });
         const statusNames = { todo: 'To Do', in_progress: this.t('statInProgress'), done: this.t('filterDone') };
         this.toast(`${this.t('taskTitle')}: ${statusNames[next]}`, next === 'done' ? 'success' : 'info');
+        if (wasRecurringTransitionToDone) this._announceRecurrenceSpawn(task);
         this.refresh();
     },
 
     markTaskDone(id) {
         const task = Store.getTask(id);
         if (!task) return;
+        const wasRecurring = task.status !== 'done' && task.recurrence;
         Store.updateTask(id, { status: 'done', completedAt: new Date().toISOString() });
         // Also stop the timer if it was running on this task
         if (this.activeTimer?.taskId === id) this.stopTimer();
         this.toast(`✓ ${this.esc(task.title)}`, 'success');
+        if (wasRecurring) this._announceRecurrenceSpawn(task);
         this.refresh();
+    },
+
+    /**
+     * Toast "Next occurrence scheduled for <date>" after a recurring task
+     * is marked done. Passed the original task (pre-update) so we can
+     * recompute the anchor date consistently with Store._spawnNextOccurrence.
+     */
+    _announceRecurrenceSpawn(originalTask) {
+        if (typeof Recurrence === 'undefined') return;
+        const anchor = originalTask.deadline
+            ? Dates.parseLocal(originalTask.deadline)
+            : Dates.todayLocal();
+        const next = Recurrence.nextDate(originalTask.recurrence, anchor);
+        if (!next) {
+            this.toast(this.t('recurEndedToast'), 'info');
+            return;
+        }
+        this.toast(`${this.t('recurNextToast')}: ${this.formatDate(Dates.toLocalKey(next))}`, 'info');
     },
 
     markTaskTodo(id) {
@@ -1643,6 +1673,40 @@ const App = {
     onSearchBlur() { document.getElementById('search-results').classList.remove('open'); },
 
     // ===== Modals =====
+    /**
+     * Build the "Repeats" form-row for the task modal. If rec is falsy the
+     * form starts on "Never" (all dependent fields hidden). We render them
+     * anyway so the change handler can just toggle display.
+     */
+    _recurrenceFieldHtml(rec) {
+        const r = (typeof Recurrence !== 'undefined') ? Recurrence.normalize(rec) : null;
+        const freq = r ? r.freq : '';
+        const interval = r ? r.interval : 1;
+        const until = r ? (r.until || '') : '';
+        const sel = (v, val) => v === val ? ' selected' : '';
+        const hidden = freq ? '' : 'display:none;';
+        return `<div class="form-row recurrence-row">
+            <div class="form-group">
+                <label>${this.t('recurLabel')}</label>
+                <select name="recurFreq" id="task-recur-freq">
+                    <option value=""${sel(freq,'')}>${this.t('recurNever')}</option>
+                    <option value="daily"${sel(freq,'daily')}>${this.t('recurDaily')}</option>
+                    <option value="weekly"${sel(freq,'weekly')}>${this.t('recurWeekly')}</option>
+                    <option value="monthly"${sel(freq,'monthly')}>${this.t('recurMonthly')}</option>
+                    <option value="yearly"${sel(freq,'yearly')}>${this.t('recurYearly')}</option>
+                </select>
+            </div>
+            <div class="form-group recur-interval-wrap" id="task-recur-interval-wrap" style="${hidden}">
+                <label>${this.t('recurEveryLabel')}</label>
+                <input type="number" name="recurInterval" id="task-recur-interval" min="1" max="999" value="${interval}">
+            </div>
+            <div class="form-group recur-until-wrap" id="task-recur-until-wrap" style="${hidden}">
+                <label>${this.t('recurUntilLabel')}</label>
+                <input type="date" name="recurUntil" id="task-recur-until" value="${until}">
+            </div>
+        </div>`;
+    },
+
     showModal(type, editId, prefill) {
         this.editingId = editId || null;
         this._modalPrefill = prefill || {};
@@ -1878,6 +1942,7 @@ const App = {
                         <label class="form-check"><input type="checkbox" name="isProcedural" ${t.isProcedural?'checked':''}> ${this.t('proceduralDeadline')}</label>
                     </div>
                 </div>
+                ${this._recurrenceFieldHtml(t.recurrence)}
                 ${allTags.length ? `<div class="form-group"><label>${this.t('tags')}</label><div style="display:flex;gap:8px;flex-wrap:wrap">${tagsHtml}</div></div>` : ''}
                 <div class="form-group"><label>${this.t('notes')}</label><textarea name="notes">${this.esc(t.notes || '')}</textarea></div>
                 ${isEdit ? `<div class="form-group"><label>${this.t('addHoursManual')}</label><input name="addHours" type="number" step="0.25" placeholder="0.5" min="0"></div>` : ''}
@@ -1953,6 +2018,18 @@ const App = {
                 repopulateProject();
                 projectSel.value = pid;
             });
+
+            // Recurrence: toggle interval + until visibility based on freq.
+            const recurFreq = form.querySelector('#task-recur-freq');
+            const recurIvlWrap = form.querySelector('#task-recur-interval-wrap');
+            const recurUntilWrap = form.querySelector('#task-recur-until-wrap');
+            if (recurFreq) {
+                recurFreq.addEventListener('change', () => {
+                    const on = !!recurFreq.value;
+                    if (recurIvlWrap) recurIvlWrap.style.display = on ? '' : 'none';
+                    if (recurUntilWrap) recurUntilWrap.style.display = on ? '' : 'none';
+                });
+            }
 
             form.onsubmit = (e) => { e.preventDefault(); this.saveTask_form(e.target); };
         }
@@ -2051,6 +2128,21 @@ const App = {
         // If company named but not yet registered on the client, auto-add
         if (data.clientId && data.company) {
             Store.addCompanyToClient(data.clientId, data.company);
+        }
+
+        // Recurrence: collapse recurFreq/recurInterval/recurUntil into a
+        // single object (or null to clear). Store.normalize handles validation.
+        const recurFreq = (data.recurFreq || '').trim();
+        delete data.recurFreq; delete data.recurInterval; delete data.recurUntil;
+        if (recurFreq) {
+            data.recurrence = {
+                freq: recurFreq,
+                interval: parseInt(fd.get('recurInterval'), 10) || 1,
+                until: (fd.get('recurUntil') || '').trim() || undefined,
+            };
+        } else {
+            // Explicit null tells updateTask to drop any existing rule.
+            data.recurrence = null;
         }
 
         if (this.editingId) {
@@ -2919,6 +3011,7 @@ const App = {
                     notes,
                     tags: item.tagIds || [],
                     dependsOn: resolvedDeps,
+                    recurrence: item.recurrence,  // Store.addTask normalises or drops
                 });
                 lastTaskId = t.id;
                 chainTaskIds.set((item.title || '').toLowerCase().trim(), t.id);
@@ -3074,6 +3167,7 @@ const App = {
                 isProcedural: d.isProcedural || false,
                 notes: d.notes || '',
                 tags: d.tagIds || [],
+                recurrence: d.recurrence,
             });
             if (d.subtasks?.length) d.subtasks.forEach(sub => Store.addTask({ projectId, title: sub, priority: 'medium' }));
             this.toast(`${this.t('taskCreated')}: ${d.title}`, 'success');

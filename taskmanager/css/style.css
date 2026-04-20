@@ -1486,6 +1486,19 @@ kbd {
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.task-recur-badge {
+    font-size: 10.5px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+    white-space: nowrap;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.01em;
+}
 
 /* Card h3 with avatar prefix */
 .card h3 .client-avatar { margin-right: 8px; vertical-align: middle; }
