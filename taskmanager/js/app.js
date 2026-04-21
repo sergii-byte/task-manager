@@ -296,10 +296,20 @@ const App = {
         // Sidebar nav
         this._on('nav-capture', 'click', () => this.showCapture());
         this._on('nav-dashboard', 'click', () => this.showDashboard());
+        this._on('nav-matters', 'click', () => this.showMatters());
         this._on('nav-calendar', 'click', () => this.showCalendar());
         this._on('nav-inbox', 'click', () => this.showInbox());
         this._on('nav-reports', 'click', () => this.showReports());
         this._on('add-client-btn', 'click', () => this.showModal('client'));
+        this._on('btn-add-matter', 'click', () => this.showModal('project'));
+
+        // Matters filters (delegated — active/on_hold/completed/all)
+        document.getElementById('matters-filters')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-matters-filter]');
+            if (!btn) return;
+            this._mattersFilter = btn.dataset.mattersFilter;
+            this.renderMatters();
+        });
         this._on('sidebar-logo-btn', 'click', () => this.showDashboard());
         document.getElementById('sidebar-logo-btn')?.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.showDashboard(); }
@@ -336,26 +346,34 @@ const App = {
         this._on('qi-send', 'click', () => AiInput.process());
         this._on('qi-import', 'click', () => this.showImport());
 
-        // Capture view (hero textarea). Enter submits, Shift+Enter = newline.
-        // ⌘/Ctrl+Enter also submits — ergonomic for long captures.
+        // Capture view (hero textarea). In Quick mode Enter submits (Shift+Enter =
+        // newline). In Meeting mode Enter ALWAYS inserts a newline — transcripts
+        // are multi-paragraph and submit-on-Enter would be infuriating. ⌘/Ctrl+Enter
+        // forces submit in both modes.
         this._on('cap-text', 'keydown', (e) => {
-            const submit = (e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && (e.metaKey || e.ctrlKey));
-            if (submit) {
+            const isQuick = (this._captureMode || 'quick') === 'quick';
+            const forceSubmit = e.key === 'Enter' && (e.metaKey || e.ctrlKey);
+            const quickSubmit = isQuick && e.key === 'Enter' && !e.shiftKey;
+            if (forceSubmit || quickSubmit) {
                 e.preventDefault();
-                AiInput.process({ inputId: 'cap-text', sendId: 'cap-send', placeholderKey: 'capturePlaceholder' });
+                this._submitCapture();
             }
         });
         // Auto-grow textarea as the user types.
         this._on('cap-text', 'input', (e) => {
             const t = e.target;
             t.style.height = 'auto';
-            t.style.height = Math.min(t.scrollHeight, 360) + 'px';
+            const cap = (this._captureMode || 'quick') === 'meeting' ? 600 : 360;
+            t.style.height = Math.min(t.scrollHeight, cap) + 'px';
         });
         this._on('cap-mic',  'click', () => AiInput.toggleMic({ inputId: 'cap-text', micId: 'cap-mic' }));
-        this._on('cap-send', 'click', () =>
-            AiInput.process({ inputId: 'cap-text', sendId: 'cap-send', placeholderKey: 'capturePlaceholder' })
-        );
+        this._on('cap-send', 'click', () => this._submitCapture());
         this._on('cap-import', 'click', () => this.showImport());
+
+        // Capture mode toggle (Quick | Meeting notes)
+        document.querySelectorAll('[data-capture-mode]').forEach(btn => {
+            btn.addEventListener('click', () => this.setCaptureMode(btn.dataset.captureMode));
+        });
         // Chip click: populate textarea + focus (user can still edit before sending).
         document.getElementById('capture-chips')?.addEventListener('click', (e) => {
             const chip = e.target.closest('[data-chip-text]');
@@ -539,6 +557,7 @@ const App = {
         // Update nav active states
         document.getElementById('nav-capture')?.classList.toggle('active', this.currentView === 'capture');
         document.getElementById('nav-dashboard')?.classList.toggle('active', this.currentView === 'dashboard');
+        document.getElementById('nav-matters')?.classList.toggle('active', this.currentView === 'matters' || this.currentView === 'project');
         document.getElementById('nav-calendar')?.classList.toggle('active', this.currentView === 'calendar');
         document.getElementById('nav-inbox')?.classList.toggle('active', this.currentView === 'inbox');
         document.getElementById('nav-reports')?.classList.toggle('active', this.currentView === 'reports');
@@ -590,14 +609,125 @@ const App = {
         const g = document.getElementById('capture-greeting');
         if (g) g.textContent = this._captureGreeting();
 
+        // Mode toggle + scope selector state
+        const mode = this._captureMode || 'quick';
+        this._applyCaptureModeUI(mode);
+        this._populateCaptureScope();
+
         // Example chips: static i18n list, click populates the textarea.
+        // In meeting mode we hide chips — they're a Quick-mode affordance.
         const chipsEl = document.getElementById('capture-chips');
-        if (chipsEl) {
+        const examplesWrap = document.querySelector('.capture-examples');
+        if (examplesWrap) examplesWrap.hidden = (mode === 'meeting');
+        if (chipsEl && mode !== 'meeting') {
             const keys = ['captureEx1', 'captureEx2', 'captureEx3', 'captureEx4'];
             chipsEl.innerHTML = keys.map(k => {
                 const txt = this.t(k);
                 return `<button type="button" class="capture-chip" data-chip-text="${this.esc(txt)}">${this.esc(txt)}</button>`;
             }).join('');
+        }
+    },
+
+    /**
+     * Switch between Quick and Meeting notes capture modes. Updates:
+     * textarea placeholder + rows, send button label, chips visibility,
+     * scope selector visibility. State persists on App instance, not
+     * localStorage — always defaults to Quick on page load.
+     */
+    setCaptureMode(mode) {
+        if (mode !== 'quick' && mode !== 'meeting') return;
+        if (this._captureMode === mode) return;
+        this._captureMode = mode;
+        this._applyCaptureModeUI(mode);
+        this._populateCaptureScope();
+        // Resize the textarea to match new cap and refocus it.
+        const ta = document.getElementById('cap-text');
+        if (ta) {
+            ta.style.height = 'auto';
+            const cap = mode === 'meeting' ? 600 : 360;
+            ta.style.height = Math.min(ta.scrollHeight, cap) + 'px';
+            ta.focus();
+        }
+    },
+
+    _applyCaptureModeUI(mode) {
+        document.querySelectorAll('[data-capture-mode]').forEach(btn => {
+            const on = btn.dataset.captureMode === mode;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        const scope = document.getElementById('cap-scope');
+        if (scope) scope.hidden = (mode !== 'meeting');
+        const ta = document.getElementById('cap-text');
+        if (ta) {
+            const phKey = mode === 'meeting' ? 'meetingPlaceholder' : 'capturePlaceholder';
+            ta.setAttribute('placeholder', this.t(phKey));
+            ta.setAttribute('data-i18n-placeholder', phKey);
+            ta.rows = mode === 'meeting' ? 10 : 4;
+        }
+        const label = document.getElementById('cap-send-label');
+        if (label) label.textContent = this.t(mode === 'meeting' ? 'meetingSend' : 'captureSend');
+        // Class on wrap lets CSS enlarge the field in meeting mode.
+        const wrap = document.querySelector('.capture-wrap');
+        if (wrap) wrap.classList.toggle('capture-mode-meeting', mode === 'meeting');
+    },
+
+    /**
+     * Populate the scope <select> with existing projects. Empty first
+     * option = "AI decides". Option value is project id. Shown only in
+     * Meeting mode — see _applyCaptureModeUI.
+     */
+    _populateCaptureScope() {
+        const sel = document.getElementById('cap-scope-select');
+        if (!sel) return;
+        const prev = sel.value;
+        const projects = Store.getProjects();
+        const opts = [`<option value="">${this.t('meetingScopeAuto')}</option>`];
+        projects
+            .slice()
+            .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+            .forEach(p => {
+                const client = Store.getClient(p.clientId);
+                const crumbs = [client?.name, p.company, p.name].filter(Boolean).join(' \u2192 ');
+                opts.push(`<option value="${p.id}">${this.esc(crumbs)}</option>`);
+            });
+        sel.innerHTML = opts.join('');
+        if (prev && projects.some(p => p.id === prev)) sel.value = prev;
+    },
+
+    /**
+     * Route the Capture send click to the right AiInput entry point.
+     * Quick mode → AiInput.process (single capture, free-form).
+     * Meeting mode → AiInput.processImport(text, 'transcript', projectId)
+     *   — reuses the existing transcript pipeline that already filters
+     *   for the LAWYER'S action items and emits a create_chain.
+     */
+    async _submitCapture() {
+        const mode = this._captureMode || 'quick';
+        if (mode === 'quick') {
+            AiInput.process({ inputId: 'cap-text', sendId: 'cap-send', placeholderKey: 'capturePlaceholder' });
+            return;
+        }
+        // Meeting notes
+        const ta = document.getElementById('cap-text');
+        const sendBtn = document.getElementById('cap-send');
+        if (!ta) return;
+        const text = ta.value.trim();
+        if (!text) return;
+        const scopeSel = document.getElementById('cap-scope-select');
+        const projectId = scopeSel?.value || null;
+        if (!AiInput.apiKey) { this.toast(this.t('setApiKey'), 'warning'); this.showSettings(); return; }
+        if (sendBtn) { sendBtn.disabled = true; sendBtn.classList.add('loading'); }
+        try {
+            this._lastCaptureSourceId = 'cap-text';
+            const parsed = await AiInput.processImport(text, 'transcript', projectId);
+            this._pendingAiData = parsed;
+            this.showAiPreview(parsed);
+        } catch (err) {
+            console.error('Meeting notes import failed:', err);
+            this.toast((err && err.message) || 'AI error', 'error');
+        } finally {
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.classList.remove('loading'); }
         }
     },
 
@@ -611,6 +741,80 @@ const App = {
         else if (h < 23) key = 'greetingEvening';
         else key = 'greetingNight';
         return this.t(key);
+    },
+
+    // ===== Matters (all projects across all clients) =====
+    showMatters() {
+        this.currentClientId = null;
+        this.currentProjectId = null;
+        this.showView('matters');
+        this.renderMatters();
+        this.renderSidebar();
+        this.closeSidebar();
+    },
+
+    renderMatters() {
+        const filter = this._mattersFilter || 'active';
+        let matters = Store.getProjects();
+        if (filter !== 'all') matters = matters.filter(p => (p.status || 'active') === filter);
+
+        // Reflect filter in button state
+        document.querySelectorAll('#matters-filters [data-matters-filter]').forEach(btn => {
+            const on = btn.dataset.mattersFilter === filter;
+            btn.classList.toggle('active', on);
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+
+        const grid = document.getElementById('matters-grid');
+        if (!grid) return;
+
+        if (matters.length === 0) {
+            grid.innerHTML = `<div class="empty-state">
+                <div class="empty-icon">${Icons.folder(40)}</div>
+                <p>${this.t('noMatters')}</p>
+                <button class="cta-btn" data-action="show-modal" data-type="project">+ ${this.t('newMatter')}</button>
+            </div>`;
+            return;
+        }
+
+        const statusL = { active: this.t('statusActive'), on_hold: this.t('statusOnHold'), completed: this.t('statusCompleted') };
+        const typeL = { licensing: this.t('typeLicensing'), corporate: this.t('typeCorporate'), contracts: this.t('typeContracts'), compliance: this.t('typeCompliance') };
+
+        // Sort: active first, then by next deadline, then by name.
+        const sorted = [...matters].sort((a, b) => {
+            const sa = a.status === 'active' ? 0 : a.status === 'on_hold' ? 1 : 2;
+            const sb = b.status === 'active' ? 0 : b.status === 'on_hold' ? 1 : 2;
+            if (sa !== sb) return sa - sb;
+            if (a.deadline && b.deadline) return dlDate(a.deadline) - dlDate(b.deadline);
+            if (a.deadline) return -1;
+            if (b.deadline) return 1;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
+        grid.innerHTML = sorted.map(p => {
+            const client = Store.getClient(p.clientId);
+            const stats = Store.getMatterStats(p.id);
+            const breadcrumb = [client?.name, p.company].filter(Boolean).map(n => this.esc(n)).join(' \u2192 ');
+            const badges = [];
+            badges.push(`<span class="status-badge ${p.status || 'active'}"><span class="status-dot ${p.status || 'active'}"></span> ${statusL[p.status || 'active']}</span>`);
+            if (p.projectType) badges.push(`<span class="matter-type-badge">${typeL[p.projectType] || p.projectType}</span>`);
+            if (p.jurisdiction) badges.push(`<span class="matter-jur-badge">${this.esc(p.jurisdiction)}</span>`);
+            const dl = p.deadline
+                ? `<div class="matter-card-dl ${this.deadlineClass(p.deadline)}">${Icons.calendar(12)} ${this.formatDate(p.deadline)}</div>`
+                : '';
+            const overdueLabel = stats.overdue ? `<span class="matter-overdue">${stats.overdue} ${this.t('statOverdue').toLowerCase()}</span>` : '';
+            return `<div class="card matter-card" data-action="select-project" data-id="${p.id}">
+                ${breadcrumb ? `<div class="matter-card-crumb">${breadcrumb}</div>` : ''}
+                <h3>${this.esc(p.name)}</h3>
+                <div class="matter-card-badges">${badges.join('')}</div>
+                <div class="matter-card-stats">
+                    <span title="${this.t('statOpenTasks')}"><strong>${stats.openTasks}</strong> ${this.t('statOpenTasks').toLowerCase()}</span>
+                    <span title="${this.t('statHours')}"><strong>${stats.hoursTotal}h</strong></span>
+                    ${overdueLabel}
+                </div>
+                ${dl}
+            </div>`;
+        }).join('');
     },
 
     // ===== Dashboard =====
@@ -1354,7 +1558,93 @@ const App = {
         if (project.jurisdiction) infoParts.push(`<span><strong>${this.t('jurisdictionLabel')}:</strong> ${this.esc(project.jurisdiction)}</span>`);
         if (project.deadline) infoParts.push(`<span class="${this.deadlineClass(project.deadline)}"><strong>${this.t('deadlineLabel')}:</strong> ${this.formatDate(project.deadline)}</span>`);
         document.getElementById('project-info').innerHTML = infoParts.join('');
+        this.renderMatterStats(project);
+        this.renderMatterActivity(project);
         this.renderTasks();
+    },
+
+    /**
+     * Stats strip for a matter — shown above task list. Six tiles:
+     * open tasks, overdue (red when > 0), hours this week, this month,
+     * total, and next upcoming deadline. Derived from Store.getMatterStats.
+     */
+    renderMatterStats(project) {
+        const el = document.getElementById('matter-stats');
+        if (!el) return;
+        const s = Store.getMatterStats(project.id);
+        const nextDl = s.nextDeadline
+            ? `<span class="${this.deadlineClass(s.nextDeadline.deadline)}">${this.formatDate(s.nextDeadline.deadline)}</span>`
+            : `<span class="matter-stat-muted">—</span>`;
+        const overdueVal = s.overdue > 0
+            ? `<span class="matter-stat-alert">${s.overdue}</span>`
+            : `<span class="matter-stat-muted">0</span>`;
+        el.innerHTML = `
+            <div class="matter-stat"><div class="matter-stat-v">${s.openTasks}</div><div class="matter-stat-l">${this.t('statOpenTasks')}</div></div>
+            <div class="matter-stat"><div class="matter-stat-v">${overdueVal}</div><div class="matter-stat-l">${this.t('statOverdue')}</div></div>
+            <div class="matter-stat"><div class="matter-stat-v">${s.hoursWeek}h</div><div class="matter-stat-l">${this.t('statHoursWeek')}</div></div>
+            <div class="matter-stat"><div class="matter-stat-v">${s.hoursMonth}h</div><div class="matter-stat-l">${this.t('statHoursMonth')}</div></div>
+            <div class="matter-stat"><div class="matter-stat-v">${s.hoursTotal}h</div><div class="matter-stat-l">${this.t('statHoursTotal')}</div></div>
+            <div class="matter-stat"><div class="matter-stat-v">${nextDl}</div><div class="matter-stat-l">${this.t('statNextDeadline')}</div></div>
+        `;
+    },
+
+    /**
+     * Activity timeline panel for a matter — last 40 events in reverse-chrono.
+     * Each row: icon + title + small time detail. Pure render — no handlers yet.
+     */
+    renderMatterActivity(project) {
+        const el = document.getElementById('matter-activity');
+        if (!el) return;
+        const events = Store.getMatterActivity(project.id, 40);
+        if (events.length === 0) {
+            el.innerHTML = `<div class="matter-activity-empty">${this.t('noActivity')}</div>`;
+            return;
+        }
+        const labels = {
+            task_created: this.t('activityCreated'),
+            task_done:    this.t('activityDone'),
+            time_logged:  this.t('activityLogged'),
+        };
+        const icons = {
+            task_created: '\u002B',
+            task_done:    '\u2713',
+            time_logged:  '\u23F1',
+        };
+        el.innerHTML = events.map(ev => {
+            const when = this._activityWhen(ev.ts);
+            const extra = ev.type === 'time_logged' && ev.hours ? ` <span class="matter-activity-hours">${ev.hours}h</span>` : '';
+            const note = ev.type === 'time_logged' && ev.detail ? `<div class="matter-activity-note">${this.esc(ev.detail)}</div>` : '';
+            return `<div class="matter-activity-item matter-activity-${ev.type}">
+                <span class="matter-activity-icon">${icons[ev.type] || ''}</span>
+                <div class="matter-activity-body">
+                    <div class="matter-activity-line">
+                        <span class="matter-activity-kind">${labels[ev.type] || ev.type}</span>${extra}
+                    </div>
+                    <div class="matter-activity-title">${this.esc(ev.title || '\u2014')}</div>
+                    ${note}
+                    <div class="matter-activity-when">${when}</div>
+                </div>
+            </div>`;
+        }).join('');
+    },
+
+    /**
+     * Human-friendly relative time for activity timeline.
+     * "just now" / "5m" / "3h" / "2d" / "14 Apr".
+     */
+    _activityWhen(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        if (isNaN(d)) return '';
+        const diffMs = Date.now() - d.getTime();
+        const m = Math.floor(diffMs / 60000);
+        if (m < 1)  return this.t('justNow');
+        if (m < 60) return `${m}m`;
+        const h = Math.floor(m / 60);
+        if (h < 24) return `${h}h`;
+        const days = Math.floor(h / 24);
+        if (days < 7) return `${days}d`;
+        return this.formatDate(d.toISOString().slice(0, 10));
     },
 
     renderTasks() {
@@ -3197,6 +3487,7 @@ const App = {
         this.applyI18n();
         if (this.currentView === 'capture') this.renderCapture();
         else if (this.currentView === 'dashboard') this.renderDashboard();
+        else if (this.currentView === 'matters') this.renderMatters();
         else if (this.currentView === 'calendar') this.renderCalendarFull();
         else if (this.currentView === 'inbox') this.renderInbox();
         else if (this.currentView === 'client') this.renderClient();

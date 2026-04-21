@@ -447,6 +447,106 @@ const Store = {
         return this._data.tasks.filter(t => t.clientId === clientId && !t.projectId);
     },
     getTask(id) { return this._data.tasks.find(t => t.id === id); },
+
+    /**
+     * Aggregate stats for a matter (project). Roll up hours across all
+     * time logs attached to tasks in this project, plus task counts by
+     * status. Week/month buckets use local-time boundaries so a
+     * 23:30 entry doesn't leak into the previous/next bucket.
+     *
+     * Returns: { hoursTotal, hoursWeek, hoursMonth, openTasks, overdue,
+     *            procedural, done, nextDeadline }
+     */
+    getMatterStats(projectId) {
+        const tasks = this.getTasks(projectId);
+        const taskIds = new Set(tasks.map(t => t.id));
+        const logs = this._data.timeLogs.filter(l => taskIds.has(l.taskId));
+
+        const today = Dates.todayLocal();
+        const weekStart = new Date(today);
+        // Week = last 7 days (not ISO week — simpler, matches lawyer intuition).
+        weekStart.setDate(weekStart.getDate() - 6);
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        let hoursTotal = 0, hoursWeek = 0, hoursMonth = 0;
+        logs.forEach(l => {
+            const h = parseFloat(l.hours) || 0;
+            hoursTotal += h;
+            const d = Dates.parseLocal(l.date) || new Date(l.date);
+            if (d && d >= weekStart)  hoursWeek  += h;
+            if (d && d >= monthStart) hoursMonth += h;
+        });
+
+        const openTasks = tasks.filter(t => t.status !== 'done');
+        const overdue = openTasks.filter(t =>
+            t.deadline && Dates.parseLocal(t.deadline) < today
+        );
+        const procedural = openTasks.filter(t => t.isProcedural);
+        const done = tasks.filter(t => t.status === 'done').length;
+
+        // Next upcoming deadline among open tasks (ignores overdue).
+        const upcoming = openTasks
+            .filter(t => t.deadline && Dates.parseLocal(t.deadline) >= today)
+            .sort((a, b) => Dates.parseLocal(a.deadline) - Dates.parseLocal(b.deadline));
+        const nextDeadline = upcoming[0] || null;
+
+        return {
+            hoursTotal: Math.round(hoursTotal * 100) / 100,
+            hoursWeek:  Math.round(hoursWeek  * 100) / 100,
+            hoursMonth: Math.round(hoursMonth * 100) / 100,
+            openTasks: openTasks.length,
+            overdue: overdue.length,
+            procedural: procedural.length,
+            done,
+            nextDeadline,
+        };
+    },
+
+    /**
+     * Chronological activity stream for a matter — combines task events
+     * (created, completed) and time logs into one sorted feed. Newest
+     * first. Each event: { ts, type, title, detail?, taskId?, hours? }.
+     *
+     * Used by the matter view's timeline panel. Capped to `limit` to
+     * keep render cheap on heavy matters.
+     */
+    getMatterActivity(projectId, limit = 40) {
+        const tasks = this.getTasks(projectId);
+        const taskIds = new Set(tasks.map(t => t.id));
+        const events = [];
+
+        tasks.forEach(t => {
+            if (t.created) {
+                events.push({
+                    ts: t.created, type: 'task_created',
+                    title: t.title, taskId: t.id,
+                });
+            }
+            if (t.completedAt) {
+                events.push({
+                    ts: t.completedAt, type: 'task_done',
+                    title: t.title, taskId: t.id,
+                });
+            }
+        });
+
+        this._data.timeLogs
+            .filter(l => taskIds.has(l.taskId))
+            .forEach(l => {
+                const task = tasks.find(t => t.id === l.taskId);
+                events.push({
+                    ts: l.date || l.created,
+                    type: 'time_logged',
+                    title: task ? task.title : '—',
+                    detail: l.description || '',
+                    taskId: l.taskId,
+                    hours: parseFloat(l.hours) || 0,
+                });
+            });
+
+        events.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+        return events.slice(0, limit);
+    },
     addTask(data) {
         const now = this._now();
         const t = {
