@@ -1,9 +1,27 @@
 [build]
-  publish = "fligenair"
-  command = "echo 'build complete'"
+  publish = "taskmanager-v2"
+  command = "echo 'static-only deploy'"
 
 [build.processing]
   skip_processing = false
 
 [build.processing.html]
   pretty_urls = false
+
+# index.html / service worker / manifest must always re-validate so users
+# never get stuck on a stale shell after we ship updates. Static assets
+# under ?v= query are content-addressed and can be cached aggressively.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
