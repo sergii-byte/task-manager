@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · today · briefing</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 360px; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+
+  .proto-banner {
+      background: var(--accent);
+      color: var(--bg);
+      padding: 8px 16px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      text-align: center;
+      font-weight: 700;
+      border-bottom: 2px solid var(--ink);
+  }
+  .proto-banner a { color: var(--bg); margin: 0 8px; }
+
+  /* ============================================================
+     BRIEFING DASHBOARD
+     Stats hero strip + 3 priority "must-do" cards + collapsed list
+     ============================================================ */
+
+  /* Hero block — large editorial */
+  .brief-hero {
+      padding: 40px 32px 32px;
+      border-bottom: var(--rule-thick);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 32px;
+      align-items: end;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
+  }
+  .brief-hero::before {
+      content: "29";
+      position: absolute;
+      right: -32px; bottom: -64px;
+      font-family: var(--font-sans);
+      font-size: 320px;
+      font-weight: 800;
+      color: var(--accent);
+      opacity: 0.06;
+      letter-spacing: -0.08em;
+      line-height: 0.78;
+      pointer-events: none;
+  }
+  .brief-hero .greet {
+      position: relative;
+  }
+  .brief-hero .greet-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--accent);
+      margin-bottom: 12px;
+      font-weight: 600;
+  }
+  .brief-hero h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(32px, 5vw, 56px);
+      font-weight: 800;
+      letter-spacing: -0.045em;
+      text-transform: lowercase;
+      line-height: 0.95;
+      margin: 0;
+      max-width: 18ch;
+  }
+  .brief-hero h1 .accent { color: var(--accent); }
+  .brief-hero h1 .strike { text-decoration: line-through; color: var(--fg-faint); text-decoration-thickness: 4px; }
+
+  .brief-hero .greet-sub {
+      font-family: var(--font-text);
+      font-size: var(--text-md);
+      color: var(--fg-muted);
+      margin-top: 12px;
+      max-width: 48ch;
+      line-height: 1.5;
+  }
+
+  .brief-hero .actions {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: flex-end;
+  }
+
+  /* Stats strip — 4 columns of metrics */
+  .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: var(--rule-thick);
+      background: var(--bg);
+  }
+  .stats > div {
+      padding: 20px 24px;
+      border-right: 1px solid var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+  }
+  .stats > div:last-child { border-right: 0; }
+  .stats .k {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+  }
+  .stats .v {
+      font-family: var(--font-sans);
+      font-size: 40px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      color: var(--ink);
+  }
+  .stats .v.danger { color: var(--vermillion); }
+  .stats .v.accent { color: var(--accent); }
+  .stats .delta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--success);
+      letter-spacing: var(--tracking-wide);
+  }
+  .stats .delta.neg { color: var(--vermillion); }
+
+  /* Top-3 must-do cards */
+  .must-do-strip {
+      padding: 32px;
+      border-bottom: var(--rule-thin);
+  }
+  .must-do-strip .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 16px;
+  }
+  .must-do-strip .head h2 {
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      text-transform: lowercase;
+      margin: 0;
+  }
+  .must-do-strip .head h2 .accent { color: var(--accent); }
+  .must-do-strip .head .meta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+  }
+
+  .must-do-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+  }
+
+  .mdo-card {
+      background: var(--bg);
+      border: 1px solid var(--ink);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      cursor: pointer;
+      transition: all var(--dur-fast) var(--ease-out);
+      position: relative;
+  }
+  .mdo-card:hover { background: var(--bg-1); }
+  .mdo-card.urgent {
+      background: var(--vermillion);
+      color: var(--bg);
+      border-color: var(--vermillion);
+  }
+  .mdo-card.urgent::before {
+      content: "● P0";
+      position: absolute;
+      top: -1px; right: -1px;
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 4px 10px;
+      letter-spacing: var(--tracking-wide);
+  }
+  .mdo-card .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: var(--tracking-ultra);
+      text-transform: uppercase;
+      color: var(--fg-faint);
+  }
+  .mdo-card.urgent .top { color: rgba(255,255,255,0.7); }
+  .mdo-card .title {
+      font-family: var(--font-text);
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+  }
+  .mdo-card.urgent .title { color: var(--bg); }
+  .mdo-card .ctx {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      line-height: 1.6;
+  }
+  .mdo-card.urgent .ctx { color: rgba(255,255,255,0.85); }
+  .mdo-card .foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+  }
+  .mdo-card.urgent .foot { border-top-color: rgba(255,255,255,0.3); }
+  .mdo-card .due-pill {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+  }
+  .mdo-card .ai-mark { color: var(--accent); }
+  .mdo-card.urgent .ai-mark { color: var(--bg); font-weight: 700; }
+
+  /* Collapsed list — secondary tasks below */
+  .secondary-list {
+      padding: 24px 32px 32px;
+  }
+  .secondary-list .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 16px;
+  }
+  .secondary-list .head h2 {
+      font-family: var(--font-sans);
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-transform: lowercase;
+      margin: 0;
+      color: var(--fg-muted);
+  }
+  .secondary-list .row {
+      display: grid;
+      grid-template-columns: 60px 24px 1fr auto auto;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--font-text);
+      font-size: var(--text-sm);
+  }
+  .secondary-list .row:last-child { border-bottom: 0; }
+  .secondary-list .idx {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-faint);
+      letter-spacing: var(--tracking-wide);
+  }
+  .secondary-list .check {
+      width: 14px; height: 14px;
+      border: 2px solid var(--ink);
+      cursor: pointer;
+      flex-shrink: 0;
+  }
+  .secondary-list .row.is-done .check {
+      background: var(--accent);
+      border-color: var(--accent);
+      position: relative;
+  }
+  .secondary-list .row.is-done .check::after {
+      content: "\00D7";
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      color: var(--bg);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+  }
+  .secondary-list .row.is-done .title { text-decoration: line-through; color: var(--fg-faint); }
+  .secondary-list .title {
+      color: var(--ink);
+      font-weight: 500;
+  }
+  .secondary-list .ctx {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+  }
+  .secondary-list .due {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      min-width: 56px;
+      text-align: right;
+  }
+</style>
+</head>
+<body class="with-ai-rail" data-view="today">
+
+<div class="proto-banner">
+    PROTOTYPE C · BRIEFING · TODAY
+    <a href="/prototype-b-timeline.html">← timeline (B)</a> · <a href="/prototype.html">editorial list (A) →</a> · <a href="/prototypes.html">all variants</a>
+</div>
+
+<div id="app">
+
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Capture</span><span class="proj-count"></span></div>
+        <div class="proj active"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">10</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span><span class="proj-count"></span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Matters</span><span class="proj-count">12</span></div>
+        <div class="proj"><span class="proj-num">06</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count">4:32</span></div>
+        <div class="proj"><span class="proj-num">07</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Crypto</span><span class="proj-count">4</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Northwind</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">10</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">Solana Found.</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">11</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>UA</button></div>
+    </div>
+</aside>
+
+<main id="main">
+
+<!-- Hero greeting -->
+<div class="brief-hero">
+    <div class="greet">
+        <div class="greet-eyebrow">WEDNESDAY · 29.04.2026 · 14:32</div>
+        <h1>good afternoon, <span class="accent">sergiy.</span></h1>
+        <div class="greet-sub">One overdue (OFAC memo for Solana). Three must-do before EOD. <strong>04:30 already billable</strong> — best Wednesday this month.</div>
+    </div>
+    <div class="actions">
+        <button class="btn primary" type="button">+ CAPTURE</button>
+        <button class="btn sm" type="button">▤ FULL LIST</button>
+    </div>
+</div>
+
+<!-- Stats strip -->
+<div class="stats">
+    <div>
+        <span class="k">SCHEDULED TODAY</span>
+        <span class="v">10</span>
+        <span class="delta">2 done · 7 left</span>
+    </div>
+    <div>
+        <span class="k">OVERDUE</span>
+        <span class="v danger">01</span>
+        <span class="delta neg">since yesterday 18:00</span>
+    </div>
+    <div>
+        <span class="k">BILLABLE</span>
+        <span class="v accent">04:30</span>
+        <span class="delta">+12% vs Tue</span>
+    </div>
+    <div>
+        <span class="k">PROJECTED REVENUE</span>
+        <span class="v">€382.50</span>
+        <span class="delta">EOD target €680</span>
+    </div>
+</div>
+
+<!-- Top-3 must-do cards -->
+<div class="must-do-strip">
+    <div class="head">
+        <h2>must do · <span class="accent">before EOD</span></h2>
+        <span class="meta">RANKED BY AI · DEPENDENCIES + DEADLINES</span>
+    </div>
+    <div class="must-do-grid">
+
+        <!-- Card 1 — OVERDUE OFAC -->
+        <div class="mdo-card urgent">
+            <div class="top"><span>T-0142</span><span>● BILLABLE</span></div>
+            <div class="title">File OFAC compliance memo · Solana stablecoin</div>
+            <div class="ctx">SOLANA FOUNDATION → USDC RAILS Q2<br>4 dependencies blocked · counsel waiting</div>
+            <div class="foot">
+                <span class="due-pill">⚠ OVERDUE 20H</span>
+                <span class="ai-mark">AI ▸ DRAFT READY</span>
+            </div>
+        </div>
+
+        <!-- Card 2 — Procedural deadline -->
+        <div class="mdo-card">
+            <div class="top"><span>T-0146</span><span>● PROCEDURAL</span></div>
+            <div class="title">File shareholder consent · Acme Series B</div>
+            <div class="ctx">ACME CRYPTO LTD → SERIES B PREP<br>Hard deadline · registrar accepts until 14:00</div>
+            <div class="foot">
+                <span class="due-pill" style="color:var(--vermillion)">⏱ IN 1H 28M</span>
+                <span class="ai-mark">AI ▸ FORM PREFILLED</span>
+            </div>
+        </div>
+
+        <!-- Card 3 — Send invoice -->
+        <div class="mdo-card">
+            <div class="top"><span>T-0147</span><span>● MONEY-MOVING</span></div>
+            <div class="title">Send INV-2026-0042 · Acme · April retainer</div>
+            <div class="ctx">€2,927.40 · 28:42h @ €85/h · 14 entries<br>Last invoice paid in 6 days · low risk</div>
+            <div class="foot">
+                <span class="due-pill">15:30</span>
+                <span class="ai-mark">AI ▸ READY TO SEND</span>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Secondary list -->
+<div class="secondary-list">
+    <div class="head">
+        <h2>also today · <span class="accent">07 more</span></h2>
+        <button class="btn sm">▤ EXPAND</button>
+    </div>
+
+    <div class="row">
+        <span class="idx">T-0143</span><div class="check"></div>
+        <span class="title">Review Acme NDA red-lines from counter-party</span>
+        <span class="ctx">CORPORATE · ACME</span>
+        <span class="due">10:30</span>
+    </div>
+    <div class="row">
+        <span class="idx">T-0144</span><div class="check"></div>
+        <span class="title">Call · Mira (BVI vs Cayman jurisdiction)</span>
+        <span class="ctx">RESEARCH · SOLANA</span>
+        <span class="due">11:00</span>
+    </div>
+    <div class="row">
+        <span class="idx">T-0145</span><div class="check"></div>
+        <span class="title">Draft engagement letter · Northwind family trust</span>
+        <span class="ctx">LEGAL · NORTHWIND</span>
+        <span class="due">11:45</span>
+    </div>
+    <div class="row">
+        <span class="idx">T-0148</span><div class="check"></div>
+        <span class="title">Research · MiCA registration timeline (EU clients)</span>
+        <span class="ctx">RESEARCH · INTERNAL</span>
+        <span class="due">16:00</span>
+    </div>
+    <div class="row">
+        <span class="idx">T-0149</span><div class="check"></div>
+        <span class="title">Pick up notarised PoA · Vasylenko</span>
+        <span class="ctx">PERSONAL</span>
+        <span class="due">17:30</span>
+    </div>
+    <div class="row is-done">
+        <span class="idx">T-0140</span><div class="check"></div>
+        <span class="title">Standup — internal team</span>
+        <span class="ctx">INTERNAL</span>
+        <span class="due">09:30</span>
+    </div>
+    <div class="row is-done">
+        <span class="idx">T-0141</span><div class="check"></div>
+        <span class="title">Inbox triage · 14 items</span>
+        <span class="ctx">INTERNAL</span>
+        <span class="due">08:50</span>
+    </div>
+</div>
+
+</main>
+
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head">
+            <div class="ai-glyph">o</div>
+            <div class="ai-title">ordify <small>· today</small></div>
+        </div>
+        <div class="ai-panel-body">
+            <div class="ai-bubble">
+                Ранкове резюме, Сергію. <strong>OFAC memo</strong> просимо у Solana з понеділка — підготувала драфт на основі попередніх. Перевір і відправ?
+            </div>
+            <div class="ai-suggest-row">
+                <button class="ai-chip">▸ Показати драфт</button>
+                <button class="ai-chip">Який ризик?</button>
+                <button class="ai-chip">Хто чекає?</button>
+            </div>
+            <div class="ai-bubble user">Покажи драфт і список залежностей.</div>
+            <div class="ai-bubble">
+                Драфт у новому tabі. <strong>4 залежності:</strong> token-sale, USDC rails reg, Mira's BVI/Cayman call, Solana board update. Всі чекають твого OK.
+            </div>
+        </div>
+        <form class="ai-input" onsubmit="return false">
+            <input placeholder="Ask ordify…">
+            <span class="kbd">⏎</span>
+        </form>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>

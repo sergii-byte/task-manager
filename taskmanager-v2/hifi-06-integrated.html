@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · integrated · main app screen (hi-fi)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 56px; display: grid; min-height: 100vh; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+
+  .meta-banner {
+      background: var(--ink);
+      color: var(--bg);
+      padding: 6px 16px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      text-align: center;
+      font-weight: 700;
+  }
+  .meta-banner a { color: var(--accent); margin: 0 8px; text-decoration: none; }
+
+  /* ============================================================
+     OMNI-BAR — primary input zone, prominent, lifted
+     ============================================================ */
+  .omni-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 24px;
+      border-bottom: 2px solid var(--ink);
+      background: var(--bg-1);
+      box-shadow: 0 4px 12px -8px rgba(0,0,0,0.12);
+  }
+  .omni-bar .glyph {
+      width: 28px; height: 28px;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 14px;
+      border-radius: 50%;
+  }
+  .omni-bar .kbd {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      letter-spacing: 0.06em;
+      padding: 3px 7px;
+      border: 1px solid var(--line-strong);
+      flex-shrink: 0;
+      font-weight: 600;
+      background: var(--bg);
+  }
+  .omni-bar input {
+      flex: 1;
+      appearance: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      font-family: var(--font-text);
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: -0.005em;
+      color: var(--ink);
+      padding: 6px 0;
+  }
+  .omni-bar input::placeholder { color: var(--fg-muted); font-weight: 400; }
+  .omni-bar .right-hint {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-faint);
+      letter-spacing: 0.06em;
+      flex-shrink: 0;
+      text-transform: uppercase;
+  }
+  .omni-bar .mic-btn {
+      appearance: none;
+      background: var(--bg);
+      border: 1px solid var(--line-strong);
+      color: var(--fg-muted);
+      cursor: pointer;
+      padding: 6px;
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+  }
+  .omni-bar .mic-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ============================================================
+     ACTIVE TIMER STRIP — minimal: pulse · label · clock · stop
+     ============================================================ */
+  .active-strip {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 7px 24px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
+      box-shadow: inset 3px 0 0 var(--lime);
+      font-family: var(--font-text);
+      font-size: 12px;
+      color: var(--ink);
+  }
+  .active-strip .pulse {
+      width: 6px; height: 6px;
+      background: var(--lime);
+      flex-shrink: 0;
+      border-radius: 50%;
+      animation: a-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes a-pulse {
+      0%,100% { opacity: 1; }
+      50%     { opacity: 0.3; }
+  }
+  .active-strip .what {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--fg-muted);
+  }
+  .active-strip .clock {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      flex-shrink: 0;
+  }
+  .active-strip .stop {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      color: var(--fg-muted);
+      padding: 2px 4px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      flex-shrink: 0;
+  }
+  .active-strip .stop:hover { color: var(--ink); }
+
+  /* ============================================================
+     INLINE ▶ on each task row — borderless, hover-revealed accent
+     ============================================================ */
+  .play-mini {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      color: var(--fg-faint);
+      margin-right: 8px;
+      vertical-align: -2px;
+      flex-shrink: 0;
+      opacity: 0.5;
+      transition: opacity 0.1s, color 0.1s;
+  }
+  tr:hover .play-mini { opacity: 1; }
+  .play-mini:hover { color: var(--accent); }
+  .play-mini svg { display: block; }
+  tr.is-running td { background: #fbffea !important; }
+  tr.is-running { box-shadow: inset 3px 0 0 var(--lime); }
+  tr.is-running .play-mini { color: var(--ink); opacity: 1; }
+
+  /* ============================================================
+     SECONDARY TOOLBAR — filters + view-toggle + actions
+     Sits below omni-bar. Quieter than omni-bar (no card-lift).
+     ============================================================ */
+  .toolbar {
+      padding: 12px 24px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+  }
+  .toolbar .title-block {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-right: auto;
+  }
+  .toolbar .title-block h1 {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0;
+      color: var(--ink);
+      line-height: 1;
+      text-transform: lowercase;
+  }
+  .toolbar .title-block .meta {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--fg-faint);
+      letter-spacing: 0.04em;
+  }
+
+  .filter-pills {
+      display: inline-flex;
+      gap: 14px;
+      align-items: center;
+  }
+  .filter-pills button {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      padding: 4px 0;
+      cursor: pointer;
+      font-family: var(--font-text);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: -0.005em;
+      color: var(--fg-muted);
+      border-bottom: 2px solid transparent;
+      transition: color 120ms, border-color 120ms;
+  }
+  .filter-pills button:hover { color: var(--ink); }
+  .filter-pills button.active {
+      color: var(--ink);
+      border-bottom-color: var(--accent);
+  }
+  .filter-pills .sep { color: var(--line-strong); font-size: 13px; }
+
+  .view-toggle {
+      display: inline-flex;
+      border: 1px solid var(--line-strong);
+  }
+  .view-toggle button {
+      appearance: none;
+      background: var(--bg);
+      border: 0;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+  }
+  .view-toggle button + button { border-left: 1px solid var(--line-strong); }
+  .view-toggle button.active { background: var(--ink); color: var(--bg); }
+  .view-toggle button:hover:not(.active) { color: var(--ink); }
+
+  .icon-action {
+      appearance: none;
+      background: transparent;
+      border: 0;
+      padding: 4px 6px;
+      cursor: pointer;
+      color: var(--fg-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+  }
+  .icon-action:hover { color: var(--ink); }
+
+  /* ============================================================
+     DATA TABLE — same as v2 (single toolbar, no scroll, status as
+     left-rule). Sentence-case headers, mono-caps only on active sort.
+     ============================================================ */
+  .table-wrap {
+      overflow: hidden;
+      background: var(--bg);
+  }
+  .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-text);
+      font-size: 13px;
+      table-layout: fixed;
+  }
+  .data-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--bg);
+      border-bottom: 1px solid var(--ink);
+      padding: 10px 12px;
+      text-align: left;
+      font-family: var(--font-text);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--fg-muted);
+      cursor: default;
+      white-space: nowrap;
+      user-select: none;
+      letter-spacing: -0.005em;
+  }
+  .data-table thead th.sortable { cursor: pointer; position: relative; }
+  .data-table thead th.sortable:hover { color: var(--ink); }
+  .data-table thead th.sortable:not(.sorted)::after {
+      content: "↕";
+      font-size: 9px;
+      margin-left: 4px;
+      color: var(--fg-faint);
+      opacity: 0;
+      transition: opacity 0.1s;
+  }
+  .data-table thead th.sortable:not(.sorted):hover::after { opacity: 0.7; }
+  .data-table thead th.sorted {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      box-shadow: inset 0 -2px 0 var(--accent);
+  }
+  .data-table thead th.sorted .sort-arrow {
+      font-size: 8px; margin-left: 4px;
+  }
+  .data-table tbody tr {
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      height: 38px;
+      border-left: 4px solid transparent;
+      transition: background 80ms;
+  }
+  .data-table tbody tr:hover { background: var(--bg-1); }
+  .data-table tbody tr.is-overdue  { border-left-color: var(--vermillion); }
+  .data-table tbody tr.is-due-soon { border-left-color: var(--saffron); }
+  .data-table tbody tr.is-meeting  { border-left-color: var(--cobalt); }
+
+  .data-table td {
+      padding: 8px 12px;
+      vertical-align: middle;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+  }
+  .data-table td.title-cell {
+      color: var(--ink);
+      font-weight: 500;
+      font-size: 14px;
+      letter-spacing: -0.005em;
+  }
+  .data-table td.mono-cell {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--fg-faint);
+      letter-spacing: 0.02em;
+  }
+  .data-table td.num {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--fg-muted);
+      font-size: 12px;
+  }
+  .data-table td.deadline-cell {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.01em;
+      color: var(--fg-muted);
+      font-variant-numeric: tabular-nums;
+  }
+  .data-table td.deadline-cell.overdue  { color: var(--vermillion); font-weight: 700; }
+  .data-table td.deadline-cell.due-soon { color: #8a6500; font-weight: 700; }
+  .data-table td.fade { color: var(--fg-faint); font-size: 12px; }
+
+  .data-table .check {
+      width: 16px; height: 16px;
+      border: 2px solid var(--ink);
+      background: var(--bg);
+      cursor: pointer;
+      position: relative;
+      display: inline-block;
+      vertical-align: middle;
+  }
+  .data-table .check-meeting {
+      width: 16px; height: 16px;
+      border: 2px solid var(--cobalt);
+      border-radius: 50%;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: inline-block;
+      vertical-align: middle;
+      position: relative;
+  }
+  .data-table .check-meeting::after {
+      content: ""; position: absolute; inset: 3px;
+      background: var(--cobalt); border-radius: 50%;
+  }
+
+  .pri {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 1px 5px;
+      border: 1px solid var(--line-strong);
+      color: var(--fg-muted);
+  }
+  .pri.p0 { background: var(--vermillion); color: var(--bg); border-color: var(--vermillion); }
+  .pri.p1 { color: var(--ink); border-color: var(--ink); font-weight: 700; }
+
+  .tag-mini {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.02em;
+      padding: 1px 5px;
+      color: var(--fg-muted);
+      margin-right: 3px;
+      border-bottom: 1px solid var(--line-strong);
+  }
+  .tag-mini.t-corp     { color: var(--cobalt); border-bottom-color: var(--cobalt); }
+  .tag-mini.t-research { color: #8a6500; border-bottom-color: #c89400; }
+  .tag-mini.t-crypto   { color: var(--ink); border-bottom-color: var(--ink); }
+  .tag-mini.t-personal { color: var(--magenta); border-bottom-color: var(--magenta); }
+  .tag-mini.t-bill     { color: var(--accent); border-bottom-color: var(--accent); }
+  .tag-mini.t-legal    { color: var(--ink); border-bottom-color: var(--ink); }
+
+  .swatch-tiny {
+      display: inline-block;
+      width: 8px; height: 8px;
+      vertical-align: middle;
+      margin-right: 6px;
+  }
+
+  /* AI rail collapsed */
+  #ai-rail { background: var(--ink); }
+
+  #main { display: flex; flex-direction: column; }
+
+  /* Annotation block at bottom — explains the layout */
+  .annot {
+      padding: 16px 24px;
+      background: var(--bg-1);
+      border-top: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      letter-spacing: 0.04em;
+      line-height: 1.7;
+  }
+  .annot strong { color: var(--ink); }
+  .annot .arrow { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body class="with-ai-rail" data-view="inbox">
+
+<div class="meta-banner">
+    HI-FI · 06 · INTEGRATED — main app screen (omni-bar + table)
+    <a href="/hifi-05-omni-input.html">omni-only (05)</a>
+    <a href="/hifi-04-tasks-table.html">table-only (04)</a>
+    <a href="/">live app</a>
+</div>
+
+<div id="app">
+
+<!-- ============ SIDEBAR ============ -->
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">8</span></div>
+        <div class="proj active"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span><span class="proj-count"></span></div>
+        <div class="proj"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count">4:32</span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj"><span class="proj-num">06</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Tech (IT)</span><span class="proj-count">4</span></div>
+        <div class="proj"><span class="proj-num">07</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Maersk-flag (B2B)</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">SolanaPay (Crypto)</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko (private)</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>ES</button></div>
+    </div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main id="main">
+
+<!-- ROW 1 — OMNI-INPUT (primary control) -->
+<div class="omni-bar">
+    <span class="glyph">o</span>
+    <span class="kbd">⌘K</span>
+    <input type="text" placeholder="capture, log time, ask, paste email…">
+    <button class="mic-btn" type="button" aria-label="Voice">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg>
+    </button>
+    <span class="right-hint">⌘K to expand</span>
+</div>
+
+<!-- ACTIVE TIMER STRIP — minimal, only when running -->
+<div class="active-strip">
+    <span class="pulse"></span>
+    <span class="what">unassigned</span>
+    <span class="clock">00:14:32</span>
+    <button class="stop" type="button">stop</button>
+</div>
+
+<!-- ROW 2 — secondary toolbar (filters + view-toggle + actions) -->
+<div class="toolbar">
+    <div class="title-block">
+        <h1>your work</h1>
+        <span class="meta">8 of 37 open</span>
+    </div>
+
+    <div class="filter-pills">
+        <button type="button">All</button>
+        <span class="sep">·</span>
+        <button type="button" class="active">Today</button>
+        <span class="sep">·</span>
+        <button type="button">This week</button>
+        <span class="sep">·</span>
+        <button type="button">Overdue</button>
+        <span class="sep">·</span>
+        <button type="button">Inbox</button>
+    </div>
+
+    <div class="view-toggle" role="group" aria-label="View mode">
+        <button class="active" type="button">Table</button>
+        <button type="button">List</button>
+        <button type="button">Board</button>
+    </div>
+
+    <button class="icon-action" type="button">⬇ CSV</button>
+</div>
+
+<!-- ROW 3 — TABLE (data layer) -->
+<div class="table-wrap">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th style="width:36px;text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></th>
+                <th class="sortable sorted" style="width:160px">CLIENT <span class="sort-arrow">▲</span></th>
+                <th class="sortable" style="width:200px">Matter</th>
+                <th class="sortable" style="width:auto">Title</th>
+                <th class="sortable" style="width:150px">Deadline</th>
+                <th class="sortable" style="width:60px">Pri</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Acme Tech · 3 rows -->
+            <tr class="is-due-soon">
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--accent)"></span>Acme Tech</td>
+                <td>Series B prep</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>File shareholder consent · Acme Series B</td>
+                <td class="deadline-cell due-soon">today 14:00 · 1h 28m</td>
+                <td><span class="pri p0">P0</span></td>
+            </tr>
+
+            <tr>
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--accent)"></span>Acme Tech</td>
+                <td>Series B prep</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Review Acme NDA red-lines from counter-party</td>
+                <td class="deadline-cell">today 10:30</td>
+                <td><span class="pri p1">P1</span></td>
+            </tr>
+
+            <tr>
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--accent)"></span>Acme Tech</td>
+                <td>Ongoing retainer</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Send INV-2026-0042 · Acme · April retainer + LLC</td>
+                <td class="deadline-cell">today 15:30</td>
+                <td><span class="pri p1">P1</span></td>
+            </tr>
+
+            <!-- SolanaPay · 3 rows -->
+            <tr class="is-overdue">
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--saffron)"></span>SolanaPay</td>
+                <td>Token offering</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>File OFAC compliance memo · SolanaPay stablecoin</td>
+                <td class="deadline-cell overdue">28.04 18:00 · 20h late</td>
+                <td><span class="pri p0">P0</span></td>
+            </tr>
+
+            <tr class="is-meeting">
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--saffron)"></span>SolanaPay</td>
+                <td>Token offering</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Maria call · BVI vs Cayman jurisdiction</td>
+                <td class="deadline-cell" style="color:var(--cobalt);font-weight:700">today 11:00 · 28 min</td>
+                <td><span class="pri" style="color:var(--cobalt);border-color:var(--cobalt)">MTG</span></td>
+            </tr>
+
+            <tr>
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--saffron)"></span>SolanaPay</td>
+                <td>Token offering</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Prep · Maria call (BVI/Cayman comparison memo)</td>
+                <td class="deadline-cell">today 10:45</td>
+                <td><span class="pri p1">P1</span></td>
+            </tr>
+
+            <!-- Vasylenko · 2 rows -->
+            <tr>
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--ink)"></span>Vasylenko</td>
+                <td>Trust restructure</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Draft engagement letter · Vasylenko trust</td>
+                <td class="deadline-cell">today 11:45</td>
+                <td><span class="pri">P2</span></td>
+            </tr>
+
+            <tr>
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td><span class="swatch-tiny" style="background:var(--ink)"></span>Vasylenko</td>
+                <td class="fade">— (no matter)</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Pick up notarised PoA · Vasylenko</td>
+                <td class="deadline-cell">today 17:30</td>
+                <td><span class="pri">P3</span></td>
+            </tr>
+
+            <!-- Orphan · 1 row -->
+            <tr>
+                <td style="text-align:center"><input type="checkbox" style="cursor:pointer;accent-color:var(--accent)"></td>
+                <td class="fade">—</td>
+                <td class="fade">— (orphan)</td>
+                <td class="title-cell"><button class="play-mini" type="button" aria-label="Start timer"><svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><polygon points="1.5,0.7 7,4 1.5,7.3"/></svg></button>Research · MiCA registration timeline (EU clients)</td>
+                <td class="deadline-cell">today 16:00</td>
+                <td><span class="pri">P2</span></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Annotation -->
+<div class="annot">
+    <strong>TIMER:</strong> ▶ перед title запускает на задаче · omni-input «start timer» / голос → unassigned · «log 30 min on acme» → задним числом без таймера. Активный — узкая полоска под omni-bar.<br>
+    <strong>POLICY:</strong> вкладка «Time» = отчёты. Сам таймер живёт глобально + на задачах.
+</div>
+
+</main>
+
+<!-- AI rail collapsed -->
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head">
+            <div class="ai-glyph">o</div>
+        </div>
+        <div class="ai-collapsed-label">ASK ORDIFY</div>
+        <div class="ai-collapsed-arrow">‹</div>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>
