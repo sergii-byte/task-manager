@@ -171,7 +171,6 @@ const AI = {
         if (!text) throw new Error('Empty response');
         return text;
     },
-};
 
     /**
      * Parse a multi-step capture into a structured commit payload.
@@ -244,7 +243,6 @@ const AI = {
             throw new Error('Bad JSON from model: ' + cleaned.slice(0, 80));
         }
     },
-};
 
     /**
      * Analyse an email and return structured tasks/meetings/notes extracted from it.

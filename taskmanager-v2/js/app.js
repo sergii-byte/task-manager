@@ -1031,11 +1031,11 @@ const App = {
                 </div>`;
             }).join('');
 
-        // Footer toggles
-        document.getElementById('theme-light').classList.toggle('active', (document.documentElement.dataset.theme || 'light') === 'light');
-        document.getElementById('theme-dark') .classList.toggle('active',  document.documentElement.dataset.theme === 'dark');
-        document.getElementById('lang-en').classList.toggle('active', I18n.lang === 'en');
-        document.getElementById('lang-uk').classList.toggle('active', I18n.lang === 'uk');
+        // Footer toggles — defensive ?. since UA language buttons may be hidden via HTML comment.
+        document.getElementById('theme-light')?.classList.toggle('active', (document.documentElement.dataset.theme || 'light') === 'light');
+        document.getElementById('theme-dark') ?.classList.toggle('active',  document.documentElement.dataset.theme === 'dark');
+        document.getElementById('lang-en')?.classList.toggle('active', I18n.lang === 'en');
+        document.getElementById('lang-uk')?.classList.toggle('active', I18n.lang === 'uk');
     },
 
     /** Set of task ids selected via checkbox in inbox table. */
