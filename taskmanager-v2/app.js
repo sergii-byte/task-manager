@@ -74,7 +74,7 @@ const debounce = (fn, ms) => {
 const STORE_KEY = 'ordify-v2-data';
 
 const defaultState = () => ({
-    v: 3,
+    v: 4,
     profile: {
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
@@ -82,7 +82,8 @@ const defaultState = () => ({
         anthropicKey: '',
         anthropicModel: 'claude-3-5-haiku-latest',
         dictationLang: 'uk-UA',
-        snapshotIntervalHours: 4
+        snapshotIntervalHours: 4,
+        googleClientId: ''
     },
     clients: [],
     matters: [],
@@ -90,6 +91,7 @@ const defaultState = () => ({
     logs: [],
     invoices: [],
     audits: [],
+    attachments: [],
     timer: null   // { taskId, matterId, clientId, label, startedAt }
 });
 
@@ -104,7 +106,7 @@ const Store = {
             // shallow merge to retain new keys after upgrades
             state = Object.assign(defaultState(), parsed);
             // ensure arrays exist
-            ['clients','matters','tasks','logs','invoices','audits'].forEach(k => {
+            ['clients','matters','tasks','logs','invoices','audits','attachments'].forEach(k => {
                 if (!Array.isArray(state[k])) state[k] = [];
             });
             if (!state.profile) state.profile = defaultState().profile;
@@ -661,8 +663,9 @@ function renderTaskList(tasks) {
                         ${cli || mat ? `<div class="task-meta">${esc(cli?.name||'')}${mat?` · ${esc(mat.title)}`:''}</div>` : ''}
                     </td>
                     <td>${t.due ? `<span class="badge ${st==='overdue'?'overdue':''}">${fmtDate(t.due)}</span>` : ''}</td>
-                    <td style="width:48px">
+                    <td style="width:80px">
                         ${mat ? `<button class="play" data-start="${t.id}" title="Start timer">▶</button>` : ''}
+                        ${t.due ? `<button class="play" data-act="gcal-task" data-id="${t.id}" title="Add to Google Calendar" style="font-size:11px;width:auto;padding:0 6px">📅</button>` : ''}
                     </td>
                 </tr>`;
         }).join('')}
@@ -748,6 +751,9 @@ function viewClient(id) {
             ${c.address ? `<div><span class="lbl">Address</span>${esc(c.address)}</div>` : ''}
         </div>
         ${c.notes ? `<div class="notes-block">${esc(c.notes)}</div>` : ''}
+
+        <h2 class="section-h">Attachments</h2>
+        <div id="att-host-client"></div>
 
         <h2 class="section-h">Matters</h2>
         ${matters.length ? `
@@ -864,6 +870,9 @@ function viewMatter(id) {
 
         <h2 class="section-h">Tasks</h2>
         ${renderTaskList(tasks)}
+
+        <h2 class="section-h">Attachments</h2>
+        <div id="att-host-matter"></div>
 
         <h2 class="section-h">Time entries</h2>
         ${logs.length ? `
@@ -1020,6 +1029,7 @@ function viewInvoice(id) {
                 <button class="btn" data-act="edit-invoice" data-id="${inv.id}">Edit</button>
                 ${inv.status === 'draft' ? `<button class="btn" data-act="invoice-status" data-id="${inv.id}" data-status="sent">Mark sent</button>` : ''}
                 ${inv.status !== 'paid' ? `<button class="btn primary" data-act="invoice-status" data-id="${inv.id}" data-status="paid">Mark paid</button>` : ''}
+                <button class="btn" data-act="gmail-invoice" data-id="${inv.id}" title="Create a Gmail draft to the client">📧 Draft email</button>
                 <button class="btn" onclick="window.print()">Print / PDF</button>
             </div>
         </div>
@@ -1217,6 +1227,25 @@ function viewSettings() {
                     </select>
                     <small class="hint">Voice input uses Chrome / Edge built-in recognition.</small>
                 </div>
+            </div>
+
+            <h3>Google integrations</h3>
+            <div class="settings-warn">
+                Setup at <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>:
+                enable <strong>Gmail API</strong>, <strong>Calendar API</strong>, <strong>Sheets API</strong>;
+                create OAuth Client ID (Web app); add origin <code>https://ordifyme.netlify.app</code>.
+                Paste the Client ID below.
+            </div>
+            <div class="grid2">
+                <div class="field full">
+                    <label>Google OAuth Client ID</label>
+                    <input name="googleClientId" placeholder="123456789-abcdef.apps.googleusercontent.com" value="${esc(p.googleClientId || '')}" autocomplete="off">
+                    <small class="hint">Required for Gmail draft, Calendar sync, Sheets export.</small>
+                </div>
+            </div>
+            <div class="settings-data">
+                <button type="button" class="btn" data-act="sheets-export">📊 Export time logs to Sheets</button>
+                <button type="button" class="btn" data-act="google-signout">Sign out of Google</button>
             </div>
 
             <h3>Backups</h3>
@@ -1672,6 +1701,40 @@ function bindGlobalActions() {
                 Store.save(); render(); toast('History cleared');
                 break;
             }
+            case 'gmail-invoice': {
+                const inv = invoiceById(act.dataset.id);
+                if (!inv) break;
+                if (!Google.configured()) { toast('Set Google Client ID in Settings first', 'error'); break; }
+                toast('Opening Google sign-in…');
+                Google.draftInvoiceEmail(inv.id).then(() => {
+                    toast('Draft saved in Gmail');
+                    if (confirm('Open Gmail drafts in a new tab?')) Google.openDrafts();
+                }).catch(e => toast('Gmail error: ' + e.message, 'error'));
+                break;
+            }
+            case 'gcal-task': {
+                const t = taskById(act.dataset.id);
+                if (!t) break;
+                if (!Google.configured()) { toast('Set Google Client ID in Settings first', 'error'); break; }
+                Google.syncTaskToCalendar(t.id).then(evt => {
+                    toast('Added to calendar');
+                    render();
+                }).catch(e => toast('Calendar error: ' + e.message, 'error'));
+                break;
+            }
+            case 'sheets-export': {
+                if (!Google.configured()) { toast('Set Google Client ID in Settings first', 'error'); break; }
+                toast('Exporting to Sheets…');
+                Google.exportTimeLogs().then(({ url, rows }) => {
+                    toast(`Exported ${rows} entries`);
+                    if (url && confirm('Open the Sheet in a new tab?')) window.open(url, '_blank');
+                }).catch(e => toast('Sheets error: ' + e.message, 'error'));
+                break;
+            }
+            case 'google-signout': {
+                Google.signOut();
+                break;
+            }
             case 'export': doExport(); break;
             case 'import': doImport(); break;
             case 'reset': Store.reset(); break;
@@ -1771,6 +1834,12 @@ function render() {
     root.innerHTML = html;
     root.scrollTop = 0;
     if (view === 'settings') renderSnapshotsList();
+    // mount attachment widgets if their hosts are present in the rendered view
+    if (view === 'matters' && id) {
+        Attach.renderInto('att-host-matter', Attach.forMatter(id), true);
+    } else if (view === 'clients' && id) {
+        Attach.renderInto('att-host-client', Attach.forClient(id), true);
+    }
 }
 
 /* =========================================================================

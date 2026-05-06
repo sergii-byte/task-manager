@@ -536,13 +536,21 @@ ${text}`;
  * ========================================================================= */
 
 const Recorder = {
-    rec: null,
+    rec: null,           // SpeechRecognition instance
+    media: null,         // MediaRecorder instance (audio capture)
+    stream: null,        // MediaStream (for stop)
+    chunks: [],          // audio data chunks
     listening: false,
     finalText: '',
     interimText: '',
+    startedAt: null,
 
     supported() {
         return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    },
+
+    canRecordAudio() {
+        return !!(navigator.mediaDevices && window.MediaRecorder);
     },
 
     toggle() {
@@ -550,64 +558,109 @@ const Recorder = {
         else Recorder.start();
     },
 
-    start() {
-        if (!Recorder.supported()) {
+    async start() {
+        if (!Recorder.supported() && !Recorder.canRecordAudio()) {
             toast('Voice input not supported in this browser. Use Chrome or Edge.', 'error');
             return;
         }
-        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const rec = new SR();
-        rec.lang = state.profile.dictationLang || 'uk-UA';
-        rec.continuous = true;
-        rec.interimResults = true;
 
-        Recorder.finalText = '';
-        Recorder.interimText = '';
-
-        rec.onresult = (e) => {
-            let interim = '', final = '';
-            for (let i = e.resultIndex; i < e.results.length; i++) {
-                const r = e.results[i];
-                if (r.isFinal) final += r[0].transcript + ' ';
-                else interim += r[0].transcript;
+        // Acquire mic for both speech recognition AND raw audio recording
+        let stream = null;
+        if (Recorder.canRecordAudio()) {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                Recorder.stream = stream;
+                const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' :
+                             MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+                const media = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+                Recorder.chunks = [];
+                media.ondataavailable = (e) => { if (e.data && e.data.size > 0) Recorder.chunks.push(e.data); };
+                media.onstop = async () => {
+                    const blob = new Blob(Recorder.chunks, { type: media.mimeType || 'audio/webm' });
+                    if (blob.size > 0) {
+                        const ctx = Attach._currentContext();
+                        const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+                        await Attach.add({
+                            blob,
+                            name: `dictation-${stamp}.webm`,
+                            mime: blob.type,
+                            kind: 'audio',
+                            ...ctx
+                        });
+                        // do not toast here; the AI completion toast is more useful
+                    }
+                };
+                media.start();
+                Recorder.media = media;
+            } catch (e) {
+                console.warn('MediaRecorder unavailable', e);
             }
-            if (final) Recorder.finalText += final;
-            Recorder.interimText = interim;
-            const combined = (Recorder.finalText + Recorder.interimText).trim();
-            Omni.input.value = combined;
-        };
-        rec.onerror = (e) => {
-            console.warn('Speech recognition error', e);
-            if (e.error === 'not-allowed') toast('Microphone permission denied', 'error');
-            else if (e.error === 'no-speech') {} // silent
-            else toast('Recognition error: ' + e.error, 'error');
-            Recorder._setListening(false);
-        };
-        rec.onend = () => {
-            Recorder._setListening(false);
-            // if we have text, auto-fire AI
-            const txt = (Recorder.finalText + Recorder.interimText).trim();
-            if (txt) {
-                Omni.input.value = txt;
-                Omni.runAI();
-            }
-        };
-
-        try {
-            rec.start();
-            Recorder.rec = rec;
-            Recorder._setListening(true);
-            Omni.input.focus();
-            toast(`Listening (${rec.lang})…`);
-        } catch (err) {
-            console.error('rec.start failed', err);
-            toast('Could not start recording: ' + err.message, 'error');
         }
+
+        // Speech recognition for live transcription
+        if (Recorder.supported()) {
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            const rec = new SR();
+            rec.lang = state.profile.dictationLang || 'uk-UA';
+            rec.continuous = true;
+            rec.interimResults = true;
+
+            Recorder.finalText = '';
+            Recorder.interimText = '';
+            Recorder.startedAt = Date.now();
+
+            rec.onresult = (e) => {
+                let interim = '', final = '';
+                for (let i = e.resultIndex; i < e.results.length; i++) {
+                    const r = e.results[i];
+                    if (r.isFinal) final += r[0].transcript + ' ';
+                    else interim += r[0].transcript;
+                }
+                if (final) Recorder.finalText += final;
+                Recorder.interimText = interim;
+                const combined = (Recorder.finalText + Recorder.interimText).trim();
+                Omni.input.value = combined;
+            };
+            rec.onerror = (e) => {
+                console.warn('Speech recognition error', e);
+                if (e.error === 'not-allowed') toast('Microphone permission denied', 'error');
+                else if (e.error === 'no-speech') {}
+                else toast('Recognition error: ' + e.error, 'error');
+                Recorder._setListening(false);
+            };
+            rec.onend = () => {
+                Recorder._setListening(false);
+                const txt = (Recorder.finalText + Recorder.interimText).trim();
+                if (txt) {
+                    Omni.input.value = txt;
+                    Omni.runAI();
+                }
+            };
+            try {
+                rec.start();
+                Recorder.rec = rec;
+            } catch (err) {
+                console.error('rec.start failed', err);
+                toast('Could not start recognition: ' + err.message, 'error');
+            }
+        }
+
+        Recorder._setListening(true);
+        Omni.input.focus();
+        const lang = state.profile.dictationLang || 'uk-UA';
+        toast(`Listening (${lang})…`);
     },
 
     stop() {
         if (Recorder.rec) {
             try { Recorder.rec.stop(); } catch (e) {}
+        }
+        if (Recorder.media && Recorder.media.state !== 'inactive') {
+            try { Recorder.media.stop(); } catch (e) {}
+        }
+        if (Recorder.stream) {
+            Recorder.stream.getTracks().forEach(t => t.stop());
+            Recorder.stream = null;
         }
         Recorder._setListening(false);
     },
