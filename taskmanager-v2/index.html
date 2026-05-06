@@ -1,296 +1,50 @@
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ordify.me</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/tokens.css?v=58">
-<link rel="stylesheet" href="css/styles.css?v=58">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a1b9a' stroke-width='2.5'%3E%3Crect x='3' y='3' width='18' height='18'/%3E%3Cpath d='M7.5 9.5h9'/%3E%3Cpath d='M7.5 13.5h6'/%3E%3Cpath d='M7.5 17.5h3'/%3E%3C/svg%3E">
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#6a1b9a">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<link rel="apple-touch-icon" href="icon-192.svg">
+<title>ordify</title>
+<link rel="stylesheet" href="style.css?v=2">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a1b9a' stroke-width='2.5'%3E%3Crect x='3' y='3' width='18' height='18' rx='3'/%3E%3Cpath d='M7.5 9.5h9M7.5 13.5h6M7.5 17.5h3'/%3E%3C/svg%3E">
 </head>
 <body>
-<a href="#main" class="skip-link">Skip to main content</a>
-<div id="app">
 
-    <!-- ============================================================
-         SIDEBAR
-         ============================================================ -->
-    <aside id="sidebar" aria-label="Navigation">
-        <div class="brand" id="brand-btn" role="button" tabindex="0" title="Today">
-            <span>ordif<span class="accent">y</span></span>
-            <span class="domain">.me</span>
-        </div>
-
-        <div class="sidebar-section-label">
-            <span data-i18n="navViews">VIEWS</span>
-        </div>
-        <div id="nav-views"></div>
-
-        <div class="sidebar-section-label">
-            <span data-i18n="navClients">CLIENTS · <span id="clients-count">0</span></span>
-            <button class="add-btn" id="btn-add-client" title="Add client" type="button">+</button>
-        </div>
-        <div id="clients-list"></div>
-
-        <div class="sidebar-footer">
-            <button class="icon-btn" id="btn-settings" title="Settings" type="button" aria-label="Settings">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-            </button>
-            <button class="icon-btn" id="btn-trash" title="Trash" type="button" aria-label="Trash">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
-                </svg>
-            </button>
-            <button class="icon-btn" id="btn-audit" title="Audit log" type="button" aria-label="Audit log">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/>
-                </svg>
-            </button>
-            <div class="toggle-group" role="group" aria-label="Theme">
-                <button id="theme-light" class="active" type="button" title="Light theme" aria-label="Light">☀</button>
-                <button id="theme-dark" type="button" title="Dark theme" aria-label="Dark">☾</button>
-            </div>
-            <!-- Language toggle removed — app is English-only by design.
-                 i18n keys live in js/i18n.js and stay as a skeleton for future. -->
-            <!-- <div class="toggle-group" role="group" aria-label="Language">
-                <button id="lang-en" class="active" type="button">EN</button>
-                <button id="lang-uk" type="button">UA</button>
-            </div> -->
-        </div>
-    </aside>
-
-    <!-- ============================================================
-         MAIN
-         ============================================================ -->
-    <!-- Floating bulk-actions bar — only shown when one or more tasks are checked -->
-    <div id="bulk-bar" class="bulk-bar" hidden>
-        <span class="count" id="bulk-count">0</span>
-        <span class="grow"></span>
-        <button class="inv-act primary" data-bulk="done" type="button">Mark done</button>
-        <button class="inv-act ghost"   data-bulk="delete" type="button">Delete</button>
-        <button class="inv-act ghost"   data-bulk="clear" type="button">Clear ✕</button>
+<aside id="sidebar">
+    <div class="brand">ordify</div>
+    <nav id="nav"></nav>
+    <div class="sidebar-foot">
+        <button id="settings-btn" title="Settings">⚙ Settings</button>
     </div>
-    <!-- Floating bulk-bar for selected timelogs (Time view) -->
-    <div id="bulk-log-bar" class="bulk-bar" hidden>
-        <span class="count" id="bulk-log-count">0</span>
-        <span class="grow"></span>
-        <button class="inv-act primary" data-bulklog="move" type="button">Move to matter…</button>
-        <button class="inv-act ghost"   data-bulklog="non-billable" type="button">Mark non-billable</button>
-        <button class="inv-act ghost"   data-bulklog="delete" type="button">Delete</button>
-        <button class="inv-act ghost"   data-bulklog="clear" type="button">Clear ✕</button>
-    </div>
+</aside>
 
-    <!-- Offline banner — shown when navigator.onLine === false -->
-    <div id="offline-banner" class="offline-banner" hidden>
-        <span class="dot"></span>
-        <span>working offline · changes save locally · sync resumes when you reconnect</span>
-    </div>
-
-    <main id="main" aria-label="Workspace">
-        <!-- OMNI-BAR — single primary input. Capture, log time, start/stop timer, query. -->
-        <div id="omni-bar" class="omni-bar" role="search">
-            <button id="hamburger" class="hamburger-btn" type="button" aria-label="Toggle menu" aria-expanded="false">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
-            </button>
-            <span class="glyph" aria-hidden="true">+</span>
-            <input id="omni-input" type="text" autocomplete="off" spellcheck="false"
-                   placeholder="Capture a task — or «start timer», «log 30 min», «?ask»">
-            <button id="omni-mic" class="mic-btn" type="button" aria-label="Voice (stub)" title="Voice — phase 9">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg>
-            </button>
-            <span class="omni-intent" id="omni-hint" data-intent="empty">⌘K</span>
+<main id="main">
+    <header id="topbar">
+        <div id="timer-strip" hidden>
+            <span class="dot"></span>
+            <span id="timer-label">—</span>
+            <span id="timer-clock">00:00:00</span>
+            <button id="timer-stop">stop</button>
         </div>
-        <!-- Active timer strip — hidden until a timer is running. -->
-        <div id="active-strip" class="active-strip" hidden>
-            <span class="pulse" aria-hidden="true"></span>
-            <span class="what" id="active-strip-what">unassigned</span>
-            <button class="assign-link" id="active-strip-assign" type="button" hidden>assign…</button>
-            <span class="clock" id="active-strip-clock">00:00:00</span>
-            <button class="stop" id="active-strip-stop" type="button">stop</button>
-        </div>
-        <div id="view-root"></div>
-    </main>
+        <input id="search" type="text" placeholder="Search clients, matters, tasks…" autocomplete="off">
+    </header>
+    <div id="view"></div>
+</main>
 
-    <!-- ============================================================
-         AI RIGHT RAIL (≥ 1400px)
-         ============================================================ -->
-    <aside id="ai-rail" aria-label="ordify AI assistant">
-        <div class="ai-panel">
-            <div class="ai-panel-head">
-                <div class="ai-glyph">o</div>
-                <div class="ai-title">ordify <small id="ai-rail-context">· today</small></div>
-                <button class="btn icon ghost" id="ai-rail-close" type="button" aria-label="Hide assistant" style="margin-left:auto;color:var(--bg);border-color:transparent;padding:4px 8px;font-size:14px">&#x2715;</button>
-            </div>
-            <div class="ai-collapsed-label">ASK ORDIFY</div>
-            <div class="ai-collapsed-arrow">&#x2039;</div>
-            <div class="ai-panel-body" id="ai-rail-body">
-                <div class="ai-bubble">Ready to help. Start a question with <strong>?</strong> in the bar above — e.g. «<em>?when is the Acme deadline</em>». I'll answer here.</div>
-            </div>
-        </div>
-    </aside>
+<dialog id="modal">
+    <form id="modal-form" method="dialog">
+        <header><h2 id="modal-title">Edit</h2><button type="button" class="close" id="modal-close">×</button></header>
+        <div id="modal-body"></div>
+        <footer>
+            <button type="button" id="modal-delete" class="danger">Delete</button>
+            <span class="grow"></span>
+            <button type="button" id="modal-cancel">Cancel</button>
+            <button type="submit" id="modal-save" class="primary">Save</button>
+        </footer>
+    </form>
+</dialog>
 
-    <!-- Keyboard shortcuts help — toggled by Shift+? -->
-    <div class="omnik-scrim" id="kbd-scrim" hidden>
-        <div class="omnik-dialog kbd-dialog" role="dialog" aria-modal="true">
-            <div class="omnik-head">
-                <span class="title">keyboard shortcuts</span>
-                <span class="grow"></span>
-                <span class="esc">ESC TO CLOSE</span>
-            </div>
-            <div class="kbd-body">
-                <h3>capture</h3>
-                <div class="kbd-row"><kbd>⌘K</kbd> · <kbd>Ctrl+K</kbd><span>fullscreen capture (AI parse) / focus omni</span></div>
-                <div class="kbd-row"><kbd>⌘N</kbd><span>focus omni-bar</span></div>
-                <div class="kbd-row"><kbd>⌘L</kbd><span>focus omni + prefill <code>log </code></span></div>
-                <div class="kbd-row"><kbd>/</kbd><span>focus omni</span></div>
-                <div class="kbd-row"><kbd>?</kbd><span>focus omni + prefill <code>?</code> (ask AI)</span></div>
+<div id="toast" hidden></div>
 
-                <h3>tasks</h3>
-                <div class="kbd-row"><kbd>j</kbd> / <kbd>k</kbd><span>cursor down / up through tasks</span></div>
-                <div class="kbd-row"><kbd>x</kbd><span>mark task done / undone</span></div>
-                <div class="kbd-row"><kbd>t</kbd><span>start / stop timer on cursor task</span></div>
-                <div class="kbd-row"><kbd>e</kbd><span>edit cursor task</span></div>
-                <div class="kbd-row"><kbd>double-click</kbd><span>inline-edit task title</span></div>
-
-                <h3>navigation</h3>
-                <div class="kbd-row"><kbd>g g</kbd><span>Today</span></div>
-                <div class="kbd-row"><kbd>g i</kbd><span>Tasks (Inbox)</span></div>
-                <div class="kbd-row"><kbd>g c</kbd><span>Calendar</span></div>
-                <div class="kbd-row"><kbd>g t</kbd><span>Time</span></div>
-                <div class="kbd-row"><kbd>g v</kbd><span>Invoices</span></div>
-                <div class="kbd-row"><kbd>g r</kbd><span>Reports</span></div>
-                <div class="kbd-row"><kbd>g w</kbd><span>Weekly digest</span></div>
-                <div class="kbd-row"><kbd>g s</kbd><span>Settings</span></div>
-                <div class="kbd-row"><kbd>#</kbd><span>Trash</span></div>
-
-                <h3>misc</h3>
-                <div class="kbd-row"><kbd>Esc</kbd><span>close modals / blur omni</span></div>
-                <div class="kbd-row"><kbd>Shift+?</kbd><span>show this help</span></div>
-                <div class="kbd-row"><kbd>⌘⏎</kbd><span>commit ⌘K modal / save edit</span></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ⌘K fullscreen omni modal (multi-step capture with AI preview) -->
-    <div class="omnik-scrim" id="omnik-scrim" hidden>
-        <div class="omnik-dialog" role="dialog" aria-modal="true" aria-labelledby="omnik-title">
-            <div class="omnik-head">
-                <span class="kbd">⌘K</span>
-                <span class="title" id="omnik-title">capture · log · ask · plan</span>
-                <span class="grow"></span>
-                <span class="esc">ESC TO CLOSE</span>
-            </div>
-            <textarea id="omnik-input"
-                      placeholder="Describe what you want to do — e.g. «register US LLC for new client by may 15, fixed €2400 with EIN milestone»"
-                      autocomplete="off" spellcheck="false" rows="3"></textarea>
-            <div class="omnik-preview" id="omnik-preview">
-                <div class="omnik-empty">type to preview · ⏎ to commit</div>
-            </div>
-            <div class="omnik-foot">
-                <span class="hint" id="omnik-hint">⌘⏎ commit · esc cancel</span>
-                <span class="grow"></span>
-                <button type="button" class="inv-act ghost" id="omnik-cancel">Cancel</button>
-                <button type="button" class="inv-act primary" id="omnik-commit" disabled>Commit ⌘⏎</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- First-run setup wizard — opens once on a fresh install, dismissible -->
-    <div class="omnik-scrim" id="setup-scrim" hidden>
-        <div class="omnik-dialog setup-dialog" role="dialog" aria-modal="true">
-            <div class="omnik-head">
-                <span class="title">welcome to ordify</span>
-                <span class="grow"></span>
-                <button class="link-btn quiet" id="setup-skip" type="button">skip · finish later</button>
-            </div>
-            <div class="setup-body" id="setup-body"></div>
-            <div class="omnik-foot">
-                <button class="link-btn quiet" id="setup-back" type="button">‹ back</button>
-                <span class="grow"></span>
-                <span class="omnik-step" id="setup-step">step 1 of 4</span>
-                <button class="inv-act primary" id="setup-next" type="button">Next ›</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Universal edit modal — for matters / tasks / clients / meetings -->
-    <div class="omnik-scrim" id="edit-scrim" hidden>
-        <div class="omnik-dialog" role="dialog" aria-modal="true">
-            <div class="omnik-head">
-                <span class="title" id="edit-title">edit</span>
-                <span class="grow"></span>
-                <span class="esc">ESC TO CLOSE</span>
-            </div>
-            <div class="set-grid" id="edit-body" style="padding:18px;gap:14px"></div>
-            <div class="omnik-foot">
-                <button class="inv-act ghost" id="edit-delete" type="button" style="border-color:var(--vermillion);color:var(--vermillion)">Move to trash</button>
-                <span class="grow"></span>
-                <button class="inv-act ghost" id="edit-cancel" type="button">Cancel</button>
-                <button class="inv-act primary" id="edit-save" type="button">Save ⌘⏎</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Quick-log-call spotlight popover (hidden by default, opens on ⌘L) -->
-    <div class="scrim" id="logcall-scrim" hidden>
-        <div class="spotlight" role="dialog" aria-modal="true" aria-labelledby="sl-title">
-            <div class="sl-head">
-                <span class="kbd-tag">&#8984;L</span>
-                <span id="sl-title">LOG CALL</span>
-                <span class="grow"></span>
-                <span class="esc">ESC TO CLOSE</span>
-            </div>
-            <div class="sl-input-wrap">
-                <input class="sl-input" id="sl-input" type="text" autocomplete="off"
-                       placeholder="just hung up… maria 12min EU stablecoin">
-            </div>
-            <div class="sl-parse" id="sl-parse" hidden>
-                <div class="sl-parse-label"><span class="dot"></span>AI &#x25B8; DETECTED</div>
-                <div class="sl-fields" id="sl-fields"></div>
-            </div>
-            <div class="sl-foot">
-                <span class="hint" id="sl-hint">Type to start · Enter to log</span>
-                <span class="grow"></span>
-                <button type="button" class="btn-sl" id="sl-cancel">Cancel</button>
-                <button type="button" class="btn-sl primary" id="sl-log">&check; Log <span class="kbd-inline">&#x23CE;</span></button>
-            </div>
-        </div>
-    </div>
-
-</div>
-
-<script src="js/icons.js?v=58"></script>
-<script src="js/dom.js?v=58"></script>
-<script src="js/i18n.js?v=58"></script>
-<script src="js/store.js?v=58"></script>
-<script src="js/ai.js?v=58"></script>
-<script src="js/google.js?v=58"></script>
-<script src="js/gmail.js?v=58"></script>
-<script src="js/gcal.js?v=58"></script>
-<script src="js/crypto.js?v=58"></script>
-<script src="js/sheets.js?v=58"></script>
-<script src="js/files.js?v=58"></script>
-<script src="js/recorder.js?v=58"></script>
-<script src="js/snapshots.js?v=58"></script>
-<script src="js/app.js?v=58"></script>
-<script>
-    // Register Service Worker for offline support — silent on error so it
-    // doesn't break local file:// or unsupported browsers.
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
-        });
-    }
-</script>
+<script src="app.js?v=2"></script>
 </body>
 </html>
