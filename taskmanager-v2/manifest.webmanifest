@@ -1,0 +1,19 @@
+{
+  "name": "ordify",
+  "short_name": "ordify",
+  "description": "Practice manager for solo lawyers — clients, matters, time, invoices.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#6a1b9a",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

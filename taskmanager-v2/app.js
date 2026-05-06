@@ -74,17 +74,22 @@ const debounce = (fn, ms) => {
 const STORE_KEY = 'ordify-v2-data';
 
 const defaultState = () => ({
-    v: 2,
+    v: 3,
     profile: {
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
-        invoiceNumberPrefix: 'INV-', invoiceNumberCounter: 1
+        invoiceNumberPrefix: 'INV-', invoiceNumberCounter: 1,
+        anthropicKey: '',
+        anthropicModel: 'claude-3-5-haiku-latest',
+        dictationLang: 'uk-UA',
+        snapshotIntervalHours: 4
     },
     clients: [],
     matters: [],
     tasks: [],
     logs: [],
     invoices: [],
+    audits: [],
     timer: null   // { taskId, matterId, clientId, label, startedAt }
 });
 
@@ -99,10 +104,12 @@ const Store = {
             // shallow merge to retain new keys after upgrades
             state = Object.assign(defaultState(), parsed);
             // ensure arrays exist
-            ['clients','matters','tasks','logs','invoices'].forEach(k => {
+            ['clients','matters','tasks','logs','invoices','audits'].forEach(k => {
                 if (!Array.isArray(state[k])) state[k] = [];
             });
             if (!state.profile) state.profile = defaultState().profile;
+            // merge new profile fields without losing user values
+            state.profile = Object.assign(defaultState().profile, state.profile);
         } catch (e) {
             console.error('Store.load failed', e);
             state = defaultState();
@@ -137,21 +144,169 @@ const Store = {
 };
 
 /* =========================================================================
+ * 2b. AUDIT LOG
+ * ========================================================================= */
+
+function audit(action, entityId = null, detail = '') {
+    state.audits = state.audits || [];
+    state.audits.push({
+        id: uuid(),
+        ts: new Date().toISOString(),
+        action,
+        entityId,
+        detail
+    });
+    // keep last 1000 entries
+    if (state.audits.length > 1000) {
+        state.audits = state.audits.slice(-1000);
+    }
+}
+
+/* =========================================================================
+ * 2c. SNAPSHOTS — IndexedDB
+ * ========================================================================= */
+
+const Snapshots = {
+    DB: 'ordify-snapshots',
+    STORE: 'snaps',
+    _db: null,
+
+    async _open() {
+        if (Snapshots._db) return Snapshots._db;
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(Snapshots.DB, 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(Snapshots.STORE)) {
+                    db.createObjectStore(Snapshots.STORE, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => { Snapshots._db = req.result; resolve(req.result); };
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    async create(label = 'manual') {
+        try {
+            const db = await Snapshots._open();
+            const snap = {
+                id: uuid(),
+                ts: new Date().toISOString(),
+                label,
+                stats: {
+                    clients: state.clients.length,
+                    matters: state.matters.length,
+                    tasks:   state.tasks.length,
+                    logs:    state.logs.length,
+                    invoices:state.invoices.length
+                },
+                state: JSON.stringify(state)
+            };
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(Snapshots.STORE, 'readwrite');
+                tx.objectStore(Snapshots.STORE).put(snap);
+                tx.oncomplete = resolve;
+                tx.onerror = () => reject(tx.error);
+            });
+            // prune to last 30
+            const all = await Snapshots.list();
+            if (all.length > 30) {
+                const toDelete = all.slice(30);
+                for (const s of toDelete) await Snapshots.delete(s.id);
+            }
+            return snap.id;
+        } catch (e) {
+            console.warn('Snapshot create failed', e);
+            return null;
+        }
+    },
+
+    async list() {
+        try {
+            const db = await Snapshots._open();
+            return await new Promise((resolve, reject) => {
+                const tx = db.transaction(Snapshots.STORE, 'readonly');
+                const req = tx.objectStore(Snapshots.STORE).getAll();
+                req.onsuccess = () => {
+                    const list = req.result || [];
+                    list.sort((a,b) => b.ts.localeCompare(a.ts));
+                    resolve(list);
+                };
+                req.onerror = () => reject(req.error);
+            });
+        } catch (e) { return []; }
+    },
+
+    async get(id) {
+        const db = await Snapshots._open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(Snapshots.STORE, 'readonly');
+            const req = tx.objectStore(Snapshots.STORE).get(id);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+
+    async delete(id) {
+        const db = await Snapshots._open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(Snapshots.STORE, 'readwrite');
+            tx.objectStore(Snapshots.STORE).delete(id);
+            tx.oncomplete = resolve;
+            tx.onerror = () => reject(tx.error);
+        });
+    },
+
+    async restore(id) {
+        const snap = await Snapshots.get(id);
+        if (!snap) throw new Error('Snapshot not found');
+        const parsed = JSON.parse(snap.state);
+        state = Object.assign(defaultState(), parsed);
+        Store.save();
+        audit('restoreSnapshot', id, snap.label);
+        Store.save();
+    },
+
+    startAutoLoop() {
+        const tick = async () => {
+            const last = Number(localStorage.getItem('ordify-last-snap') || 0);
+            const intervalMs = (Number(state.profile.snapshotIntervalHours) || 4) * 3600000;
+            if (Date.now() - last > intervalMs) {
+                const id = await Snapshots.create('auto');
+                if (id) localStorage.setItem('ordify-last-snap', String(Date.now()));
+            }
+        };
+        // first tick after 30s grace, then hourly
+        setTimeout(tick, 30000);
+        setInterval(tick, 3600000);
+    }
+};
+
+/* =========================================================================
  * 3. SELECTORS / DERIVED
  * ========================================================================= */
 
 const byId = (list, id) => list.find(x => x.id === id);
+// byId returns even soft-deleted items (so restore works)
 const clientById = (id) => byId(state.clients, id);
 const matterById = (id) => byId(state.matters, id);
 const taskById   = (id) => byId(state.tasks, id);
 const invoiceById = (id) => byId(state.invoices, id);
 
-const mattersForClient = (cid) => state.matters.filter(m => m.clientId === cid);
-const tasksForMatter = (mid) => state.tasks.filter(t => t.matterId === mid);
-const tasksForClient = (cid) => state.tasks.filter(t => t.clientId === cid);
-const logsForMatter = (mid) => state.logs.filter(l => l.matterId === mid);
-const logsForTask = (tid) => state.logs.filter(l => l.taskId === tid);
-const logsForClient = (cid) => state.logs.filter(l => l.clientId === cid);
+// list selectors filter out soft-deleted by default
+const live = (list) => list.filter(x => !x.deletedAt);
+const liveClients = () => live(state.clients);
+const liveMatters = () => live(state.matters);
+const liveTasks = () => live(state.tasks);
+const liveLogs = () => live(state.logs);
+const liveInvoices = () => live(state.invoices);
+
+const mattersForClient = (cid) => state.matters.filter(m => m.clientId === cid && !m.deletedAt);
+const tasksForMatter = (mid) => state.tasks.filter(t => t.matterId === mid && !t.deletedAt);
+const tasksForClient = (cid) => state.tasks.filter(t => t.clientId === cid && !t.deletedAt);
+const logsForMatter = (mid) => state.logs.filter(l => l.matterId === mid && !l.deletedAt);
+const logsForTask = (tid) => state.logs.filter(l => l.taskId === tid && !l.deletedAt);
+const logsForClient = (cid) => state.logs.filter(l => l.clientId === cid && !l.deletedAt);
 
 const taskStatus = (t) => {
     if (t.status === 'done') return 'done';
@@ -164,7 +319,7 @@ const profileCurrency = () => state.profile.currency || 'EUR';
 
 const totalUnbilledForClient = (cid) => {
     return state.logs
-        .filter(l => l.clientId === cid && !l.invoiceId)
+        .filter(l => l.clientId === cid && !l.invoiceId && !l.deletedAt)
         .reduce((sum, l) => {
             const m = matterById(l.matterId);
             const rate = matterRate(m);
@@ -322,7 +477,7 @@ const Timer = {
         const t = state.timer;
         const start = new Date(t.startedAt).getTime();
         const minutes = Math.max(1, Math.round((Date.now() - start) / 60000));
-        state.logs.push({
+        const log = {
             id: uuid(),
             taskId: t.taskId,
             matterId: t.matterId,
@@ -332,7 +487,9 @@ const Timer = {
             minutes,
             notes: t.label || '',
             invoiceId: null
-        });
+        };
+        state.logs.push(log);
+        audit('logTime', log.id, `${minutes}m on ${matterById(t.matterId)?.title || '?'}`);
         state.timer = null;
         Store.save();
         Timer._refresh();
@@ -369,7 +526,9 @@ const NAV_ITEMS = [
     { id: 'matters',  label: 'Matters',   icon: '◇' },
     { id: 'tasks',    label: 'Tasks',     icon: '☐' },
     { id: 'time',     label: 'Time',      icon: '◴' },
-    { id: 'invoices', label: 'Invoices',  icon: '$' }
+    { id: 'invoices', label: 'Invoices',  icon: '$' },
+    { id: 'history',  label: 'History',   icon: '◷' },
+    { id: 'trash',    label: 'Trash',     icon: '⌫' }
 ];
 
 function renderSidebar() {
@@ -378,12 +537,20 @@ function renderSidebar() {
     nav.innerHTML = NAV_ITEMS.map(it => {
         let count = '';
         if (it.id === 'today') {
-            const n = state.tasks.filter(t => taskStatus(t) !== 'done' && (t.due === todayISO() || taskStatus(t) === 'overdue')).length;
+            const n = liveTasks().filter(t => taskStatus(t) !== 'done' && (t.due === todayISO() || taskStatus(t) === 'overdue')).length;
             if (n) count = `<span class="count">${n}</span>`;
-        } else if (it.id === 'clients') count = `<span class="count">${state.clients.length || ''}</span>`;
-        else if (it.id === 'matters') count = `<span class="count">${state.matters.filter(m=>m.status!=='closed').length || ''}</span>`;
-        else if (it.id === 'tasks') count = `<span class="count">${state.tasks.filter(t=>t.status!=='done').length || ''}</span>`;
-        else if (it.id === 'invoices') count = `<span class="count">${state.invoices.filter(i=>i.status!=='paid').length || ''}</span>`;
+        } else if (it.id === 'clients') count = `<span class="count">${liveClients().length || ''}</span>`;
+        else if (it.id === 'matters') count = `<span class="count">${liveMatters().filter(m=>m.status!=='closed').length || ''}</span>`;
+        else if (it.id === 'tasks') count = `<span class="count">${liveTasks().filter(t=>t.status!=='done').length || ''}</span>`;
+        else if (it.id === 'invoices') count = `<span class="count">${liveInvoices().filter(i=>i.status!=='paid').length || ''}</span>`;
+        else if (it.id === 'trash') {
+            const n = state.clients.filter(x=>x.deletedAt).length
+                    + state.matters.filter(x=>x.deletedAt).length
+                    + state.tasks.filter(x=>x.deletedAt).length
+                    + state.logs.filter(x=>x.deletedAt).length
+                    + state.invoices.filter(x=>x.deletedAt).length;
+            if (n) count = `<span class="count">${n}</span>`;
+        }
 
         return `<button class="nav-item ${cur===it.id?'active':''}" data-nav="${it.id}">
             <span class="ic">${it.icon}</span><span>${it.label}</span>${count}
@@ -397,30 +564,8 @@ function renderSidebar() {
 }
 
 /* =========================================================================
- * 9. SEARCH
+ * 9. SEARCH — replaced by omni.js (Omni module)
  * ========================================================================= */
-
-function setupSearch() {
-    const inp = $('#search');
-    const handle = debounce(() => {
-        const q = inp.value.trim().toLowerCase();
-        if (!q) return;
-        // jump to first match
-        const cli = state.clients.find(c => c.name?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q));
-        if (cli) { navigate('clients/' + cli.id); inp.value=''; return; }
-        const mat = state.matters.find(m => m.title?.toLowerCase().includes(q));
-        if (mat) { navigate('matters/' + mat.id); inp.value=''; return; }
-        const tk = state.tasks.find(t => t.title?.toLowerCase().includes(q));
-        if (tk) { navigate('tasks'); inp.value=''; return; }
-        toast('No matches');
-    }, 320);
-    inp.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') handle();
-    });
-    inp.addEventListener('input', () => {
-        if (inp.value.length > 2) handle();
-    });
-}
 
 /* =========================================================================
  * 10. VIEW: TODAY
@@ -428,14 +573,15 @@ function setupSearch() {
 
 function viewToday() {
     const today = todayISO();
-    const dueToday = state.tasks.filter(t => t.status !== 'done' && t.due === today);
-    const overdue = state.tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
-    const noDate = state.tasks.filter(t => t.status !== 'done' && !t.due).slice(0, 5);
+    const tasks = liveTasks();
+    const dueToday = tasks.filter(t => t.status !== 'done' && t.due === today);
+    const overdue  = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
+    const noDate   = tasks.filter(t => t.status !== 'done' && !t.due).slice(0, 5);
 
-    const todayLogs = state.logs.filter(l => l.startedAt.slice(0,10) === today);
+    const todayLogs = liveLogs().filter(l => l.startedAt.slice(0,10) === today);
     const todayMins = todayLogs.reduce((s, l) => s + l.minutes, 0);
 
-    const recentInvoices = [...state.invoices].sort((a,b)=> (b.dateIssued||'').localeCompare(a.dateIssued||'')).slice(0, 3);
+    const recentInvoices = [...liveInvoices()].sort((a,b)=> (b.dateIssued||'').localeCompare(a.dateIssued||'')).slice(0, 3);
 
     return `
         <div class="view-head">
@@ -454,18 +600,18 @@ function viewToday() {
             </div>
             <div class="card">
                 <div class="card-label">Active matters</div>
-                <div class="card-value">${state.matters.filter(m=>m.status!=='closed').length}</div>
-                <div class="card-sub">across ${state.clients.length} ${state.clients.length===1?'client':'clients'}</div>
+                <div class="card-value">${liveMatters().filter(m=>m.status!=='closed').length}</div>
+                <div class="card-sub">across ${liveClients().length} ${liveClients().length===1?'client':'clients'}</div>
             </div>
             <div class="card">
                 <div class="card-label">Open tasks</div>
-                <div class="card-value">${state.tasks.filter(t=>t.status!=='done').length}</div>
+                <div class="card-value">${liveTasks().filter(t=>t.status!=='done').length}</div>
                 <div class="card-sub">${overdue.length} overdue</div>
             </div>
             <div class="card">
                 <div class="card-label">Unpaid invoices</div>
-                <div class="card-value">${state.invoices.filter(i=>i.status!=='paid').length}</div>
-                <div class="card-sub">${state.invoices.filter(i=>i.status==='draft').length} draft</div>
+                <div class="card-value">${liveInvoices().filter(i=>i.status!=='paid').length}</div>
+                <div class="card-sub">${liveInvoices().filter(i=>i.status==='draft').length} draft</div>
             </div>
         </div>
 
@@ -528,7 +674,7 @@ function renderTaskList(tasks) {
  * ========================================================================= */
 
 function viewClients() {
-    const list = [...state.clients].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    const list = [...liveClients()].sort((a,b) => (a.name||'').localeCompare(b.name||''));
     return `
         <div class="view-head">
             <h1>Clients</h1>
@@ -576,7 +722,7 @@ function viewClient(id) {
     const logs = logsForClient(id);
     const totalMins = logs.reduce((s,l)=>s+l.minutes,0);
     const unbilled = totalUnbilledForClient(id);
-    const invoices = state.invoices.filter(i => i.clientId === id);
+    const invoices = liveInvoices().filter(i => i.clientId === id);
 
     return `
         <div class="breadcrumb"><a href="#/clients">Clients</a> ›</div>
@@ -644,7 +790,7 @@ function viewClient(id) {
  * ========================================================================= */
 
 function viewMatters() {
-    const list = [...state.matters].sort((a,b)=> (a.title||'').localeCompare(b.title||''));
+    const list = [...liveMatters()].sort((a,b)=> (a.title||'').localeCompare(b.title||''));
     return `
         <div class="view-head">
             <h1>Matters</h1>
@@ -743,7 +889,7 @@ function viewMatter(id) {
 let tasksFilter = 'open';
 
 function viewTasks() {
-    let list = [...state.tasks];
+    let list = [...liveTasks()];
     if (tasksFilter === 'open') list = list.filter(t => t.status !== 'done');
     else if (tasksFilter === 'done') list = list.filter(t => t.status === 'done');
     else if (tasksFilter === 'overdue') list = list.filter(t => taskStatus(t) === 'overdue');
@@ -776,7 +922,7 @@ function viewTasks() {
  * ========================================================================= */
 
 function viewTime() {
-    const list = [...state.logs].sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
+    const list = [...liveLogs()].sort((a,b)=>b.startedAt.localeCompare(a.startedAt));
     const totalMins = list.reduce((s,l)=>s+l.minutes,0);
     const unbilled = list.filter(l=>!l.invoiceId).reduce((s,l)=>s+l.minutes,0);
 
@@ -825,7 +971,7 @@ function invoiceTotal(inv) {
 }
 
 function viewInvoices() {
-    const list = [...state.invoices].sort((a,b) => (b.dateIssued||'').localeCompare(a.dateIssued||''));
+    const list = [...liveInvoices()].sort((a,b) => (b.dateIssued||'').localeCompare(a.dateIssued||''));
     return `
         <div class="view-head">
             <h1>Invoices</h1>
@@ -931,6 +1077,87 @@ function viewInvoice(id) {
 }
 
 /* =========================================================================
+ * 15b. VIEW: HISTORY
+ * ========================================================================= */
+
+function viewHistory() {
+    const list = [...(state.audits||[])].reverse().slice(0, 500);
+    return `
+        <div class="view-head">
+            <h1>History</h1>
+            <div class="meta">${list.length} recent ${list.length===1?'event':'events'}</div>
+            <div class="actions">
+                ${list.length ? `<button class="btn danger" data-act="audit-clear">Clear history</button>` : ''}
+            </div>
+        </div>
+        ${list.length === 0 ? `
+            <div class="empty-state">
+                <h3>No history yet</h3>
+                <p>Every change you make is logged here automatically.</p>
+            </div>
+        ` : `
+            <ul class="audit-list">
+                ${list.map(a => `
+                    <li class="audit-row">
+                        <div class="audit-when">${new Date(a.ts).toLocaleString()}</div>
+                        <span class="audit-action">${esc(a.action)}</span>
+                        <span class="audit-detail">${esc(a.detail || '')}</span>
+                    </li>
+                `).join('')}
+            </ul>
+        `}
+    `;
+}
+
+/* =========================================================================
+ * 15c. VIEW: TRASH
+ * ========================================================================= */
+
+function viewTrash() {
+    const items = [
+        ...state.clients.filter(x=>x.deletedAt).map(x => ({...x, _kind:'client',  _label: x.name})),
+        ...state.matters.filter(x=>x.deletedAt).map(x => ({...x, _kind:'matter',  _label: x.title})),
+        ...state.tasks.filter(x=>x.deletedAt).map(x   => ({...x, _kind:'task',    _label: x.title})),
+        ...state.logs.filter(x=>x.deletedAt).map(x    => ({...x, _kind:'time',    _label: `${x.minutes}m on ${matterById(x.matterId)?.title || '?'}`})),
+        ...state.invoices.filter(x=>x.deletedAt).map(x=> ({...x, _kind:'invoice', _label: x.number}))
+    ];
+    items.sort((a,b) => (b.deletedAt||'').localeCompare(a.deletedAt||''));
+
+    return `
+        <div class="view-head">
+            <h1>Trash</h1>
+            <div class="meta">${items.length} item${items.length===1?'':'s'}</div>
+            <div class="actions">
+                ${items.length ? `<button class="btn danger" data-act="empty-trash">Empty trash</button>` : ''}
+            </div>
+        </div>
+        ${items.length === 0 ? `
+            <div class="empty-state">
+                <h3>Trash is empty</h3>
+                <p>Deleted items appear here. They stay until you empty the trash.</p>
+            </div>
+        ` : `
+            <table class="t">
+                <thead><tr>
+                    <th>Type</th><th>Item</th><th>Deleted</th><th></th>
+                </tr></thead>
+                <tbody>${items.map(it => `
+                    <tr class="trash-row">
+                        <td><span class="badge">${esc(it._kind)}</span></td>
+                        <td>${esc(it._label)}</td>
+                        <td class="muted">${fmtDate(it.deletedAt)}</td>
+                        <td><div class="trash-actions">
+                            <button class="btn sm" data-act="restore" data-id="${it.id}">Restore</button>
+                            <button class="btn sm danger" data-act="permadelete" data-id="${it.id}">Delete forever</button>
+                        </div></td>
+                    </tr>
+                `).join('')}</tbody>
+            </table>
+        `}
+    `;
+}
+
+/* =========================================================================
  * 16. VIEW: SETTINGS
  * ========================================================================= */
 
@@ -963,10 +1190,51 @@ function viewSettings() {
                 <div class="field"><label>Next invoice number</label><input name="invoiceNumberCounter" type="number" min="1" step="1" value="${esc(p.invoiceNumberCounter)}"></div>
             </div>
 
+            <h3>AI &amp; voice input</h3>
+            <div class="settings-warn">
+                <strong>Heads up:</strong> your Anthropic API key is stored in this browser's localStorage in plaintext.
+                Anyone with access to this device can read it. Use a key with limited spend, and revoke it if the device is compromised.
+            </div>
+            <div class="grid2">
+                <div class="field full">
+                    <label>Anthropic API key</label>
+                    <input name="anthropicKey" type="password" placeholder="sk-ant-..." value="${esc(p.anthropicKey)}" autocomplete="off">
+                    <small class="hint">Get one at console.anthropic.com → API Keys. Without this, omni-input AI parsing is disabled.</small>
+                </div>
+                <div class="field"><label>Claude model</label>
+                    <select name="anthropicModel">
+                        ${['claude-3-5-haiku-latest','claude-3-5-sonnet-latest','claude-sonnet-4-5','claude-opus-4-1'].map(m =>
+                            `<option ${p.anthropicModel===m?'selected':''}>${m}</option>`).join('')}
+                    </select>
+                    <small class="hint">Haiku = cheapest &amp; fastest. Sonnet = better at ambiguous input.</small>
+                </div>
+                <div class="field"><label>Dictation language</label>
+                    <select name="dictationLang">
+                        <option value="uk-UA" ${p.dictationLang==='uk-UA'?'selected':''}>Ukrainian (uk-UA)</option>
+                        <option value="ru-RU" ${p.dictationLang==='ru-RU'?'selected':''}>Russian (ru-RU)</option>
+                        <option value="en-US" ${p.dictationLang==='en-US'?'selected':''}>English (en-US)</option>
+                        <option value="pl-PL" ${p.dictationLang==='pl-PL'?'selected':''}>Polish (pl-PL)</option>
+                    </select>
+                    <small class="hint">Voice input uses Chrome / Edge built-in recognition.</small>
+                </div>
+            </div>
+
+            <h3>Backups</h3>
+            <div class="grid2">
+                <div class="field"><label>Auto-snapshot every (hours)</label>
+                    <input name="snapshotIntervalHours" type="number" min="1" max="168" step="1" value="${esc(p.snapshotIntervalHours)}">
+                    <small class="hint">Snapshots are stored in IndexedDB on this device.</small>
+                </div>
+            </div>
+
             <div class="actions" style="margin-top:24px">
                 <button type="submit" class="btn primary">Save settings</button>
             </div>
         </form>
+
+        <h3 style="margin-top:48px">Snapshots</h3>
+        <div style="margin-bottom:12px"><button class="btn" data-act="snapshot-now">＋ Take snapshot now</button></div>
+        <div id="snap-list-host"><em class="muted" style="font-size:12px">Loading…</em></div>
 
         <h3 style="margin-top:48px">Data</h3>
         <div class="settings-data">
@@ -974,8 +1242,26 @@ function viewSettings() {
             <button class="btn" data-act="import">Import JSON</button>
             <button class="btn danger" data-act="reset">Reset all data</button>
         </div>
-        <p class="muted" style="margin-top:8px;font-size:12px">All data lives in your browser's localStorage. Export regularly for backup.</p>
+        <p class="muted" style="margin-top:8px;font-size:12px">All data lives in your browser's localStorage. Export regularly for backup. Snapshots are stored in IndexedDB and survive a "Reset all data".</p>
     `;
+}
+
+async function renderSnapshotsList() {
+    const host = $('#snap-list-host');
+    if (!host) return;
+    const list = await Snapshots.list();
+    if (!list.length) {
+        host.innerHTML = `<div class="empty">No snapshots yet.</div>`;
+        return;
+    }
+    host.innerHTML = `<ul class="snap-list">${list.map(s => `
+        <li class="snap-row">
+            <span class="when">${new Date(s.ts).toLocaleString()}</span>
+            <span class="badge ${s.label==='auto'?'':'todo'}">${esc(s.label)}</span>
+            <span class="stats">${s.stats?.clients||0}C · ${s.stats?.matters||0}M · ${s.stats?.tasks||0}T · ${s.stats?.logs||0}L · ${s.stats?.invoices||0}I</span>
+            <button class="btn sm" data-act="snapshot-restore" data-id="${esc(s.id)}">Restore</button>
+            <button class="btn sm danger" data-act="snapshot-delete" data-id="${esc(s.id)}">Delete</button>
+        </li>`).join('')}</ul>`;
 }
 
 /* =========================================================================
@@ -996,22 +1282,29 @@ function openClientForm(id = null) {
         ],
         onSave: (data) => {
             if (!data.name?.trim()) { toast('Name is required', 'error'); return false; }
-            if (c) Object.assign(c, data);
-            else state.clients.push({ id: uuid(), createdAt: new Date().toISOString(), ...data });
+            if (c) {
+                Object.assign(c, data);
+                audit('updateClient', c.id, c.name);
+            } else {
+                const nc = { id: uuid(), createdAt: new Date().toISOString(), ...data };
+                state.clients.push(nc);
+                audit('createClient', nc.id, nc.name);
+            }
             Store.save(); render();
             toast(c ? 'Client updated' : 'Client added');
         },
         onDelete: c ? () => {
-            // soft cascade check
             const has = mattersForClient(c.id).length || tasksForClient(c.id).length || logsForClient(c.id).length;
-            if (has && !confirm('This client has matters/tasks/time. Delete them all too?')) return;
-            state.matters = state.matters.filter(m => m.clientId !== c.id);
-            state.tasks = state.tasks.filter(t => t.clientId !== c.id);
-            state.logs = state.logs.filter(l => l.clientId !== c.id);
-            state.clients = state.clients.filter(x => x.id !== c.id);
+            if (has && !confirm('This client has matters/tasks/time. Move them all to Trash?')) return;
+            const ts = new Date().toISOString();
+            state.matters.forEach(m => { if (m.clientId === c.id) m.deletedAt = ts; });
+            state.tasks.forEach(t => { if (t.clientId === c.id) t.deletedAt = ts; });
+            state.logs.forEach(l => { if (l.clientId === c.id) l.deletedAt = ts; });
+            c.deletedAt = ts;
+            audit('deleteClient', c.id, c.name);
             Store.save();
             navigate('clients');
-            toast('Client deleted');
+            toast('Moved to Trash');
         } : null
     });
 }
@@ -1043,20 +1336,28 @@ function openMatterForm(id = null, defaultClientId = null) {
         ],
         onSave: (data) => {
             if (!data.title?.trim()) { toast('Title is required', 'error'); return false; }
-            if (m) Object.assign(m, data);
-            else state.matters.push({ id: uuid(), openedAt: new Date().toISOString(), ...data });
+            if (m) {
+                Object.assign(m, data);
+                audit('updateMatter', m.id, m.title);
+            } else {
+                const nm = { id: uuid(), openedAt: new Date().toISOString(), ...data };
+                state.matters.push(nm);
+                audit('createMatter', nm.id, nm.title);
+            }
             Store.save(); render();
             toast(m ? 'Matter updated' : 'Matter created');
         },
         onDelete: m ? () => {
             const has = tasksForMatter(m.id).length || logsForMatter(m.id).length;
-            if (has && !confirm('This matter has tasks/time. Delete them all too?')) return;
-            state.tasks = state.tasks.filter(t => t.matterId !== m.id);
-            state.logs = state.logs.filter(l => l.matterId !== m.id);
-            state.matters = state.matters.filter(x => x.id !== m.id);
+            if (has && !confirm('This matter has tasks/time. Move them all to Trash?')) return;
+            const ts = new Date().toISOString();
+            state.tasks.forEach(t => { if (t.matterId === m.id) t.deletedAt = ts; });
+            state.logs.forEach(l => { if (l.matterId === m.id) l.deletedAt = ts; });
+            m.deletedAt = ts;
+            audit('deleteMatter', m.id, m.title);
             Store.save();
             navigate('matters');
-            toast('Matter deleted');
+            toast('Moved to Trash');
         } : null
     });
 }
@@ -1093,17 +1394,24 @@ function openTaskForm(id = null, defaultMatterId = null) {
                 priority: data.priority,
                 notes: data.notes
             };
-            if (t) Object.assign(t, payload);
-            else state.tasks.push({ id: uuid(), status: 'todo', createdAt: new Date().toISOString(), ...payload });
+            if (t) {
+                Object.assign(t, payload);
+                audit('updateTask', t.id, t.title);
+            } else {
+                const nt = { id: uuid(), status: 'todo', createdAt: new Date().toISOString(), ...payload };
+                state.tasks.push(nt);
+                audit('createTask', nt.id, nt.title);
+            }
             Store.save(); render();
             toast(t ? 'Task updated' : 'Task added');
         },
         onDelete: t ? () => {
-            state.tasks = state.tasks.filter(x => x.id !== t.id);
+            t.deletedAt = new Date().toISOString();
             // unlink logs from deleted task but keep them
             state.logs.forEach(l => { if (l.taskId === t.id) l.taskId = null; });
+            audit('deleteTask', t.id, t.title);
             Store.save(); render();
-            toast('Task deleted');
+            toast('Moved to Trash');
         } : null
     });
 }
@@ -1137,17 +1445,21 @@ function openLogForm(id = null) {
             if (l) {
                 if (l.invoiceId) { toast('Cannot edit billed entry', 'error'); return false; }
                 Object.assign(l, payload);
+                audit('updateLog', l.id, `${l.minutes}m`);
             } else {
-                state.logs.push({ id: uuid(), taskId: null, invoiceId: null, ...payload });
+                const nl = { id: uuid(), taskId: null, invoiceId: null, ...payload };
+                state.logs.push(nl);
+                audit('createLog', nl.id, `${nl.minutes}m`);
             }
             Store.save(); render();
             toast(l ? 'Entry updated' : 'Entry added');
         },
         onDelete: l ? () => {
             if (l.invoiceId) { toast('Cannot delete billed entry', 'error'); return; }
-            state.logs = state.logs.filter(x => x.id !== l.id);
+            l.deletedAt = new Date().toISOString();
+            audit('deleteLog', l.id, `${l.minutes}m`);
             Store.save(); render();
-            toast('Entry deleted');
+            toast('Moved to Trash');
         } : null
     });
 }
@@ -1171,12 +1483,13 @@ function openInvoiceForm(matterId = null, existingId = null) {
                 toast('Invoice updated');
             },
             onDelete: () => {
-                // unlink logs
+                // unlink logs (so they become unbilled again) — but keep the invoice in Trash
                 state.logs.forEach(l => { if (l.invoiceId === existing.id) l.invoiceId = null; });
-                state.invoices = state.invoices.filter(i => i.id !== existing.id);
+                existing.deletedAt = new Date().toISOString();
+                audit('deleteInvoice', existing.id, existing.number);
                 Store.save();
                 navigate('invoices');
-                toast('Invoice deleted');
+                toast('Moved to Trash');
             }
         });
         return;
@@ -1227,6 +1540,7 @@ function openInvoiceForm(matterId = null, existingId = null) {
             state.invoices.push(inv);
             state.profile.invoiceNumberCounter += 1;
             unbilledLogs.forEach(l => l.invoiceId = inv.id);
+            audit('createInvoice', inv.id, `${number} (${m.title})`);
             Store.save();
             navigate('invoices/' + inv.id);
             toast(`Invoice ${number} created`);
@@ -1254,6 +1568,7 @@ function bindGlobalActions() {
             if (t) {
                 t.status = t.status === 'done' ? 'todo' : 'done';
                 t.completedAt = t.status === 'done' ? new Date().toISOString() : null;
+                audit(t.status === 'done' ? 'completeTask' : 'reopenTask', t.id, t.title);
                 Store.save(); render();
             }
             return;
@@ -1291,7 +1606,70 @@ function bindGlobalActions() {
             case 'edit-invoice': openInvoiceForm(null, act.dataset.id); break;
             case 'invoice-status': {
                 const inv = invoiceById(act.dataset.id);
-                if (inv) { inv.status = act.dataset.status; Store.save(); render(); toast('Marked '+inv.status); }
+                if (inv) {
+                    inv.status = act.dataset.status;
+                    audit('invoiceStatus', inv.id, `${inv.number} → ${inv.status}`);
+                    Store.save(); render(); toast('Marked '+inv.status);
+                }
+                break;
+            }
+            case 'restore': {
+                const id = act.dataset.id;
+                const item = state.clients.find(x=>x.id===id) || state.matters.find(x=>x.id===id) ||
+                             state.tasks.find(x=>x.id===id) || state.logs.find(x=>x.id===id) ||
+                             state.invoices.find(x=>x.id===id);
+                if (item) {
+                    delete item.deletedAt;
+                    audit('restore', id, item.name || item.title || item.number || '');
+                    Store.save(); render(); toast('Restored');
+                }
+                break;
+            }
+            case 'permadelete': {
+                if (!confirm('Permanently delete this item? This cannot be undone.')) break;
+                const id = act.dataset.id;
+                state.clients  = state.clients.filter(x => x.id !== id);
+                state.matters  = state.matters.filter(x => x.id !== id);
+                state.tasks    = state.tasks.filter(x => x.id !== id);
+                state.logs     = state.logs.filter(x => x.id !== id);
+                state.invoices = state.invoices.filter(x => x.id !== id);
+                audit('permadelete', id, '');
+                Store.save(); render(); toast('Permanently deleted');
+                break;
+            }
+            case 'empty-trash': {
+                if (!confirm('Permanently delete ALL trashed items? Cannot be undone.')) break;
+                state.clients  = state.clients.filter(x => !x.deletedAt);
+                state.matters  = state.matters.filter(x => !x.deletedAt);
+                state.tasks    = state.tasks.filter(x => !x.deletedAt);
+                state.logs     = state.logs.filter(x => !x.deletedAt);
+                state.invoices = state.invoices.filter(x => !x.deletedAt);
+                audit('emptyTrash', null, '');
+                Store.save(); render(); toast('Trash emptied');
+                break;
+            }
+            case 'snapshot-now': {
+                Snapshots.create('manual').then(id => {
+                    if (id) { toast('Snapshot saved'); render(); }
+                    else toast('Snapshot failed', 'error');
+                });
+                break;
+            }
+            case 'snapshot-restore': {
+                if (!confirm('Restore this snapshot? Current state will be replaced.')) break;
+                Snapshots.restore(act.dataset.id).then(() => {
+                    render(); toast('Restored from snapshot');
+                }).catch(e => toast('Restore failed: ' + e.message, 'error'));
+                break;
+            }
+            case 'snapshot-delete': {
+                Snapshots.delete(act.dataset.id).then(() => { render(); toast('Snapshot deleted'); });
+                break;
+            }
+            case 'audit-clear': {
+                if (!confirm('Clear all audit history? Cannot be undone.')) break;
+                state.audits = [];
+                Store.save(); render(); toast('History cleared');
                 break;
             }
             case 'export': doExport(); break;
@@ -1314,10 +1692,12 @@ function bindGlobalActions() {
         if (e.target.id === 'settings-form') {
             e.preventDefault();
             const data = new FormData(e.target);
+            const numericFields = new Set(['rate', 'invoiceNumberCounter', 'snapshotIntervalHours']);
             for (const [k, v] of data.entries()) {
-                if (k === 'rate' || k === 'invoiceNumberCounter') state.profile[k] = Number(v) || 0;
+                if (numericFields.has(k)) state.profile[k] = Number(v) || 0;
                 else state.profile[k] = v;
             }
+            audit('updateSettings', null, '');
             Store.save();
             toast('Settings saved');
             render();
@@ -1379,6 +1759,8 @@ function render() {
             case 'tasks':    html = viewTasks(); break;
             case 'time':     html = viewTime(); break;
             case 'invoices': html = id ? viewInvoice(id) : viewInvoices(); break;
+            case 'history':  html = viewHistory(); break;
+            case 'trash':    html = viewTrash(); break;
             case 'settings': html = viewSettings(); break;
             default:         html = viewToday();
         }
@@ -1388,6 +1770,7 @@ function render() {
     }
     root.innerHTML = html;
     root.scrollTop = 0;
+    if (view === 'settings') renderSnapshotsList();
 }
 
 /* =========================================================================
@@ -1399,7 +1782,7 @@ function boot() {
     Modal.init();
     Timer.init();
     bindGlobalActions();
-    setupSearch();
+    Snapshots.startAutoLoop();
     if (!location.hash) location.hash = '#/today';
     render();
 }
