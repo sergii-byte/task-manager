@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · today / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 96px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(28% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(360px, 28%); min-height: 100vh; }
+  .main { padding: 80px 96px 100px; max-width: 1100px; }
+
+  /* Date row */
+  .date-row { display: flex; align-items: baseline; gap: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 28px; }
+  .date-row .now { color: var(--ink); font-weight: 700; }
+  .date-row .sep { color: var(--faint); }
+  .date-row .clock { color: var(--accent); font-weight: 700; }
+  .date-row .clock .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 6px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+
+  /* HERO — sentence-as-headline */
+  .hero { padding-bottom: 40px; border-bottom: 1px solid var(--ink); }
+  .hero .greet { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero h1 {
+      margin: 18px 0 0;
+      font-family: var(--font-sans);
+      font-size: 72px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1;
+      text-transform: lowercase;
+      color: var(--ink);
+      max-width: 22ch;
+  }
+  .hero h1 .punct { color: var(--faint); }
+  .hero h1 .accent { color: var(--accent); }
+  .hero h1 .strike { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); text-decoration-thickness: 2px; }
+
+  .hero .stats { margin-top: 36px; display: grid; grid-template-columns: repeat(4, auto); gap: 0 56px; align-items: baseline; padding-top: 4px; }
+  .hero .stats .stat .k { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero .stats .stat .v { font-family: var(--font-sans); font-size: 32px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); margin-top: 6px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .hero .stats .stat .v .small { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-left: 4px; font-weight: 500; letter-spacing: 0.04em; }
+  .hero .stats .stat .v.accent { color: var(--accent); }
+  .hero .stats .stat .sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; text-transform: uppercase; }
+  .hero .stats .stat .sub.warn { color: var(--warn); font-weight: 700; }
+
+  /* SECTION */
+  .sec { padding: 56px 0 24px; border-bottom: 1px solid var(--line); }
+  .sec:last-of-type { border-bottom: 0; }
+  .sec-hdr { display: flex; align-items: baseline; gap: 16px; margin-bottom: 20px; }
+  .sec-hdr h2 { margin: 0; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); }
+  .sec-hdr .count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.06em; }
+  .sec-hdr .right { margin-left: auto; display: flex; gap: 18px; font-family: var(--font-mono); font-size: 11px; }
+  .sec-hdr .right a { color: var(--ink); text-decoration: none; border-bottom: 1.5px solid var(--ink); padding-bottom: 1px; cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .sec-hdr .right a:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* TIME RAIL — schedule with clock-anchor */
+  .schedule { display: flex; flex-direction: column; }
+  .slot {
+      display: grid;
+      grid-template-columns: 90px 12px 1fr;
+      gap: 22px;
+      padding: 14px 0;
+      align-items: baseline;
+      border-bottom: 1px solid var(--line-soft);
+      cursor: pointer;
+  }
+  .slot:hover { background: var(--paper); margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .slot .when { font-family: var(--font-mono); font-size: 13px; color: var(--ink); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .slot .when .end { color: var(--muted); display: block; font-size: 11px; margin-top: 2px; font-weight: 500; }
+  .slot .marker { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; align-self: center; justify-self: center; }
+  .slot.meet .marker { background: var(--cobalt); }
+  .slot.deep .marker { background: var(--ink); }
+  .slot.now .marker { background: var(--accent); width: 12px; height: 12px; box-shadow: 0 0 0 4px rgba(106,27,154,0.15); animation: pulse 2s infinite; }
+  .slot.done .marker { background: transparent; border: 1.5px solid var(--faint); }
+  .slot .body .label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+  .slot.now .body .label { color: var(--accent); }
+  .slot .body .what { font-family: var(--font-sans); font-size: 19px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.3; color: var(--ink); max-width: 64ch; }
+  .slot.now .body .what { font-weight: 600; }
+  .slot.done .body .what { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--line); }
+  .slot .body .ctx { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 6px; }
+  .slot .body .ctx .accent { color: var(--accent); font-weight: 700; }
+  .slot .body .ctx a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .slot .body .ctx a:hover { border-color: var(--ink); }
+
+  .slot .body .nudge {
+      margin-top: 10px;
+      padding-left: 16px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-text);
+      font-size: 14px;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      line-height: 1.5;
+  }
+  .slot .body .nudge .by { font-family: var(--font-mono); font-size: 9px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 4px; }
+  .slot .body .nudge a { color: var(--accent); text-decoration: none; border-bottom: 1.5px solid var(--accent); cursor: pointer; font-weight: 600; }
+  .slot .body .nudge a + a { margin-left: 16px; }
+  .slot .body .nudge a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  /* NOW-LINE — horizontal divider through schedule */
+  .now-line { display: grid; grid-template-columns: 90px 12px 1fr; gap: 22px; align-items: center; padding: 6px 0; border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); margin: 4px 0; }
+  .now-line .label { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .now-line .dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; justify-self: center; }
+  .now-line .what { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+
+  /* INBOX-STYLE TASKS (after schedule) */
+  .tasks { display: flex; flex-direction: column; }
+  .task {
+      display: grid;
+      grid-template-columns: 24px 1fr auto auto;
+      gap: 20px;
+      padding: 14px 0;
+      align-items: baseline;
+      border-bottom: 1px solid var(--line-soft);
+      cursor: pointer;
+  }
+  .task .check { width: 14px; height: 14px; border: 1.5px solid var(--ink); border-radius: 50%; align-self: center; }
+  .task.done .check { background: var(--ink); position: relative; }
+  .task.done .check::after { content: ""; position: absolute; left: 2.5px; top: 4.5px; width: 5px; height: 2.5px; border-left: 1.5px solid var(--bg); border-bottom: 1.5px solid var(--bg); transform: rotate(-45deg); }
+  .task .title { font-family: var(--font-text); font-size: 16px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.4; font-weight: 500; }
+  .task .title .ctx { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; font-weight: 500; }
+  .task .title .ctx a { color: var(--ink); text-decoration: none; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .task .title .ctx a:hover { border-color: var(--ink); }
+  .task .est { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+  .task .matter { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; font-weight: 600; }
+  .task.done .title { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--line); }
+  .task.done .matter { color: var(--faint); }
+
+  /* Pull-quote AI insight */
+  .pull {
+      margin: 32px 0 0;
+      padding: 20px 0 20px 24px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.4;
+      color: var(--ink);
+      max-width: 50ch;
+  }
+  .pull .src { display: block; margin-top: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  /* Inbox triaged */
+  .inbox { display: flex; flex-direction: column; }
+  .mail { display: grid; grid-template-columns: 80px 1fr auto; gap: 18px; padding: 14px 0; border-bottom: 1px solid var(--line-soft); align-items: baseline; cursor: pointer; }
+  .mail .who { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .mail .body .subj { font-family: var(--font-text); font-size: 15.5px; color: var(--ink); letter-spacing: -0.005em; font-weight: 500; line-height: 1.4; }
+  .mail .body .summary { font-family: var(--font-text); font-size: 13.5px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.5; margin-top: 4px; max-width: 64ch; }
+  .mail .body .summary .accent { color: var(--accent); font-weight: 600; }
+  .mail .body .actions { display: flex; gap: 18px; margin-top: 8px; flex-wrap: wrap; }
+  .mail .body .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 3px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .mail .body .actions a:hover { color: var(--accent); border-color: var(--accent); }
+  .mail .body .actions a.primary { color: var(--accent); border-color: var(--accent); }
+  .mail .body .actions a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+  .mail .meta { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.04em; text-align: right; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 80px 32px 24px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  .stream { flex: 1; padding: 24px 32px 0; display: flex; flex-direction: column; gap: 32px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+  .turn.me { padding-left: 24px; border-left: 1px solid var(--ink); }
+  .turn.me .when { color: var(--ink); font-weight: 700; }
+  .turn.me .text { color: var(--muted); font-style: italic; }
+
+  .actions-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions-row a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions-row a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 18px 32px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14.5px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: 1fr; }
+    .main { padding: 64px 24px; }
+    .rail { display: none; }
+    .mini-nav { right: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a class="act">today</a>
+    <a>week</a>
+    <a>matters</a>
+    <a>billing</a>
+</nav>
+
+<div class="stage">
+
+<main class="main">
+
+    <div class="date-row">
+        <span class="now">tuesday · 06 may 2026</span>
+        <span class="sep">/</span>
+        <span class="clock"><span class="pulse"></span>10:42 madrid · cet</span>
+        <span class="sep">/</span>
+        <span>day 4 of 5 · week 19</span>
+        <span class="sep">/</span>
+        <span>2 deadlines this week</span>
+    </div>
+
+    <header class="hero">
+        <div class="greet">good morning, sergiy</div>
+        <h1>three things matter today<span class="punct">.</span></h1>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="k">on the day</div>
+                <div class="v">3 <span class="small">/ 8</span></div>
+                <div class="sub">5 done before noon · ahead</div>
+            </div>
+            <div class="stat">
+                <div class="k">timer</div>
+                <div class="v accent">2:14</div>
+                <div class="sub">m·006 · nda round 2</div>
+            </div>
+            <div class="stat">
+                <div class="k">this week</div>
+                <div class="v">14.3 <span class="small">h</span></div>
+                <div class="sub">€2,145 billable · ytd</div>
+            </div>
+            <div class="stat">
+                <div class="k">closest deadline</div>
+                <div class="v">2d</div>
+                <div class="sub warn">term sheet · acme · thu</div>
+            </div>
+        </div>
+    </header>
+
+    <p class="pull">
+        “you've cleared the morning. now the only thing standing between you and the term sheet is one nda round and a 30-min sync with marta.”
+        <span class="src">— ordify · 10:42</span>
+    </p>
+
+    <!-- SCHEDULE -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>schedule</h2>
+            <span class="count">/ 6 events · 4.5h committed</span>
+            <span class="right">
+                <a>+ event</a>
+                <a>day view</a>
+            </span>
+        </div>
+        <div class="schedule">
+
+            <div class="slot done">
+                <div class="when">09:00<span class="end">→ 09:30</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">deep · done</div>
+                    <div class="what">morning review · clear inbox &amp; set the day</div>
+                    <div class="ctx">∅ no matter · auto-routed 6 emails · 4 follow-ups extracted</div>
+                </div>
+            </div>
+
+            <div class="slot done">
+                <div class="when">09:30<span class="end">→ 10:30</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">deep · done</div>
+                    <div class="what">term sheet · second-pass markup with marta's notes</div>
+                    <div class="ctx">m·006 · acme · <span class="accent">1:02 logged</span> · 12 changes accepted</div>
+                </div>
+            </div>
+
+            <div class="slot now">
+                <div class="when">10:30<span class="end">→ 12:00</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">deep · in progress · 12 min in</div>
+                    <div class="what">nda round 2 · counter-party comments &amp; cover email</div>
+                    <div class="ctx">m·006 · acme · timer running · est 1:30 to finish</div>
+
+                    <div class="nudge">
+                        <span class="by">★ ordify, just now</span>
+                        the counter-party usually replies within 3 days. once you send, friday's call with marta becomes the natural close-out — i'll prep talking points an hour before.
+                        <div style="margin-top: 8px"><a>send when ready</a><a class="dim">later</a></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="now-line">
+                <span class="label">now · 10:42</span>
+                <span class="dot"></span>
+                <span class="what">2h 18m of focused work left until your next call</span>
+            </div>
+
+            <div class="slot meet">
+                <div class="when">13:00<span class="end">→ 13:30</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">meeting · with marta ortega</div>
+                    <div class="what">monthly retainer status · acme</div>
+                    <div class="ctx">m·006 · zoom · last call: 18 min · usually routine</div>
+                </div>
+            </div>
+
+            <div class="slot deep">
+                <div class="when">14:00<span class="end">→ 15:30</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">deep · scheduled</div>
+                    <div class="what">charterparty markup · maersk-flag · nype 2015 round 1</div>
+                    <div class="ctx">m·019 · maersk-flag · est 1:30 · billable @ €150/h</div>
+                </div>
+            </div>
+
+            <div class="slot meet">
+                <div class="when">16:00<span class="end">→ 16:45</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">meeting · with capt. kovalenko</div>
+                    <div class="what">incoterms 2020 dispute · fob clause walk-through</div>
+                    <div class="ctx">m·019 · phone · auto-logs · prep memo attached</div>
+                </div>
+            </div>
+
+            <div class="slot deep">
+                <div class="when">17:00<span class="end">→ 18:00</span></div>
+                <div class="marker"></div>
+                <div class="body">
+                    <div class="label">protected · light end</div>
+                    <div class="what">timesheet review · invoice prep · daily wind-down</div>
+                    <div class="ctx">∅ no matter · ordify will pre-fill from the day's logs</div>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- AFTER HOURS / OPEN TASKS -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>open this week</h2>
+            <span class="count">/ 7 tasks · 2 due in 3 days</span>
+            <span class="right">
+                <a>+ task</a>
+                <a>see all 37</a>
+            </span>
+        </div>
+        <div class="tasks">
+            <div class="task">
+                <span class="check"></span>
+                <div class="title">
+                    review series-b term sheet · comments to outside counsel
+                    <span class="ctx">m·006 · <a>acme tech</a> · due thu · 2 unresolved comments from marta</span>
+                </div>
+                <span class="est">1.5 h</span>
+                <span class="matter">m·006</span>
+            </div>
+            <div class="task">
+                <span class="check"></span>
+                <div class="title">
+                    research · ofac sanctions update · solanapay
+                    <span class="ctx">m·022 · <a>solanapay foundation</a> · due fri · est 2h</span>
+                </div>
+                <span class="est">2 h</span>
+                <span class="matter">m·022</span>
+            </div>
+            <div class="task">
+                <span class="check"></span>
+                <div class="title">
+                    sign retainer renewal — vasylenko private
+                    <span class="ctx">m·028 · <a>vasylenko, a.</a> · awaiting docusign · 3 days idle</span>
+                </div>
+                <span class="est">10 min</span>
+                <span class="matter">m·028</span>
+            </div>
+            <div class="task">
+                <span class="check"></span>
+                <div class="title">
+                    expense receipts · april — submit to bookkeeper
+                    <span class="ctx">∅ admin · 4 receipts queued · €842 total</span>
+                </div>
+                <span class="est">15 min</span>
+                <span class="matter">∅</span>
+            </div>
+            <div class="task done">
+                <span class="check"></span>
+                <div class="title">
+                    review inv·042 draft · acme
+                    <span class="ctx">m·006 · 23 timelogs bundled · sent for review 09:14</span>
+                </div>
+                <span class="est">done</span>
+                <span class="matter">m·006</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- INBOX TRIAGED -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>inbox · triaged</h2>
+            <span class="count">/ 3 of 14 worth your attention</span>
+            <span class="right">
+                <a>open inbox</a>
+            </span>
+        </div>
+        <div class="inbox">
+
+            <div class="mail">
+                <div class="who">marta o.<br><span style="color:var(--accent); font-weight:700">acme</span></div>
+                <div class="body">
+                    <div class="subj">re: term sheet — two more comments before thursday</div>
+                    <div class="summary">
+                        <span class="accent">action needed:</span> she wants you to weigh in on §6.4 (anti-dilution carve-out) and §11 (board observer rights) before the call. expects reply today or tomorrow morning.
+                    </div>
+                    <div class="actions">
+                        <a class="primary">draft reply</a>
+                        <a>open thread</a>
+                        <a>add as task</a>
+                    </div>
+                </div>
+                <div class="meta">07:42<br>1h ago</div>
+            </div>
+
+            <div class="mail">
+                <div class="who">d. kim<br><span style="color:var(--accent); font-weight:700">acme</span></div>
+                <div class="body">
+                    <div class="subj">inv·042 — wire scheduled for fri</div>
+                    <div class="summary">
+                        david confirms the wire is queued. <span class="accent">no action needed.</span> i'll mark inv·042 as <em>payment pending</em> and watch for sepa receipt.
+                    </div>
+                    <div class="actions">
+                        <a class="dim">noted</a>
+                        <a>archive</a>
+                    </div>
+                </div>
+                <div class="meta">06:20<br>2h ago</div>
+            </div>
+
+            <div class="mail">
+                <div class="who">unknown<br><span style="color:var(--muted)">cold</span></div>
+                <div class="body">
+                    <div class="subj">enquiry — startup incorporation, bcn-based founder</div>
+                    <div class="summary">
+                        cold email from a referral via marta. fits your pattern — likely fixed-fee delaware llc + es operating presence. <em>i drafted a polite intake reply and a slot for thursday 11:30.</em>
+                    </div>
+                    <div class="actions">
+                        <a class="primary">send draft</a>
+                        <a>read full</a>
+                        <a class="dim">defer to mon</a>
+                    </div>
+                </div>
+                <div class="meta">05:14<br>5h ago</div>
+            </div>
+
+        </div>
+    </section>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>working alongside</div>
+        <h2 class="ttl">today · <span class="accent">tue</span></h2>
+    </header>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">10:42 · status</span>
+            <p class="text">
+                you're <strong>2.5 hours into the day</strong> and already cleared the morning ritual + first deep block. nda is in flight (12 min in). on pace to ship before lunch.
+            </p>
+            <p class="text">
+                <em>the only real risk today is the 13:00 call running long — last 2 retainer calls with marta averaged 22 min, but she usually has more to say after term-sheet weeks.</em>
+            </p>
+            <div class="actions-row">
+                <a>extend buffer to 14:30</a>
+                <a class="dim">leave as is</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">decisions waiting on you</span>
+            <p class="text">
+                <strong>1.</strong> term-sheet §6.4 vs §11 — marta wants both before thu. <em>i can draft your position from your last 3 series-b matters.</em><br>
+                <strong>2.</strong> cold lead from marta's referral — she vouched. <em>thu 11:30 still open, want me to send the slot?</em><br>
+                <strong>3.</strong> april overage forecast (+1.2h) — bundle into inv·042 or hold for may?
+            </p>
+            <div class="actions-row">
+                <a class="primary">walk me through 1</a>
+                <a>send slot</a>
+                <a>bundle overage</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">later, if there's room</span>
+            <p class="text">
+                <em>q3 tax estimate is due 31 jul. four matters closing this quarter pushes you over the irpf threshold. <strong>not urgent</strong>, but worth 30 min next week — i'll surface it again on monday.</em>
+            </p>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="ask, log, or 'what's next'…">
+        <span class="hint"><kbd>⌘K</kbd> · hold <kbd>␣</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>

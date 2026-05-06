@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · week / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --saffron: #c98a00;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 64px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(24% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(340px, 24%); min-height: 100vh; }
+  .main { padding: 80px 64px 80px; }
+
+  /* Date row */
+  .date-row { display: flex; align-items: baseline; gap: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 24px; }
+  .date-row .now { color: var(--ink); font-weight: 700; }
+  .date-row .sep { color: var(--faint); }
+  .date-row .arrow { color: var(--ink); cursor: pointer; padding: 0 4px; }
+  .date-row .arrow:hover { color: var(--accent); }
+
+  /* HERO */
+  .hero { padding-bottom: 32px; border-bottom: 1px solid var(--ink); display: grid; grid-template-columns: 1fr auto; gap: 56px; align-items: end; }
+  .hero .left .eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero .left h1 {
+      margin: 16px 0 0;
+      font-family: var(--font-sans);
+      font-size: 80px;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 0.92;
+      text-transform: lowercase;
+      color: var(--ink);
+  }
+  .hero .left h1 .accent { color: var(--accent); }
+  .hero .left h1 .punct { color: var(--faint); }
+  .hero .left .lede { margin-top: 18px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 56ch; }
+  .hero .left .lede strong { color: var(--ink); font-weight: 600; }
+
+  .hero .right { display: grid; grid-template-columns: repeat(3, auto); gap: 14px 36px; align-items: end; }
+  .hero .right .stat { text-align: right; }
+  .hero .right .stat .k { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero .right .stat .v { font-family: var(--font-sans); font-size: 28px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); margin-top: 4px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .hero .right .stat .v .small { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 500; }
+  .hero .right .stat .v.accent { color: var(--accent); }
+  .hero .right .stat .sub { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; margin-top: 3px; text-transform: uppercase; }
+  .hero .right .stat .sub.warn { color: var(--warn); font-weight: 700; }
+
+  /* WEEK GRID — 7 columns, rows = hour bands */
+  .week { margin-top: 40px; }
+
+  .week-hdr { display: grid; grid-template-columns: 64px repeat(7, 1fr); gap: 0; border-bottom: 1px solid var(--ink); }
+  .week-hdr .corner { padding: 8px 6px; font-family: var(--font-mono); font-size: 9px; color: var(--faint); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
+  .week-hdr .day { padding: 12px 14px; border-left: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 4px; }
+  .week-hdr .day .dow { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .week-hdr .day .num { font-family: var(--font-sans); font-size: 28px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--ink); }
+  .week-hdr .day .meta { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.04em; text-transform: uppercase; }
+  .week-hdr .day.today .dow { color: var(--accent); }
+  .week-hdr .day.today .num { color: var(--accent); }
+  .week-hdr .day.weekend { background: var(--paper); }
+  .week-hdr .day.weekend .num { color: var(--faint); }
+  .week-hdr .day.weekend .dow { color: var(--faint); }
+
+  /* Hour rows */
+  .week-body { position: relative; }
+  .hr-row { display: grid; grid-template-columns: 64px repeat(7, 1fr); gap: 0; border-bottom: 1px solid var(--line-soft); min-height: 64px; }
+  .hr-row.major { border-bottom-color: var(--line); }
+  .hr-row .hr-label { padding: 4px 6px 0; font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }
+  .hr-row .hr-label .h { color: var(--muted); font-weight: 600; }
+  .hr-row .cell { border-left: 1px solid var(--line-soft); position: relative; padding: 4px 6px; }
+  .hr-row .cell.today { background: rgba(106,27,154,0.025); }
+  .hr-row .cell.weekend { background: var(--paper); }
+
+  /* Event blocks — positioned absolutely within their day column with their own grid-row */
+  .ev {
+      position: absolute;
+      left: 4px; right: 4px;
+      padding: 6px 8px;
+      font-family: var(--font-text);
+      font-size: 11.5px;
+      line-height: 1.3;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      cursor: pointer;
+      border-left: 2px solid var(--ink);
+      background: var(--paper);
+      overflow: hidden;
+      transition: transform 80ms;
+      z-index: 1;
+  }
+  .ev:hover { transform: translateY(-1px); z-index: 2; box-shadow: 0 4px 16px -4px rgba(0,0,0,0.1); }
+  .ev .when { font-family: var(--font-mono); font-size: 9px; color: var(--muted); letter-spacing: 0.06em; font-weight: 600; }
+  .ev .title { margin-top: 2px; font-weight: 500; }
+  .ev .title .ctx { display: block; font-family: var(--font-mono); font-size: 9px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; font-weight: 600; }
+  .ev.acme { border-left-color: var(--accent); }
+  .ev.acme .title { color: var(--accent); font-weight: 600; }
+  .ev.maersk { border-left-color: var(--cobalt); }
+  .ev.maersk .title { color: var(--cobalt); font-weight: 600; }
+  .ev.solana { border-left-color: var(--saffron); }
+  .ev.solana .title { color: var(--saffron); font-weight: 600; }
+  .ev.priv { border-left-color: var(--ink); }
+  .ev.deep { background: var(--bg); border-left-style: solid; }
+  .ev.meet { background: var(--paper); border-left-width: 3px; }
+  .ev.deadline { background: #fff5f3; border-left-color: var(--warn); }
+  .ev.deadline .title { color: var(--warn); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; }
+  .ev.deadline .when { color: var(--warn); }
+  .ev.invoice { background: rgba(106,27,154,0.06); border-left-color: var(--accent); }
+  .ev.invoice .title { color: var(--accent); font-weight: 700; text-transform: uppercase; font-size: 10px; letter-spacing: 0.06em; }
+  .ev.done { background: var(--bg); border-left-color: var(--faint); }
+  .ev.done .title, .ev.done .when { color: var(--faint); text-decoration: line-through; text-decoration-color: var(--line); }
+
+  .ev.ai-suggest { background: transparent; border: 1px dashed var(--accent); border-left: 2px dashed var(--accent); }
+  .ev.ai-suggest .title { color: var(--accent); font-style: italic; font-weight: 500; }
+  .ev.ai-suggest .when { color: var(--accent); }
+  .ev.ai-suggest .title .ctx { color: var(--accent); font-style: normal; font-weight: 700; }
+
+  /* NOW-line — horizontal accent line through current day at current time */
+  .now-line {
+      position: absolute;
+      left: 64px; right: 0;
+      border-top: 1.5px solid var(--accent);
+      z-index: 3;
+      pointer-events: none;
+  }
+  .now-line::before {
+      content: "now · 10:42";
+      position: absolute;
+      left: -56px;
+      top: -8px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      background: var(--bg);
+      padding: 2px 4px;
+  }
+  .now-line .dot {
+      position: absolute;
+      width: 9px; height: 9px;
+      background: var(--accent);
+      border-radius: 50%;
+      top: -5px;
+      box-shadow: 0 0 0 4px rgba(106,27,154,0.15);
+      animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.4} }
+
+  /* Pull-quote */
+  .pull {
+      margin: 56px 0 0;
+      padding: 24px 0 24px 28px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-sans);
+      font-size: 26px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.35;
+      color: var(--ink);
+      max-width: 56ch;
+  }
+  .pull .src { display: block; margin-top: 12px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  /* WEEKLY DIGEST — narrative wrap-up */
+  .digest { margin-top: 56px; padding-top: 40px; border-top: 1px solid var(--ink); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px; }
+  .digest .col h3 { margin: 0 0 16px; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .digest .col h3 .accent { color: var(--accent); }
+
+  /* Distribution stripe — by client */
+  .dist { display: flex; height: 8px; gap: 1px; margin-bottom: 16px; }
+  .dist .seg { transition: opacity 80ms; }
+  .dist .seg.acme { background: var(--accent); }
+  .dist .seg.maersk { background: var(--cobalt); }
+  .dist .seg.solana { background: var(--saffron); }
+  .dist .seg.priv { background: var(--ink); }
+  .dist .seg.empty { background: var(--line); }
+
+  .dist-rows { display: flex; flex-direction: column; gap: 10px; }
+  .dist-row { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 12px; align-items: baseline; }
+  .dist-row .sw { width: 10px; height: 10px; align-self: center; }
+  .dist-row .name { font-family: var(--font-text); font-size: 14px; color: var(--ink); letter-spacing: -0.005em; font-weight: 500; }
+  .dist-row .name .ctx { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; font-weight: 500; }
+  .dist-row .h { font-family: var(--font-mono); font-size: 13px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dist-row .pct { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+
+  /* Forecast list */
+  .fcast { display: flex; flex-direction: column; gap: 14px; }
+  .fcast .row { display: grid; grid-template-columns: 60px 1fr; gap: 14px; align-items: baseline; }
+  .fcast .row .when { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .fcast .row .when.warn { color: var(--warn); font-weight: 700; }
+  .fcast .row .what { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.45; font-weight: 500; }
+  .fcast .row .what .ctx { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 3px; font-weight: 500; }
+  .fcast .row .what .accent { color: var(--accent); font-weight: 600; }
+
+  /* Notes column */
+  .notes p { margin: 0 0 16px; font-family: var(--font-text); font-size: 14px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.6; }
+  .notes p strong { font-weight: 600; }
+  .notes p .accent { color: var(--accent); font-weight: 600; }
+  .notes p em { font-style: normal; color: var(--muted); }
+  .notes .actions { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .notes .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .notes .actions a:hover { color: var(--accent); border-color: var(--accent); }
+  .notes .actions a.primary { color: var(--accent); border-color: var(--accent); }
+  .notes .actions a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 80px 28px 22px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  .stream { flex: 1; padding: 22px 28px 0; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+
+  .actions-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions-row a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions-row a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 16px 28px 22px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1300px) {
+    .stage { grid-template-columns: 1fr; }
+    .main { padding: 64px 24px; }
+    .rail { display: none; }
+    .mini-nav { right: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a>today</a>
+    <a class="act">week</a>
+    <a>matters</a>
+    <a>billing</a>
+</nav>
+
+<div class="stage">
+
+<main class="main">
+
+    <div class="date-row">
+        <span class="now">week 19 · 04 → 10 may 2026</span>
+        <span class="sep">/</span>
+        <span class="arrow">‹ wk 18</span>
+        <span class="arrow">wk 20 ›</span>
+        <span class="sep">/</span>
+        <span>3 deadlines</span>
+        <span class="sep">/</span>
+        <span>2 invoice events</span>
+    </div>
+
+    <header class="hero">
+        <div class="left">
+            <div class="eyebrow">the week ahead · monday → sunday</div>
+            <h1>front-load thursday<span class="punct">,</span><br>protect <span class="accent">friday.</span></h1>
+            <p class="lede">
+                two deadlines (term sheet thu · ofac fri), one routine retainer call, and the maersk arbitration prep starts wed. <strong>13.5h committed</strong>, <strong>9h flex</strong>. ordify is holding friday afternoon as light because last 4 fridays you ran 1.4× longer than planned.
+            </p>
+        </div>
+        <div class="right">
+            <div class="stat">
+                <div class="k">committed</div>
+                <div class="v">13.5 <span class="small">h</span></div>
+                <div class="sub">11 events · 5 days</div>
+            </div>
+            <div class="stat">
+                <div class="k">billable</div>
+                <div class="v accent">9.8 <span class="small">h</span></div>
+                <div class="sub">€1,470 forecast</div>
+            </div>
+            <div class="stat">
+                <div class="k">deadlines</div>
+                <div class="v">3</div>
+                <div class="sub warn">2 due thu · fri</div>
+            </div>
+            <div class="stat">
+                <div class="k">deep blocks</div>
+                <div class="v">7</div>
+                <div class="sub">avg 1h 18m each</div>
+            </div>
+            <div class="stat">
+                <div class="k">flex left</div>
+                <div class="v">9 <span class="small">h</span></div>
+                <div class="sub">mostly thu pm + fri am</div>
+            </div>
+            <div class="stat">
+                <div class="k">invoices</div>
+                <div class="v">2</div>
+                <div class="sub">042 due · 043 cycle</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- WEEK GRID -->
+    <section class="week">
+        <div class="week-hdr">
+            <span class="corner">cet</span>
+            <div class="day"><span class="dow">mon</span><span class="num">04</span><span class="meta">5 events · 2.0h</span></div>
+            <div class="day today"><span class="dow">tue · today</span><span class="num">06</span><span class="meta">6 events · 4.5h</span></div>
+            <div class="day"><span class="dow">wed</span><span class="num">07</span><span class="meta">4 events · 3.0h</span></div>
+            <div class="day"><span class="dow">thu</span><span class="num">08</span><span class="meta">3 events · 2.0h</span></div>
+            <div class="day"><span class="dow">fri</span><span class="num">09</span><span class="meta">3 events · 2.0h · light</span></div>
+            <div class="day weekend"><span class="dow">sat</span><span class="num">10</span><span class="meta">∅ off</span></div>
+            <div class="day weekend"><span class="dow">sun</span><span class="num">11</span><span class="meta">∅ off</span></div>
+        </div>
+
+        <!-- 09 - 18, each row = 1 hour, height 64px -->
+        <div class="week-body">
+            <div class="now-line" style="top: calc((10 - 9) * 64px + (42/60 * 64px)); left: 64px;"><span class="dot" style="left: calc((1 + 1) / 7 * (100% - 0px) - 4.5px); margin-left: 0;"></span></div>
+
+            <!-- 09:00 -->
+            <div class="hr-row major">
+                <div class="hr-label"><span class="h">09</span></div>
+                <div class="cell">
+                    <div class="ev priv done" style="height: 60px"><div class="when">09:00 · 30m</div><div class="title">morning review<span class="ctx">∅ · done</span></div></div>
+                </div>
+                <div class="cell today">
+                    <div class="ev acme done" style="height: 60px"><div class="when">09:00 · 1h</div><div class="title">term sheet markup<span class="ctx">m·006 · acme · done</span></div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell">
+                    <div class="ev deep" style="height: 124px"><div class="when">09:00 · 2h</div><div class="title">term sheet · final pass<span class="ctx">m·006 · acme · deadline 12:00</span></div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 10:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">10</span></div>
+                <div class="cell">
+                    <div class="ev meet" style="top: 0; height: 124px"><div class="when">10:00 · 2h</div><div class="title">charterparty · b/l review<span class="ctx">m·019 · maersk · billable</span></div></div>
+                </div>
+                <div class="cell today">
+                    <div class="ev acme deep" style="top: 32px; height: 92px"><div class="when">10:30 · 1h 30m</div><div class="title">nda round 2<span class="ctx">m·006 · acme · timer running</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev maersk meet" style="height: 60px"><div class="when">10:00 · 1h</div><div class="title">arbitration prep<span class="ctx">m·019 · maersk</span></div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell">
+                    <div class="ev solana deep" style="height: 60px"><div class="when">10:00 · 1h</div><div class="title">ofac update · final<span class="ctx">m·022 · solana · deadline 12:00</span></div></div>
+                </div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 11:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">11</span></div>
+                <div class="cell"></div>
+                <div class="cell today"></div>
+                <div class="cell"></div>
+                <div class="cell">
+                    <div class="ev acme deadline" style="height: 60px"><div class="when">11:30 · 30m</div><div class="title">deadline · term sheet</div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev solana deadline" style="height: 30px"><div class="when">11:30 · 30m</div><div class="title">deadline · ofac</div></div>
+                </div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 12:00 -->
+            <div class="hr-row major">
+                <div class="hr-label"><span class="h">12</span></div>
+                <div class="cell"></div>
+                <div class="cell today"></div>
+                <div class="cell"></div>
+                <div class="cell"></div>
+                <div class="cell"></div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 13:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">13</span></div>
+                <div class="cell">
+                    <div class="ev priv meet" style="height: 30px"><div class="when">13:00 · 30m</div><div class="title">vasylenko · sign retainer<span class="ctx">m·028 · 10 min</span></div></div>
+                </div>
+                <div class="cell today">
+                    <div class="ev acme meet" style="height: 30px"><div class="when">13:00 · 30m</div><div class="title">marta · status<span class="ctx">m·006 · acme</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev meet" style="height: 30px"><div class="when">13:00 · 30m</div><div class="title">team admin · weekly<span class="ctx">∅</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev ai-suggest" style="height: 30px"><div class="when">13:00 · 30m</div><div class="title">★ flex held for marta if call runs<span class="ctx">ordify suggests</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev ai-suggest" style="height: 124px"><div class="when">13:00 · 2h</div><div class="title">★ flex protected · light end<span class="ctx">last 4 fri · 1.4× plan</span></div></div>
+                </div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 14:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">14</span></div>
+                <div class="cell">
+                    <div class="ev maersk deep" style="height: 92px"><div class="when">14:00 · 1h 30m</div><div class="title">incoterms research<span class="ctx">m·019 · billable</span></div></div>
+                </div>
+                <div class="cell today">
+                    <div class="ev maersk deep" style="height: 92px"><div class="when">14:00 · 1h 30m</div><div class="title">nype 2015 markup<span class="ctx">m·019 · maersk</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev solana deep" style="height: 124px"><div class="when">14:00 · 2h</div><div class="title">ofac sanctions update<span class="ctx">m·022 · solana</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev priv deep" style="height: 60px"><div class="when">14:00 · 1h</div><div class="title">cold lead intake<span class="ctx">∅ · referral · marta</span></div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 15:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">15</span></div>
+                <div class="cell"></div>
+                <div class="cell today"></div>
+                <div class="cell"></div>
+                <div class="cell">
+                    <div class="ev acme meet" style="top: 0; height: 60px"><div class="when">15:00 · 1h</div><div class="title">marta · debrief<span class="ctx">m·006 · post-deadline</span></div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 16:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">16</span></div>
+                <div class="cell">
+                    <div class="ev priv meet" style="height: 30px"><div class="when">16:00 · 30m</div><div class="title">bookkeeper · expenses<span class="ctx">∅ admin</span></div></div>
+                </div>
+                <div class="cell today">
+                    <div class="ev maersk meet" style="height: 45px"><div class="when">16:00 · 45m</div><div class="title">capt. kovalenko · phone<span class="ctx">m·019 · incoterms</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev ai-suggest" style="height: 60px"><div class="when">16:00 · 1h</div><div class="title">★ buffer · arbitration prep overflow<span class="ctx">ordify suggests</span></div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell">
+                    <div class="ev invoice" style="height: 30px"><div class="when">16:00</div><div class="title">inv·043 · cycle close</div></div>
+                </div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 17:00 -->
+            <div class="hr-row">
+                <div class="hr-label"><span class="h">17</span></div>
+                <div class="cell">
+                    <div class="ev priv done" style="height: 60px"><div class="when">17:00 · 1h</div><div class="title">timesheet wind-down<span class="ctx">∅ · done</span></div></div>
+                </div>
+                <div class="cell today">
+                    <div class="ev priv deep" style="height: 60px"><div class="when">17:00 · 1h</div><div class="title">timesheet wind-down<span class="ctx">∅</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev priv deep" style="top: 0; height: 60px"><div class="when">17:00 · 1h</div><div class="title">timesheet wind-down<span class="ctx">∅</span></div></div>
+                </div>
+                <div class="cell">
+                    <div class="ev acme invoice" style="height: 30px"><div class="when">17:00</div><div class="title">inv·042 · acme · due</div></div>
+                </div>
+                <div class="cell"></div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+
+            <!-- 18:00 -->
+            <div class="hr-row major">
+                <div class="hr-label"><span class="h">18</span></div>
+                <div class="cell"></div>
+                <div class="cell today"></div>
+                <div class="cell"></div>
+                <div class="cell"></div>
+                <div class="cell"></div>
+                <div class="cell weekend"></div>
+                <div class="cell weekend"></div>
+            </div>
+        </div>
+    </section>
+
+    <p class="pull">
+        “if thursday term-sheet runs over, your friday is already half-protected — i'll move ofac research to wednesday afternoon and tell solanapay we're delivering a day early.”
+        <span class="src">— ordify · contingency plan</span>
+    </p>
+
+    <!-- DIGEST: 3-COL -->
+    <section class="digest">
+
+        <div class="col">
+            <h3>by client · <span class="accent">9.8h billable</span></h3>
+            <div class="dist">
+                <div class="seg acme" style="flex: 41"></div>
+                <div class="seg maersk" style="flex: 38"></div>
+                <div class="seg solana" style="flex: 14"></div>
+                <div class="seg priv" style="flex: 7"></div>
+            </div>
+            <div class="dist-rows">
+                <div class="dist-row">
+                    <span class="sw" style="background: var(--accent)"></span>
+                    <div class="name">acme tech<span class="ctx">m·006 retainer + m·014 series-b</span></div>
+                    <span class="h">5.5h</span>
+                    <span class="pct">41%</span>
+                </div>
+                <div class="dist-row">
+                    <span class="sw" style="background: var(--cobalt)"></span>
+                    <div class="name">maersk-flag<span class="ctx">m·019 charterparty advisory · hourly</span></div>
+                    <span class="h">5.0h</span>
+                    <span class="pct">38%</span>
+                </div>
+                <div class="dist-row">
+                    <span class="sw" style="background: var(--saffron)"></span>
+                    <div class="name">solanapay<span class="ctx">m·022 ofac update · fixed</span></div>
+                    <span class="h">2.0h</span>
+                    <span class="pct">14%</span>
+                </div>
+                <div class="dist-row">
+                    <span class="sw" style="background: var(--ink)"></span>
+                    <div class="name">vasylenko + admin<span class="ctx">private + bookkeeping</span></div>
+                    <span class="h">1.0h</span>
+                    <span class="pct">7%</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <h3>upcoming · <span class="accent">3 deadlines · 2 invoices</span></h3>
+            <div class="fcast">
+                <div class="row">
+                    <span class="when warn">thu · 11:30</span>
+                    <div class="what">
+                        term sheet · final markup to outside counsel
+                        <span class="ctx">m·006 · acme · 2 unresolved · marta wants weigh-in</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <span class="when warn">fri · 11:30</span>
+                    <div class="what">
+                        ofac sanctions update · delivered
+                        <span class="ctx">m·022 · solana · est 2h work · contingency moved to wed</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <span class="when">fri · 17:00</span>
+                    <div class="what">
+                        inv·042 · acme · payment due
+                        <span class="ctx"><span class="accent">€5,355</span> · david confirmed wire scheduled</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <span class="when">fri · 18:00</span>
+                    <div class="what">
+                        inv·043 · maersk-flag · cycle close
+                        <span class="ctx">draft auto-bundle · 5 timelogs · review monday</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <span class="when">mon · next</span>
+                    <div class="what">
+                        retainer renewal · vasylenko private
+                        <span class="ctx">awaiting docusign · 3 days idle · nudge sent</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col notes">
+            <h3>ordify · <span class="accent">read of the week</span></h3>
+            <p>
+                <strong>shape of the week is acme + maersk.</strong> two long-running matters, one ending a phase (term sheet → debrief), one starting (charterparty arbitration prep). solana and admin sit in the gaps.
+            </p>
+            <p>
+                <em>thursday is the structural pinch — term sheet at 11:30 with marta debrief at 15:00. if §6.4 or §11 turn into a fight, the afternoon goes. <strong>i held friday morning empty as the parachute.</strong></em>
+            </p>
+            <p>
+                <span class="accent">two things to decide before monday's start:</span> whether to add cap-table cleanup as next-week's m·006 work (it's been parked 9 days), and whether to accept the cold-lead slot you're sending today.
+            </p>
+            <div class="actions">
+                <a class="primary">accept plan</a>
+                <a>shift fri to wed</a>
+                <a>add cap-table</a>
+                <a class="dim">explain again</a>
+            </div>
+        </div>
+
+    </section>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>working alongside</div>
+        <h2 class="ttl">week <span class="accent">19</span></h2>
+    </header>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">10:42 · pulse</span>
+            <p class="text">
+                you're <strong>4 of 21 events</strong> through the week and tracking on time. pace is <span class="accent">1.04× plan</span> — a smidge ahead, mostly because monday closed clean.
+            </p>
+            <p class="text">
+                <em>biggest single risk: thursday 11:30 term-sheet. i give it a 35% chance of running over by 1+ hour based on §6.4 history. friday morning is the buffer.</em>
+            </p>
+            <div class="actions-row">
+                <a>show contingency</a>
+                <a class="dim">later</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">3 things to decide</span>
+            <p class="text">
+                <strong>1.</strong> shift ofac research to wed pm? <em>(saves 2h on fri, gives solana a day-early delivery)</em><br>
+                <strong>2.</strong> accept cold-lead intake at thu 14:00? <em>(marta vouched · likely fixed-fee)</em><br>
+                <strong>3.</strong> add cap-table cleanup to next week? <em>(parked 9 days · david still blocking)</em>
+            </p>
+            <div class="actions-row">
+                <a class="primary">walk through 1</a>
+                <a>accept lead</a>
+                <a>park cap-table</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">forecast · billable</span>
+            <p class="text">
+                if the week goes as planned: <strong>9.8 billable hours · €1,470</strong>. acme overage forecast adds <span class="accent">+1.2h</span> · €180 to inv·042. maersk hourly logs another <strong>5h · €750</strong>. <em>net: a normal week, slightly above 4-week avg.</em>
+            </p>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="ask, plan, or 'shift fri to wed'…">
+        <span class="hint"><kbd>⌘K</kbd> · hold <kbd>␣</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>

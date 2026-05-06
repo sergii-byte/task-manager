@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · palette in context</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body { background: var(--bg-1); }
+
+  .head-bar {
+      padding: 24px 32px;
+      border-bottom: var(--rule-thick);
+      background: var(--bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+  }
+  .head-bar .crumbs {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-weight: 600;
+  }
+  .head-bar h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      text-transform: lowercase;
+      line-height: 0.95;
+      margin: 0;
+  }
+  .head-bar h1 .accent { color: var(--accent); }
+  .head-bar p {
+      font-family: var(--font-text);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      max-width: 56ch;
+      margin: 8px 0 0;
+  }
+
+  .section {
+      border-bottom: var(--rule-thin);
+      background: var(--bg);
+  }
+  .section-head {
+      display: grid;
+      grid-template-columns: 80px 1fr auto;
+      align-items: baseline;
+      gap: 24px;
+      padding: 28px 32px;
+      border-bottom: var(--rule-thin);
+  }
+  .section-num {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--accent);
+      letter-spacing: var(--tracking-ultra);
+      text-transform: uppercase;
+      border-top: 2px solid var(--accent);
+      padding-top: 8px;
+      line-height: 1.4;
+  }
+  .section-head h2 {
+      font-family: var(--font-sans);
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin: 0;
+      text-transform: lowercase;
+  }
+  .section-head h2 .accent { color: var(--accent); }
+  .section-head .desc {
+      color: var(--fg-muted);
+      font-size: var(--text-sm);
+      max-width: 38ch;
+      text-align: right;
+      font-family: var(--font-text);
+  }
+  .section-body { padding: 32px; }
+
+  /* ============ Capture surface (linen — option C) ============ */
+  .capture-pad {
+      background: var(--linen-paper);
+      color: var(--linen-ink);
+      border: 1px solid var(--linen-ink);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      position: relative;
+      min-height: 280px;
+      max-width: 720px;
+  }
+  .capture-pad .pad-meta {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      font-weight: 700;
+      color: var(--linen-muted);
+  }
+  .capture-pad .pad-text {
+      font-family: var(--font-text);
+      font-size: var(--text-lg);
+      font-weight: 500;
+      line-height: 1.4;
+      flex: 1;
+  }
+  .capture-pad .pad-text mark {
+      background: var(--accent);
+      color: var(--bg);
+      padding: 0 4px;
+  }
+  .capture-pad .pad-foot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-top: 1px solid var(--linen-ink);
+      padding-top: 12px;
+  }
+  .capture-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border: 2px solid var(--ink);
+      background: var(--bg);
+      max-width: 720px;
+      margin-top: 16px;
+  }
+  .capture-strip > div {
+      padding: 14px 16px;
+      border-right: 1px solid var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+  }
+  .capture-strip > div:last-child { border-right: 0; }
+  .capture-strip .k {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+  }
+  .capture-strip .v { font-size: var(--text-md); font-weight: 700; }
+  .capture-strip .v.accent { color: var(--accent); }
+
+  /* ============ Tracker (lime running + ink log) ============ */
+  .tracker {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 2px solid var(--ink);
+      min-height: 320px;
+  }
+  .tracker-now {
+      padding: 28px;
+      background: var(--lime);
+      color: var(--ink);
+      border-right: 2px solid var(--ink);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+  }
+  .tracker-now .label {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+  }
+  .tracker-now .label .dot {
+      width: 10px;
+      height: 10px;
+      background: var(--vermillion);
+      animation: pulse 1.6s ease-in-out infinite;
+  }
+  .tracker-now .clock {
+      font-family: var(--font-mono);
+      font-size: clamp(56px, 7vw, 88px);
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      font-variant-numeric: tabular-nums;
+  }
+  .tracker-now .clock .ms {
+      font-size: 0.4em;
+      color: var(--ink);
+      opacity: 0.5;
+  }
+  .tracker-now .who {
+      font-size: var(--text-md);
+      font-weight: 600;
+      line-height: 1.3;
+  }
+  .tracker-now .who .proj-meta {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      display: block;
+      margin-bottom: 4px;
+  }
+  .tracker-now .controls { display: flex; gap: 8px; }
+
+  .tracker-log { display: flex; flex-direction: column; background: var(--bg); }
+  .tracker-log .log-head {
+      padding: 14px 20px;
+      background: var(--ink);
+      color: var(--bg);
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+  }
+  .log-entry {
+      display: grid;
+      grid-template-columns: 60px 1fr 90px;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      font-family: var(--font-text);
+  }
+  .log-entry .time {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+  }
+  .log-entry .what { font-size: var(--text-sm); font-weight: 600; }
+  .log-entry .what .meta {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      color: var(--fg-muted);
+      display: block;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+  }
+  .log-entry .duration {
+      font-family: var(--font-mono);
+      font-size: var(--text-md);
+      font-weight: 700;
+      text-align: right;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+  }
+  .log-entry .duration.bill { color: var(--vermillion); }
+
+  /* ============ Brief (paper raw → ink+plum letterform) ============ */
+  .brief-shell {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border: 2px solid var(--ink);
+      background: var(--bg);
+  }
+  .brief-input {
+      padding: 24px;
+      border-right: 2px solid var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: var(--bg-1);
+  }
+  .brief-input .raw {
+      font-family: var(--font-text);
+      font-size: var(--text-md);
+      line-height: 1.5;
+      color: var(--fg);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      padding: 14px;
+      flex: 1;
+      min-height: 180px;
+  }
+  .brief-input .raw .scratch {
+      text-decoration: line-through;
+      color: var(--fg-faint);
+  }
+  .brief-input .raw mark {
+      background: var(--lime);
+      color: var(--ink);
+      padding: 0 3px;
+  }
+  .brief-output {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background: var(--ink);
+      color: var(--bg);
+      position: relative;
+      overflow: hidden;
+  }
+  .brief-output::before {
+      content: "PL";
+      position: absolute;
+      top: -32px;
+      right: -16px;
+      font-family: var(--font-sans);
+      font-size: 200px;
+      font-weight: 800;
+      color: rgba(181, 114, 214, 0.22);
+      letter-spacing: -0.08em;
+      line-height: 1;
+      pointer-events: none;
+  }
+  .brief-output .label {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--accent-200);
+      position: relative;
+  }
+  .brief-output h3 {
+      font-size: var(--text-2xl);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      text-transform: lowercase;
+      margin: 0;
+      position: relative;
+  }
+  .brief-output .field-out {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 12px;
+      font-size: var(--text-sm);
+      position: relative;
+      padding: 10px 0;
+      border-top: 1px solid #333;
+  }
+  .brief-output .field-out .k {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: #888;
+  }
+  .brief-output .field-out .v {
+      color: var(--bg);
+      font-family: var(--font-text);
+  }
+  .brief-output .field-out .v .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--accent);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      margin-right: 6px;
+  }
+
+  /* ============ Invoice grand-amount (plum) ============ */
+  .invoice-mini {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      border: 2px solid var(--ink);
+      background: var(--bg);
+  }
+  .invoice-mini .totals-list {
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-self: end;
+      background: var(--bg-1);
+  }
+  .invoice-mini .totals-list .row {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+  }
+  .invoice-mini .totals-list .row.grand {
+      border-top: 2px solid var(--ink);
+      padding-top: 12px;
+      margin-top: 6px;
+      color: var(--ink);
+      font-weight: 700;
+      font-size: var(--text-md);
+  }
+  .invoice-mini .grand-amount {
+      background: var(--accent);
+      color: var(--bg);
+      padding: 24px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: flex-start;
+  }
+  .invoice-mini .grand-amount .k {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      margin-bottom: 4px;
+  }
+  .invoice-mini .grand-amount .v {
+      font-family: var(--font-sans);
+      font-size: 56px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      font-variant-numeric: tabular-nums;
+  }
+  .invoice-mini .grand-amount .due {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      margin-top: 8px;
+      opacity: 0.85;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+  }
+
+  /* ============ Tags ============ */
+  .ns-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      font-size: var(--text-2xs);
+      font-weight: 600;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      border: 1px solid var(--ink);
+      background: var(--bg);
+      color: var(--fg);
+      height: 22px;
+  }
+  .ns-tag .dot { width: 6px; height: 6px; background: currentColor; }
+  .ns-tag.work     { color: var(--ink); }
+  .ns-tag.design   { color: var(--cobalt); border-color: var(--cobalt); }
+  .ns-tag.research { background: var(--saffron); color: var(--ink); border-color: var(--saffron); }
+  .ns-tag.legal    { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .ns-tag.life     { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .ns-tag.craft    { background: var(--lime); color: var(--ink); border-color: var(--ink); }
+  .ns-tag.fun      { background: var(--magenta); color: var(--bg); border-color: var(--magenta); }
+  .ns-tag.cash     { background: var(--vermillion); color: var(--bg); border-color: var(--vermillion); }
+
+  .ns-priority {
+      display: inline-flex;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      font-weight: 700;
+      letter-spacing: var(--tracking-wide);
+      padding: 3px 8px;
+      border: 1px solid var(--ink);
+      background: var(--bg);
+      color: var(--ink);
+      height: 22px;
+  }
+  .ns-priority.urgent { background: var(--vermillion); color: var(--bg); border-color: var(--vermillion); }
+  .ns-priority.high   { background: var(--ink); color: var(--bg); }
+  .ns-priority.med    { background: var(--bg); color: var(--ink); }
+  .ns-priority.low    { background: var(--bg); color: var(--fg-faint); border-color: var(--fg-faint); }
+
+  .ns-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--text-2xs);
+      font-weight: 600;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      padding: 3px 8px;
+      border: 1px solid var(--line-strong);
+      background: var(--bg);
+      color: var(--fg);
+      height: 22px;
+  }
+  .ns-status .pulse { width: 6px; height: 6px; background: currentColor; }
+  .ns-status.todo    { color: var(--fg-faint); border-color: var(--fg-faint); }
+  .ns-status.doing   { color: var(--accent); border-color: var(--accent); }
+  .ns-status.doing .pulse { animation: pulse 1.6s ease-in-out infinite; }
+  .ns-status.review  { color: var(--cobalt); border-color: var(--cobalt); }
+  .ns-status.done    { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .ns-status.overdue { background: var(--vermillion); color: var(--bg); border-color: var(--vermillion); }
+
+  /* ============ Sidebar swatches in rotation ============ */
+  .swatch-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      border: 1px solid var(--ink);
+      max-width: 720px;
+  }
+  .swatch-row > div {
+      padding: 14px 12px;
+      border-right: 1px solid var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+  }
+  .swatch-row > div:last-child { border-right: 0; }
+  .swatch-row .chip {
+      width: 12px; height: 12px;
+  }
+  .swatch-row .name {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      color: var(--fg);
+  }
+  .swatch-row .hex {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-faint);
+  }
+
+  /* ============ Pill row layout ============ */
+  .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+  }
+  .pill-row .pill-label {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--fg-faint);
+      width: 80px;
+      flex-shrink: 0;
+  }
+  .pill-row + .pill-row { margin-top: 16px; }
+
+  /* ============ Buttons (mini) ============ */
+  .btn {
+      appearance: none;
+      border: 1px solid var(--ink);
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      padding: 8px 14px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+      border-radius: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 120ms;
+  }
+  .btn.sm { padding: 6px 10px; font-size: 10px; }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+  .btn.accent { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .btn.accent:hover { background: var(--accent-700); border-color: var(--accent-700); }
+</style>
+</head>
+<body>
+
+<div class="head-bar">
+    <div>
+        <div class="crumbs">FILE 00 · PALETTE · IN CONTEXT</div>
+        <h1>where each colour <span class="accent">lives.</span></h1>
+        <p>One bold accent (plum) on white+ink. Other bright colours don't compete — each owns one feature surface or semantic role. Below: every bright element shown in the exact UI surface where it'll appear.</p>
+    </div>
+    <div>
+        <a href="/" class="btn sm" style="text-decoration:none">‹ Back to app</a>
+    </div>
+</div>
+
+<!-- ============ X.01 — Capture surface (saffron) ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.01<br>CAPTURE</div>
+        <h2>capture · <span class="accent">linen</span> notepad</h2>
+        <div class="desc">Cream paper with dark-brown ink and plum marks. Quiet, premium, doesn't compete with the daily flow. AI converts marks → tasks.</div>
+    </div>
+    <div class="section-body">
+        <div class="capture-pad">
+            <div class="pad-meta">
+                <span>NOTE 014 · 14:32</span>
+                <span>SCRATCHPAD</span>
+            </div>
+            <div class="pad-text">
+                Mira called — wants the proposal <mark>by Friday</mark>, not next week. Add a slide on pricing tiers <mark>with cobalt accent</mark>. Loop in <mark>Sam for legal review</mark> before send.
+            </div>
+            <div class="pad-foot">
+                <span class="ns-tag" style="background:var(--linen-ink);color:var(--linen-paper);border-color:var(--linen-ink)">3 ACTIONS DETECTED</span>
+                <button class="btn accent sm" style="margin-left:auto">▸ CONVERT TO TASKS</button>
+            </div>
+        </div>
+        <div class="capture-strip">
+            <div><span class="k">CAPTURED</span><span class="v">14</span></div>
+            <div><span class="k">PARSED</span><span class="v accent">11</span></div>
+            <div><span class="k">QUEUED</span><span class="v">03</span></div>
+            <div><span class="k">SOURCE</span><span class="v">VOICE · KEY · MAIL</span></div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ X.02 — Tracker (lime + ink) ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.02<br>TIME</div>
+        <h2>tracker · <span class="accent">lime</span> when running</h2>
+        <div class="desc">Lime acid-green only when timer is active. Vermillion pulse dot signals «live». Stops → block reverts to ink-bordered idle state.</div>
+    </div>
+    <div class="section-body">
+        <div class="tracker">
+            <div class="tracker-now">
+                <div class="label"><span class="dot"></span>RUNNING · STARTED 09:45</div>
+                <div>
+                    <div class="clock">02:47<span class="ms">:14</span></div>
+                    <div class="who" style="margin-top:16px">
+                        <span class="proj-meta">ACME LTD · Q3 NDA · BILLABLE</span>
+                        Drafting non-disclosure terms
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="btn primary sm">▍▍ PAUSE</button>
+                    <button class="btn sm">■ STOP</button>
+                </div>
+            </div>
+            <div class="tracker-log">
+                <div class="log-head">
+                    <span>TODAY · 29.04.26</span>
+                    <span style="color:var(--vermillion)">06:14 BILLABLE</span>
+                </div>
+                <div class="log-entry">
+                    <span class="time">09:45 →</span>
+                    <span class="what">Drafting NDA terms<span class="meta">ACME · Q3 · BILLABLE</span></span>
+                    <span class="duration bill">02:47</span>
+                </div>
+                <div class="log-entry">
+                    <span class="time">09:30</span>
+                    <span class="what">Standup<span class="meta">INTERNAL</span></span>
+                    <span class="duration">00:15</span>
+                </div>
+                <div class="log-entry">
+                    <span class="time">07:30</span>
+                    <span class="what">Onboarding review<span class="meta">NORTHWIND · BILLABLE</span></span>
+                    <span class="duration bill">01:20</span>
+                </div>
+                <div class="log-entry">
+                    <span class="time">06:30</span>
+                    <span class="what">Pricing research<span class="meta">ACME · BILLABLE</span></span>
+                    <span class="duration bill">02:07</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ X.03 — Brief (ink + plum letterform) ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.03<br>BRIEF</div>
+        <h2>brief · raw → <span class="accent">formulated</span></h2>
+        <div class="desc">Ink-on-ink output panel with massive plum «PL» watermark behind. Lime mark on raw input shows what AI extracted; ink-strikethrough shows what AI dropped.</div>
+    </div>
+    <div class="section-body">
+        <div class="brief-shell">
+            <div class="brief-input">
+                <div class="upper" style="color:var(--accent);font-family:var(--font-mono);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:var(--tracking-ultra);font-weight:600">RAW INPUT · TYPED 11:42</div>
+                <div class="raw">
+                    need to <mark>redo onboarding</mark> for new freelancer plan. <span class="scratch">3 screens</span> 4 screens max. should feel <mark>fast and confident</mark>. include trial CTA but <span class="scratch">aggressive</span> light. mira said don't repeat the <span class="scratch">old mistakes</span> — too much copy. <mark>ship by may 15</mark>.
+                </div>
+                <div style="display:flex;gap:8px">
+                    <button class="btn sm">EDIT RAW</button>
+                    <button class="btn primary sm" style="margin-left:auto">▸ REFORMULATE</button>
+                </div>
+            </div>
+            <div class="brief-output">
+                <div class="label">FORMULATED BRIEF · 03 SECONDS</div>
+                <h3>onboarding v2 · freelancer plan</h3>
+                <div class="field-out"><span class="k">SCOPE</span><span class="v">4-screen flow, mobile-first, ship-ready by 15.05.26</span></div>
+                <div class="field-out"><span class="k">FEEL</span><span class="v"><span class="pill">FAST</span><span class="pill">CONFIDENT</span> · trial CTA, low-pressure</span></div>
+                <div class="field-out"><span class="k">CONSTRAINT</span><span class="v">No copy-heavy screens. Mira: «don't repeat old mistakes»</span></div>
+                <div class="field-out"><span class="k">SUCCESS</span><span class="v">≤4 screens · ≥40% trial activation · launch 15.05</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ X.04 — Invoice grand-amount (plum) ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.04<br>INVOICE</div>
+        <h2>invoice · <span class="accent">amount due</span> in plum</h2>
+        <div class="desc">Plum owns the AMOUNT DUE block — the document's final, bold gesture. Vermillion stays for the «UNPAID» status dot. Everything else is ink + paper.</div>
+    </div>
+    <div class="section-body">
+        <div class="invoice-mini">
+            <div class="totals-list">
+                <div class="row"><span>Subtotal · 28:42 hrs @ €85</span><span>€2,439.50</span></div>
+                <div class="row"><span>VAT · 20%</span><span>€487.90</span></div>
+                <div class="row grand"><span>TOTAL DUE</span><span>€2,927.40</span></div>
+            </div>
+            <div class="grand-amount">
+                <span class="k">AMOUNT DUE</span>
+                <span class="v">€2,927<span style="font-size:0.5em;vertical-align:top">.40</span></span>
+                <span class="due">PAYABLE BY 12.05.2026 · ● UNPAID</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ X.05 — Tags ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.05<br>TAGS</div>
+        <h2>tags · one colour, <span class="accent">one meaning</span></h2>
+        <div class="desc">Each domain has a stable colour. Users assign tags from this fixed set so a glance at any task tells you what kind of work it is.</div>
+    </div>
+    <div class="section-body">
+        <div class="pill-row">
+            <span class="pill-label">DOMAIN ›</span>
+            <span class="ns-tag work"><span class="dot"></span>WORK</span>
+            <span class="ns-tag design"><span class="dot"></span>DESIGN</span>
+            <span class="ns-tag research"><span class="dot"></span>RESEARCH</span>
+            <span class="ns-tag legal">LEGAL</span>
+            <span class="ns-tag life">LIFE</span>
+            <span class="ns-tag craft">CRAFT</span>
+            <span class="ns-tag fun">FUN</span>
+            <span class="ns-tag cash">URGENT$</span>
+        </div>
+    </div>
+</section>
+
+<!-- ============ X.06 — Priority + Status ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.06<br>PILLS</div>
+        <h2>priority + status · <span class="accent">pills</span></h2>
+        <div class="desc">Vermillion pill = P0 urgent. Plum pulse = doing. Ink fill = done. Cobalt outline = review. Vermillion fill = overdue. No emoji, no colour-only signals — letters carry meaning too.</div>
+    </div>
+    <div class="section-body">
+        <div class="pill-row">
+            <span class="pill-label">PRIORITY ›</span>
+            <span class="ns-priority urgent">P0</span>
+            <span class="ns-priority high">P1</span>
+            <span class="ns-priority med">P2</span>
+            <span class="ns-priority low">P3</span>
+        </div>
+        <div class="pill-row">
+            <span class="pill-label">STATUS ›</span>
+            <span class="ns-status todo"><span class="pulse"></span>TODO</span>
+            <span class="ns-status doing"><span class="pulse"></span>DOING</span>
+            <span class="ns-status review"><span class="pulse"></span>REVIEW</span>
+            <span class="ns-status done">DONE</span>
+            <span class="ns-status overdue">OVERDUE</span>
+        </div>
+    </div>
+</section>
+
+<!-- ============ X.07 — Sidebar swatches in rotation ============ -->
+<section class="section">
+    <div class="section-head">
+        <div class="section-num">X.07<br>PROJECTS</div>
+        <h2>matters · <span class="accent">rotating</span> swatches</h2>
+        <div class="desc">Each matter gets a stable colour from this rotation, assigned in creation order. Six is enough — beyond that, the cycle repeats and the position in the sidebar carries identity.</div>
+    </div>
+    <div class="section-body">
+        <div class="swatch-row">
+            <div><span class="chip" style="background:var(--accent)"></span><span class="name">PLUM</span><span class="hex">#6A1B9A</span></div>
+            <div><span class="chip" style="background:var(--cobalt)"></span><span class="name">COBALT</span><span class="hex">#1A3DD8</span></div>
+            <div><span class="chip" style="background:var(--saffron)"></span><span class="name">SAFFRON</span><span class="hex">#F5B700</span></div>
+            <div><span class="chip" style="background:var(--ink)"></span><span class="name">INK</span><span class="hex">#0A0A0A</span></div>
+            <div><span class="chip" style="background:var(--lime)"></span><span class="name">LIME</span><span class="hex">#C5F000</span></div>
+            <div><span class="chip" style="background:var(--magenta)"></span><span class="name">MAGENTA</span><span class="hex">#FF2E93</span></div>
+        </div>
+        <div style="margin-top:24px;font-family:var(--font-mono);font-size:var(--text-xs);color:var(--fg-muted);text-transform:uppercase;letter-spacing:var(--tracking-wide)">
+            Example: matter 01 = plum · matter 02 = cobalt · matter 03 = saffron · matter 04 = ink · matter 05 = lime · matter 06 = magenta · matter 07 → cycle restarts at plum.
+        </div>
+    </div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · capture / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 96px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(28% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(360px, 28%); min-height: 100vh; }
+  .main { padding: 80px 96px 100px; max-width: 1100px; }
+
+  .date-row { display: flex; align-items: baseline; gap: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 28px; }
+  .date-row .now { color: var(--ink); font-weight: 700; }
+  .date-row .sep { color: var(--faint); }
+  .date-row .live { color: var(--accent); font-weight: 700; }
+  .date-row .live .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 6px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+
+  /* HERO — what just got captured */
+  .hero { padding-bottom: 36px; border-bottom: 1px solid var(--ink); }
+  .hero .greet { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero h1 {
+      margin: 18px 0 0;
+      font-family: var(--font-sans);
+      font-size: 72px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      text-transform: lowercase;
+      color: var(--ink);
+      max-width: 22ch;
+  }
+  .hero h1 .punct { color: var(--faint); }
+  .hero h1 .accent { color: var(--accent); }
+
+  .hero .lede { margin-top: 22px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 56ch; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .hero .lede .accent { color: var(--accent); font-weight: 600; }
+
+  /* TRANSCRIPT — what you just said */
+  .transcript {
+      margin-top: 32px;
+      padding: 28px 32px 28px 36px;
+      background: var(--paper);
+      border-left: 2px solid var(--ink);
+      font-family: "Times New Roman", "Iowan Old Style", Georgia, serif;
+      font-size: 22px;
+      line-height: 1.5;
+      letter-spacing: -0.005em;
+      color: var(--ink);
+      position: relative;
+      max-width: 70ch;
+  }
+  .transcript::before {
+      content: "“";
+      position: absolute;
+      left: 8px;
+      top: 4px;
+      font-size: 64px;
+      color: var(--accent);
+      line-height: 1;
+      font-family: serif;
+      font-weight: 700;
+  }
+  .transcript .you-said { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 14px; font-style: normal; }
+  .transcript .you-said .live-dot { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 6px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  .transcript p { margin: 0; }
+  .transcript .uncertain { color: var(--muted); font-style: italic; border-bottom: 1px dotted var(--muted); cursor: help; }
+  .transcript .live-cursor { display: inline-block; width: 2px; height: 24px; background: var(--accent); animation: pulse 1s infinite; vertical-align: middle; margin-left: 2px; }
+
+  /* SECTION */
+  .sec { padding: 56px 0 24px; border-bottom: 1px solid var(--line); }
+  .sec:last-of-type { border-bottom: 0; }
+  .sec-hdr { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
+  .sec-hdr h2 { margin: 0; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); }
+  .sec-hdr .count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.06em; }
+  .sec-hdr .count .accent { color: var(--accent); font-weight: 700; }
+  .sec-hdr .right { margin-left: auto; display: flex; gap: 18px; font-family: var(--font-mono); font-size: 11px; }
+  .sec-hdr .right a { color: var(--ink); text-decoration: none; border-bottom: 1.5px solid var(--ink); padding-bottom: 1px; cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .sec-hdr .right a:hover { color: var(--accent); border-color: var(--accent); }
+  .sec-hdr .right a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  /* PARSE — what AI extracted */
+  .parsed { display: flex; flex-direction: column; gap: 24px; }
+  .extract {
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      gap: 24px;
+      padding: 22px 0 22px 0;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: baseline;
+  }
+  .extract:last-child { border-bottom: 0; }
+  .extract .ord { font-family: var(--font-mono); font-size: 13px; color: var(--accent); letter-spacing: 0.04em; font-weight: 700; line-height: 1; padding-top: 6px; }
+  .extract .body .kind {
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 8px;
+  }
+  .extract .body .kind .badge { color: var(--accent); border: 1px solid var(--accent); padding: 2px 6px; margin-right: 8px; font-size: 9px; }
+  .extract .body .kind .conf { color: var(--faint); margin-left: 8px; font-weight: 500; }
+  .extract .body .kind .conf.warn { color: var(--warn); font-weight: 700; }
+  .extract .body .what { font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.3; color: var(--ink); max-width: 46ch; }
+  .extract .body .what .editable { border-bottom: 1px dashed var(--line); padding-bottom: 1px; cursor: text; }
+  .extract .body .what .editable:hover { border-bottom-color: var(--accent); border-bottom-style: solid; }
+
+  .extract .body .meta {
+      margin-top: 12px;
+      font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: 0.04em;
+      display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline;
+  }
+  .extract .body .meta .pair { display: inline-flex; gap: 6px; }
+  .extract .body .meta .k { color: var(--faint); text-transform: uppercase; font-weight: 600; letter-spacing: 0.08em; }
+  .extract .body .meta .v { color: var(--ink); font-weight: 600; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .extract .body .meta .v:hover { border-color: var(--ink); }
+  .extract .body .meta .v.acc { color: var(--accent); border-color: var(--accent); }
+  .extract .body .meta .v.warn { color: var(--warn); border-color: var(--warn); }
+  .extract .body .meta .v.muted { color: var(--muted); }
+
+  .extract .body .actions {
+      margin-top: 14px;
+      display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .extract .body .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 3px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .extract .body .actions a:hover { color: var(--accent); border-color: var(--accent); }
+  .extract .body .actions a.primary { color: var(--accent); border-color: var(--accent); }
+  .extract .body .actions a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+  .extract .body .actions a.warn { color: var(--warn); border-color: var(--warn); }
+
+  /* AI footnote inside extract */
+  .extract .body .nudge {
+      margin-top: 14px;
+      padding-left: 14px;
+      border-left: 1.5px solid var(--accent);
+      font-family: var(--font-text);
+      font-size: 13.5px;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      line-height: 1.55;
+      max-width: 52ch;
+  }
+  .extract .body .nudge .by { font-family: var(--font-mono); font-size: 9px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 4px; }
+  .extract .body .nudge em { color: var(--muted); font-style: normal; }
+
+  .extract .right {
+      font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+      text-align: right;
+  }
+  .extract .right .when { color: var(--ink); display: block; }
+
+  /* When AI is uncertain, show inline question */
+  .question {
+      margin: 16px 0 0 60px;
+      padding: 16px 20px;
+      background: var(--bg);
+      border: 1px dashed var(--accent);
+      max-width: 56ch;
+  }
+  .question .lbl { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .question .q { font-family: var(--font-sans); font-size: 17px; font-weight: 500; letter-spacing: -0.015em; color: var(--ink); line-height: 1.4; margin-bottom: 12px; }
+  .question .opts { display: flex; gap: 10px; flex-wrap: wrap; }
+  .question .opts a { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); padding: 6px 12px; border: 1px solid var(--line); cursor: pointer; text-decoration: none; letter-spacing: -0.005em; }
+  .question .opts a:hover { border-color: var(--ink); background: var(--paper); }
+  .question .opts a.primary { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .question .opts a.primary:hover { background: var(--accent); color: var(--paper); }
+
+  /* RECENT CAPTURES — strip below */
+  .stream-list { display: flex; flex-direction: column; }
+  .cap-row {
+      display: grid; grid-template-columns: 90px 1fr auto; gap: 24px;
+      padding: 14px 0; border-bottom: 1px solid var(--line-soft);
+      align-items: baseline;
+      cursor: pointer;
+  }
+  .cap-row .when { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .cap-row .when .from { display: block; color: var(--faint); margin-top: 2px; font-weight: 500; }
+  .cap-row .body .gist { font-family: var(--font-text); font-size: 15.5px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.45; font-weight: 500; }
+  .cap-row .body .out { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; }
+  .cap-row .body .out .accent { color: var(--accent); font-weight: 700; }
+  .cap-row .body .out .ok { color: var(--ok); font-weight: 700; }
+  .cap-row .meta { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.04em; text-align: right; }
+
+  /* PULL QUOTE */
+  .pull {
+      margin: 32px 0 0;
+      padding: 20px 0 20px 24px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.4;
+      color: var(--ink);
+      max-width: 50ch;
+  }
+  .pull .src { display: block; margin-top: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 80px 32px 24px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  /* WAVEFORM — the live mic */
+  .wave-frame {
+      padding: 28px 32px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+  }
+  .wave-frame .label { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .wave-frame .timer { font-family: var(--font-mono); font-size: 24px; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 700; letter-spacing: 0.04em; }
+  .wave-frame .wave {
+      display: flex; align-items: center; gap: 2px; height: 56px;
+      padding: 8px 0;
+  }
+  .wave-frame .wave span {
+      display: block; width: 3px; background: var(--accent); border-radius: 1px;
+      animation: wavebar 1.2s ease-in-out infinite;
+  }
+  @keyframes wavebar {
+      0%, 100% { height: 6px; opacity: 0.4; }
+      50% { height: 100%; opacity: 1; }
+  }
+  .wave-frame .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .wave-frame .actions { display: flex; gap: 14px; margin-top: 8px; }
+  .wave-frame .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; text-decoration: none; padding: 3px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .wave-frame .actions a.primary { color: var(--accent); border-color: var(--accent); }
+  .wave-frame .actions a:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* STREAM */
+  .stream { flex: 1; padding: 24px 32px 0; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+
+  .actions-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions-row a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions-row a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 18px 32px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14.5px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: 1fr; }
+    .main { padding: 64px 24px; }
+    .rail { display: none; }
+    .mini-nav { right: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a>today</a>
+    <a>week</a>
+    <a>matters</a>
+    <a class="act">capture</a>
+</nav>
+
+<div class="stage">
+
+<main class="main">
+
+    <div class="date-row">
+        <span class="now">tuesday · 10:42 madrid</span>
+        <span class="sep">/</span>
+        <span class="live"><span class="pulse"></span>capturing · 1m 14s</span>
+        <span class="sep">/</span>
+        <span>en · auto-language</span>
+        <span class="sep">/</span>
+        <span>private · device-only mic</span>
+    </div>
+
+    <header class="hero">
+        <div class="greet">i'm listening</div>
+        <h1>tell me what just<br>happened<span class="punct">.</span></h1>
+        <p class="lede">
+            speak naturally — i'll transcribe, find the matter, draft the task, log the time, and ask only when i'm <span class="accent">genuinely unsure</span>. nothing leaves this page until you say so.
+        </p>
+    </header>
+
+    <!-- LIVE TRANSCRIPT -->
+    <div class="transcript">
+        <div class="you-said"><span class="live-dot"></span>YOU · LIVE TRANSCRIPT · 10:41:08 → 10:42:22</div>
+        <p>just got off a call with marta — about <strong>thirty minutes</strong>. she wants to push the term sheet to thursday but she's worried about §6.4, the anti-dilution carve-out. needs a redraft by tomorrow noon. also asked me to loop in <span class="uncertain" title="low confidence — did you mean 'morris nichols' (delaware counsel)?">morris nicholas</span> on the delaware side. and remind me to sign the retainer renewal for vasylenko before friday — that's been sitting<span class="live-cursor"></span></p>
+    </div>
+
+    <!-- WHAT ORDIFY EXTRACTED -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>what i'm hearing</h2>
+            <span class="count">/ <span class="accent">4 things</span> extracted · 1 needs your check</span>
+            <span class="right">
+                <a class="dim">wait — i'll keep talking</a>
+                <a class="primary">looks right · save all</a>
+            </span>
+        </div>
+
+        <div class="parsed">
+
+            <!-- 01 — TIMELOG (high conf, auto) -->
+            <article class="extract">
+                <span class="ord">01</span>
+                <div class="body">
+                    <div class="kind"><span class="badge">timelog</span>auto · billable<span class="conf">98% confident</span></div>
+                    <div class="what"><span class="editable">call with marta · term-sheet pacing &amp; §6.4 concern</span></div>
+                    <div class="meta">
+                        <span class="pair"><span class="k">duration</span><span class="v">30 min</span></span>
+                        <span class="pair"><span class="k">matter</span><span class="v acc">m·006 · acme</span></span>
+                        <span class="pair"><span class="k">rate</span><span class="v">€150 / h</span></span>
+                        <span class="pair"><span class="k">amount</span><span class="v">€75.00</span></span>
+                        <span class="pair"><span class="k">starts</span><span class="v">10:10</span></span>
+                    </div>
+                    <div class="nudge">
+                        <span class="by">★ ordify</span>
+                        i bound this to <strong>m·006</strong> because marta only appears on acme matters and you mentioned the term sheet. <em>i'll roll it into inv·042 (april) when you next bundle.</em>
+                    </div>
+                    <div class="actions">
+                        <a class="dim">looks right</a>
+                        <a>change matter</a>
+                        <a>mark non-billable</a>
+                    </div>
+                </div>
+                <div class="right"><span class="when">→ saving</span>m·006</div>
+            </article>
+
+            <!-- 02 — TASK (high conf, auto) -->
+            <article class="extract">
+                <span class="ord">02</span>
+                <div class="body">
+                    <div class="kind"><span class="badge">task</span>deep work · due tomorrow noon<span class="conf">94% confident</span></div>
+                    <div class="what"><span class="editable">redraft §6.4 anti-dilution carve-out · respond to marta's concern</span></div>
+                    <div class="meta">
+                        <span class="pair"><span class="k">due</span><span class="v warn">wed · 12:00</span></span>
+                        <span class="pair"><span class="k">est</span><span class="v">1.5 h</span></span>
+                        <span class="pair"><span class="k">matter</span><span class="v acc">m·006 · acme</span></span>
+                        <span class="pair"><span class="k">priority</span><span class="v">high · hard deadline</span></span>
+                    </div>
+                    <div class="nudge">
+                        <span class="by">★ ordify</span>
+                        you have a 1.5h deep block free <strong>tomorrow 09:30</strong>. i can hold it for this — you'd ship at 11:00, an hour before her noon. <em>or fit 45 min today after the 13:00 call.</em>
+                    </div>
+                    <div class="actions">
+                        <a class="primary">hold tomorrow 09:30</a>
+                        <a>fit it today</a>
+                        <a class="dim">just save · i'll schedule</a>
+                    </div>
+                </div>
+                <div class="right"><span class="when">→ tomorrow</span>m·006</div>
+            </article>
+
+            <!-- 03 — UNCERTAIN: needs disambiguation -->
+            <article class="extract">
+                <span class="ord">03</span>
+                <div class="body">
+                    <div class="kind"><span class="badge">contact</span>introduce or cc · <span class="conf warn">62% — need your check</span></div>
+                    <div class="what"><span class="editable">loop in <span style="color:var(--warn); border-bottom: 1px dotted var(--warn)">morris nicholas</span> on delaware</span></div>
+                    <div class="meta">
+                        <span class="pair"><span class="k">matter</span><span class="v acc">m·006 · acme</span></span>
+                        <span class="pair"><span class="k">action</span><span class="v">draft intro email</span></span>
+                    </div>
+                </div>
+                <div class="right"><span class="when">→ pending you</span>m·006</div>
+            </article>
+
+            <div class="question">
+                <div class="lbl">★ ordify · just one check</div>
+                <div class="q">i don't have a contact named <strong>morris nicholas</strong>. did you mean one of these?</div>
+                <div class="opts">
+                    <a class="primary">morris, nichols, arsht &amp; tunnell · DE counsel · used on m·014</a>
+                    <a>jordan lee · m.nichols partner</a>
+                    <a>add new contact</a>
+                    <a class="dim">skip · i'll do this myself</a>
+                </div>
+            </div>
+
+            <!-- 04 — TASK (low priority, mentioned in passing) -->
+            <article class="extract">
+                <span class="ord">04</span>
+                <div class="body">
+                    <div class="kind"><span class="badge">reminder</span>admin · 3 days idle<span class="conf">91% confident</span></div>
+                    <div class="what"><span class="editable">sign the retainer renewal · vasylenko, a. · before friday</span></div>
+                    <div class="meta">
+                        <span class="pair"><span class="k">matter</span><span class="v acc">m·028 · vasylenko</span></span>
+                        <span class="pair"><span class="k">due</span><span class="v warn">fri</span></span>
+                        <span class="pair"><span class="k">est</span><span class="v">10 min · docusign</span></span>
+                        <span class="pair"><span class="k">also on</span><span class="v muted">your existing list since fri</span></span>
+                    </div>
+                    <div class="nudge">
+                        <span class="by">★ ordify</span>
+                        <em>this is already on your task list (added fri 03 may, idle 3 days). i'll just bump its due date — no duplicate.</em>
+                    </div>
+                    <div class="actions">
+                        <a class="dim">do that</a>
+                        <a>let me see it</a>
+                    </div>
+                </div>
+                <div class="right"><span class="when">→ bumping</span>m·028</div>
+            </article>
+
+        </div>
+    </section>
+
+    <p class="pull">
+        “i'd rather ask once than guess wrong twice. the only check is whether to email morris nichols — answer that and you're done.”
+        <span class="src">— ordify · 10:42</span>
+    </p>
+
+    <!-- RECENT CAPTURES — what came before -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>earlier today</h2>
+            <span class="count">/ 5 captures · all routed</span>
+            <span class="right">
+                <a>see all 23 today</a>
+            </span>
+        </div>
+        <div class="stream-list">
+            <div class="cap-row">
+                <div class="when">10:08<span class="from">via voice · 18s</span></div>
+                <div class="body">
+                    <div class="gist">“david at acme says wire is queued for friday — no action needed.”</div>
+                    <div class="out">→ archived inv·042 status note · <span class="ok">no task created</span></div>
+                </div>
+                <div class="meta">archived</div>
+            </div>
+            <div class="cap-row">
+                <div class="when">09:42<span class="from">via voice · 1m 02s</span></div>
+                <div class="body">
+                    <div class="gist">post-meeting brief on the nda counter-party comments…</div>
+                    <div class="out">→ <span class="accent">3 timelogs</span> · 2 tasks · m·006 · saved</div>
+                </div>
+                <div class="meta">m·006</div>
+            </div>
+            <div class="cap-row">
+                <div class="when">09:14<span class="from">via ⌘k</span></div>
+                <div class="body">
+                    <div class="gist">“invoice april for acme — 23 timelogs”</div>
+                    <div class="out">→ <span class="accent">inv·042 draft</span> bundled · awaiting your review</div>
+                </div>
+                <div class="meta">inv·042</div>
+            </div>
+            <div class="cap-row">
+                <div class="when">08:58<span class="from">via email forward</span></div>
+                <div class="body">
+                    <div class="gist">forwarded · cold lead via marta · bcn-based founder asking about delaware llc</div>
+                    <div class="out">→ intake reply drafted · slot offered thu 11:30 · <span class="accent">awaiting your send</span></div>
+                </div>
+                <div class="meta">lead</div>
+            </div>
+            <div class="cap-row">
+                <div class="when">08:30<span class="from">via voice · 24s</span></div>
+                <div class="body">
+                    <div class="gist">“remind me to look at q3 tax estimate next week.”</div>
+                    <div class="out">→ scheduled · monday 09:00 prompt · <span class="ok">noted</span></div>
+                </div>
+                <div class="meta">later</div>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>recording &amp; thinking</div>
+        <h2 class="ttl">capture · <span class="accent">live</span></h2>
+    </header>
+
+    <!-- WAVEFORM -->
+    <div class="wave-frame">
+        <div class="label">microphone · device-only</div>
+        <div class="timer">01:14</div>
+        <div class="wave" id="wave"></div>
+        <div class="meta">12db avg · clean signal</div>
+        <div class="actions">
+            <a class="primary">⏸ pause</a>
+            <a>■ stop &amp; save</a>
+            <a>↺ start over</a>
+        </div>
+    </div>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">10:42 · while you talk</span>
+            <p class="text">
+                i hear <strong>4 distinct things</strong> so far. i've already started binding them — <span class="accent">m·006</span> for everything marta-related, <span class="accent">m·028</span> for the retainer.
+            </p>
+            <p class="text">
+                <em>only check: did you mean morris nichols (de counsel)? i'll wait for that.</em>
+            </p>
+            <div class="actions-row">
+                <a class="primary">yes — that's them</a>
+                <a class="dim">i'll handle it</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">10:42 · staying out of your way</span>
+            <p class="text">
+                the timelog (call · 30 min) and the task bump (vasylenko renewal) <strong>don't need your check</strong> — i'm 90%+ on both. they're saving as you talk. <em>nothing's been sent.</em>
+            </p>
+        </div>
+
+        <div class="turn">
+            <span class="when">when you stop</span>
+            <p class="text">
+                i'll show you a clean review with the §6.4 redraft scheduled for tomorrow 09:30 (if you accept), the timelog rolled into inv·042, and the morris nichols intro email <strong>drafted but not sent</strong>.
+            </p>
+            <div class="actions-row">
+                <a>show me a preview</a>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="or type · ‘change m·006 to m·019’…">
+        <span class="hint"><kbd>⌘K</kbd> · hold <kbd>␣</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+<script>
+  // animate waveform — 36 bars, randomized phases
+  const wave = document.getElementById('wave');
+  for (let i = 0; i < 36; i++) {
+      const bar = document.createElement('span');
+      bar.style.animationDelay = (Math.random() * 1.2).toFixed(2) + 's';
+      bar.style.animationDuration = (0.7 + Math.random() * 0.8).toFixed(2) + 's';
+      wave.appendChild(bar);
+  }
+</script>
+
+</body>
+</html>

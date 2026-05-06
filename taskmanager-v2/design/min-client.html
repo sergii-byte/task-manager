@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · client / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --saffron: #c98a00;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 96px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(28% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(360px, 28%); min-height: 100vh; }
+  .main { padding: 80px 96px 100px; max-width: 1100px; }
+
+  .crumbs { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 28px; }
+  .crumbs a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .crumbs a:hover { color: var(--ink); }
+  .crumbs .sep { color: var(--faint); margin: 0 8px; }
+  .crumbs .now { color: var(--ink); font-weight: 700; }
+
+  /* HERO */
+  .hero { padding-bottom: 40px; border-bottom: 1px solid var(--ink); }
+  .hero .eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero h1 {
+      margin: 18px 0 0;
+      font-family: var(--font-sans);
+      font-size: 88px;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 0.92;
+      text-transform: lowercase;
+      color: var(--ink);
+      max-width: 18ch;
+  }
+  .hero h1 .accent { color: var(--accent); }
+  .hero h1 .punct { color: var(--faint); }
+
+  .hero .lede { margin-top: 22px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 56ch; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .hero .lede .accent { color: var(--accent); font-weight: 600; }
+
+  .stats { margin-top: 36px; display: grid; grid-template-columns: repeat(5, auto); gap: 0 48px; align-items: baseline; }
+  .stats .stat .k { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .stats .stat .v { font-family: var(--font-sans); font-size: 28px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); margin-top: 6px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .stats .stat .v.accent { color: var(--accent); }
+  .stats .stat .v.ok { color: var(--ok); }
+  .stats .stat .v .small { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-left: 4px; font-weight: 500; letter-spacing: 0.04em; }
+  .stats .stat .sub { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; text-transform: uppercase; }
+
+  /* SECTION */
+  .sec { padding: 56px 0 24px; border-bottom: 1px solid var(--line); }
+  .sec:last-of-type { border-bottom: 0; }
+  .sec-hdr { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
+  .sec-hdr h2 { margin: 0; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); }
+  .sec-hdr .count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.06em; }
+  .sec-hdr .right { margin-left: auto; display: flex; gap: 18px; font-family: var(--font-mono); font-size: 11px; }
+  .sec-hdr .right a { color: var(--ink); text-decoration: none; border-bottom: 1.5px solid var(--ink); padding-bottom: 1px; cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .sec-hdr .right a:hover { color: var(--accent); border-color: var(--accent); }
+  .sec-hdr .right a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+  .sec-hdr .right a.primary { color: var(--accent); border-color: var(--accent); }
+
+  /* MATTERS — long-form rows */
+  .matters { display: flex; flex-direction: column; }
+  .m-row {
+      display: grid;
+      grid-template-columns: 60px 1fr 200px 110px;
+      gap: 28px;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: baseline;
+      cursor: pointer;
+  }
+  .m-row:hover .name { color: var(--accent); }
+  .m-row .ord { font-family: var(--font-mono); font-size: 13px; color: var(--accent); letter-spacing: 0.04em; font-weight: 700; line-height: 1; padding-top: 4px; }
+  .m-row .body .kind { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .m-row .body .kind .tag { padding: 2px 6px; border: 1px solid currentColor; margin-right: 8px; font-size: 9px; }
+  .m-row .body .kind .tag.sub { color: var(--accent); }
+  .m-row .body .kind .tag.fix { color: var(--ink); }
+  .m-row .body .kind .tag.hr { color: var(--cobalt); }
+  .m-row .body .kind .tag.closed { color: var(--ok); }
+  .m-row .body .name { font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.25; color: var(--ink); max-width: 36ch; transition: color 80ms; }
+  .m-row.closed .body .name { color: var(--muted); }
+  .m-row .body .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-top: 8px; }
+  .m-row .body .meta .accent { color: var(--accent); font-weight: 600; }
+  .m-row .body .meta .ok { color: var(--ok); font-weight: 700; }
+
+  /* gauge inline */
+  .gauge { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; }
+  .gauge .v { font-family: var(--font-sans); font-size: 20px; color: var(--ink); font-weight: 600; letter-spacing: -0.02em; display: block; margin-bottom: 6px; font-variant-numeric: tabular-nums; line-height: 1; }
+  .gauge .v.warn { color: #8a6500; }
+  .gauge .v.ok { color: var(--ok); }
+  .gauge .bar { display: block; width: 180px; height: 3px; background: var(--line); position: relative; margin-bottom: 6px; }
+  .gauge .bar .f { position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink); }
+  .gauge .bar .f.warn { background: #c98a00; }
+  .gauge .bar .f.over { background: var(--warn); }
+  .gauge .bar .f.ok { background: var(--ok); }
+  .gauge .lbl { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  .m-row .arrow { font-family: var(--font-mono); font-size: 13px; color: var(--faint); text-align: right; align-self: center; }
+  .m-row:hover .arrow { color: var(--accent); }
+
+  /* INVOICES — compact ledger */
+  .invs { display: flex; flex-direction: column; }
+  .inv-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 130px 110px;
+      gap: 24px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: baseline;
+      cursor: pointer;
+  }
+  .inv-row .num { font-family: var(--font-mono); font-size: 12px; color: var(--ink); letter-spacing: 0.04em; font-weight: 700; }
+  .inv-row .num .pre { color: var(--faint); font-weight: 500; }
+  .inv-row .what { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); letter-spacing: -0.005em; font-weight: 500; line-height: 1.4; }
+  .inv-row .what .meta { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 3px; font-weight: 500; }
+  .inv-row .v { font-family: var(--font-mono); font-size: 14px; color: var(--ink); letter-spacing: 0.02em; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .inv-row .status { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; text-align: right; }
+  .inv-row.draft .status { color: var(--accent); }
+  .inv-row.sent .status { color: var(--cobalt); }
+  .inv-row.paid .status { color: var(--ok); }
+  .inv-row.overdue .status { color: var(--warn); }
+
+  /* TIMELINE — recent activity */
+  .tl { display: flex; flex-direction: column; gap: 22px; padding-left: 14px; border-left: 1px solid var(--line); margin-top: 4px; }
+  .tl .item { position: relative; }
+  .tl .item::before { content: ""; position: absolute; left: -19px; top: 7px; width: 8px; height: 8px; background: var(--ink); border-radius: 50%; }
+  .tl .item.bill::before { background: var(--accent); }
+  .tl .item.meet::before { background: var(--cobalt); }
+  .tl .item.doc::before { background: var(--saffron); }
+  .tl .when { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .tl .what { font-family: var(--font-text); font-size: 15px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.45; margin-top: 4px; max-width: 56ch; }
+  .tl .what .accent { color: var(--accent); font-weight: 600; }
+  .tl .what .ok { color: var(--ok); font-weight: 600; }
+
+  /* CONTACTS + DETAILS — 2-col */
+  .two-col { display: grid; grid-template-columns: 1.3fr 1fr; gap: 56px; }
+
+  .cards { display: flex; flex-direction: column; }
+  .card {
+      padding: 18px 0;
+      border-bottom: 1px solid var(--line-soft);
+  }
+  .card:last-child { border-bottom: 0; }
+  .card .name { font-family: var(--font-sans); font-size: 19px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+  .card .role { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-top: 4px; }
+  .card .lines { font-family: var(--font-text); font-size: 13.5px; color: var(--muted); margin-top: 10px; line-height: 1.55; }
+  .card .lines .ink { color: var(--ink); font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; }
+  .card .actions { display: flex; gap: 18px; margin-top: 10px; }
+  .card .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 3px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .card .actions a:hover { color: var(--accent); border-color: var(--accent); }
+
+  .details {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 14px 18px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      align-content: start;
+  }
+  .details .k { color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; font-size: 10px; padding-top: 2px; }
+  .details .v { color: var(--ink); letter-spacing: 0.02em; line-height: 1.45; }
+  .details .v.text { font-family: var(--font-text); font-size: 13.5px; color: var(--muted); line-height: 1.55; letter-spacing: -0.005em; }
+
+  /* PULL */
+  .pull {
+      margin: 32px 0 0;
+      padding: 20px 0 20px 24px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-sans);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.4;
+      color: var(--ink);
+      max-width: 52ch;
+  }
+  .pull .src { display: block; margin-top: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 80px 32px 24px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  .stream { flex: 1; padding: 24px 32px 0; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+
+  .actions-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions-row a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions-row a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 18px 32px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14.5px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: 1fr; }
+    .main { padding: 64px 24px; }
+    .rail { display: none; }
+    .mini-nav { right: 32px; }
+    .stats { grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .two-col { grid-template-columns: 1fr; gap: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a>today</a>
+    <a>week</a>
+    <a class="act">clients</a>
+    <a>billing</a>
+</nav>
+
+<div class="stage">
+
+<main class="main">
+
+    <div class="crumbs">
+        <a>clients</a><span class="sep">/</span><span class="now">acme tech us llc</span>
+    </div>
+
+    <header class="hero">
+        <div class="eyebrow">client · 06 · it · delaware c-corp · es operating</div>
+        <h1>acme<br>tech<span class="punct">.</span></h1>
+        <p class="lede">
+            with you since <strong>jan 2024</strong> — 28 months, 28 invoices, all paid. <span class="accent">marta ortega</span> is the relationship; david kim handles billing. they pay <strong>9 days</strong> from invoice, two ahead of your average. <span class="accent">series b prep is the work right now.</span>
+        </p>
+
+        <div class="stats">
+            <div class="stat">
+                <div class="k">lifetime</div>
+                <div class="v accent">€42,300</div>
+                <div class="sub">28 mo · all paid</div>
+            </div>
+            <div class="stat">
+                <div class="k">open matters</div>
+                <div class="v">2 <span class="small">/ 4</span></div>
+                <div class="sub">1 sub · 1 hourly</div>
+            </div>
+            <div class="stat">
+                <div class="k">outstanding</div>
+                <div class="v">€4,719</div>
+                <div class="sub">inv·042 · draft</div>
+            </div>
+            <div class="stat">
+                <div class="k">days to pay</div>
+                <div class="v ok">9d</div>
+                <div class="sub">vs 11 avg · early</div>
+            </div>
+            <div class="stat">
+                <div class="k">last seen</div>
+                <div class="v">3d</div>
+                <div class="sub">marta · series b sync</div>
+            </div>
+        </div>
+    </header>
+
+    <p class="pull">
+        “acme is your single biggest exposure — 51% of trailing-90-day revenue. healthy because they pay early, but worth a second hourly client to balance.”
+        <span class="src">— ordify · concentration risk</span>
+    </p>
+
+    <!-- MATTERS -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>matters</h2>
+            <span class="count">/ 4 total · 2 open · 2 closed</span>
+            <span class="right">
+                <a class="primary">+ new matter</a>
+                <a class="dim">show closed</a>
+            </span>
+        </div>
+        <div class="matters">
+
+            <div class="m-row">
+                <span class="ord">m·006</span>
+                <div class="body">
+                    <div class="kind"><span class="tag sub">SUB</span>retainer · monthly · since jan 2024</div>
+                    <div class="name">ongoing retainer · general counsel</div>
+                    <div class="meta">€1,500 / mo · 12 h included · cycle resets in 5 days · <span class="accent">primary</span></div>
+                </div>
+                <div class="gauge">
+                    <span class="v warn">9.4 / 12 h</span>
+                    <span class="bar"><span class="f warn" style="width:78%"></span></span>
+                    <span class="lbl">scope · 78% used</span>
+                </div>
+                <span class="arrow">→</span>
+            </div>
+
+            <div class="m-row">
+                <span class="ord">m·019</span>
+                <div class="body">
+                    <div class="kind"><span class="tag hr">HR</span>hourly · series b · opened 18 apr</div>
+                    <div class="name">series b preparation · financing round</div>
+                    <div class="meta">€150 / h · out-of-scope · <span class="accent">timer running · 2:14 today</span></div>
+                </div>
+                <div class="gauge">
+                    <span class="v">6.5 h</span>
+                    <span class="bar"><span class="f" style="width:38%"></span></span>
+                    <span class="lbl">€975 unbilled</span>
+                </div>
+                <span class="arrow">→</span>
+            </div>
+
+            <div class="m-row closed">
+                <span class="ord">m·014</span>
+                <div class="body">
+                    <div class="kind"><span class="tag fix">FIX</span><span class="tag closed">CLOSED</span>delivered 14 apr · 2 days early</div>
+                    <div class="name">us delaware llc · incorporation</div>
+                    <div class="meta">€2,400 fixed · 4/4 milestones · <span class="ok">invoiced inv·042</span></div>
+                </div>
+                <div class="gauge">
+                    <span class="v ok">100%</span>
+                    <span class="bar"><span class="f ok" style="width:100%"></span></span>
+                    <span class="lbl">closed clean</span>
+                </div>
+                <span class="arrow">→</span>
+            </div>
+
+            <div class="m-row closed">
+                <span class="ord">m·002</span>
+                <div class="body">
+                    <div class="kind"><span class="tag fix">FIX</span><span class="tag closed">CLOSED</span>feb 2025 · trademark · eu</div>
+                    <div class="name">trademark filing · acme word-mark</div>
+                    <div class="meta">€1,200 fixed · paid in full · 14 mo ago</div>
+                </div>
+                <div class="gauge">
+                    <span class="v ok">100%</span>
+                    <span class="bar"><span class="f ok" style="width:100%"></span></span>
+                    <span class="lbl">archived</span>
+                </div>
+                <span class="arrow">→</span>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- INVOICES -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>invoicing</h2>
+            <span class="count">/ last 6 of 28 · €13,059 trailing 6mo</span>
+            <span class="right">
+                <a>see all 28</a>
+            </span>
+        </div>
+        <div class="invs">
+            <div class="inv-row draft">
+                <span class="num"><span class="pre">inv·</span>042</span>
+                <div class="what">april — retainer + delaware llc + 1.4h overage<span class="meta">23 timelogs · drafted by ordify · awaiting your send</span></div>
+                <span class="v">€4,719.00</span>
+                <span class="status">draft</span>
+            </div>
+            <div class="inv-row paid">
+                <span class="num"><span class="pre">inv·</span>038</span>
+                <div class="what">march · subscription<span class="meta">paid sepa · 9 days</span></div>
+                <span class="v">€1,500.00</span>
+                <span class="status">paid · 11 apr</span>
+            </div>
+            <div class="inv-row paid">
+                <span class="num"><span class="pre">inv·</span>035</span>
+                <div class="what">february · subscription<span class="meta">paid sepa · 7 days</span></div>
+                <span class="v">€1,500.00</span>
+                <span class="status">paid · 09 mar</span>
+            </div>
+            <div class="inv-row paid">
+                <span class="num"><span class="pre">inv·</span>032</span>
+                <div class="what">january · subscription + cap-table cleanup<span class="meta">paid sepa · 12 days</span></div>
+                <span class="v">€2,250.00</span>
+                <span class="status">paid · 18 feb</span>
+            </div>
+            <div class="inv-row paid">
+                <span class="num"><span class="pre">inv·</span>028</span>
+                <div class="what">december · subscription + 1.4h overage<span class="meta">paid sepa · 8 days · holiday delay</span></div>
+                <span class="v">€1,710.00</span>
+                <span class="status">paid · 22 jan</span>
+            </div>
+            <div class="inv-row paid">
+                <span class="num"><span class="pre">inv·</span>025</span>
+                <div class="what">november · subscription<span class="meta">paid sepa · 11 days</span></div>
+                <span class="v">€1,500.00</span>
+                <span class="status">paid · 14 dec</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ACTIVITY -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>recent activity</h2>
+            <span class="count">/ apr 2026 · 9 events</span>
+            <span class="right">
+                <a>open log</a>
+            </span>
+        </div>
+        <div class="tl">
+            <div class="item meet">
+                <div class="when">today · 11:00</div>
+                <div class="what">series b kick-off — marta ortega + outside counsel · <span class="accent">36 min auto-logged</span></div>
+            </div>
+            <div class="item bill">
+                <div class="when">today · 14:08</div>
+                <div class="what">ordify drafted <span class="accent">inv·042</span> from 23 timelogs · awaiting your review</div>
+            </div>
+            <div class="item doc">
+                <div class="when">29 apr · mon</div>
+                <div class="what">term-sheet markup signed off — preferred terms round 2</div>
+            </div>
+            <div class="item doc">
+                <div class="when">22 apr · tue</div>
+                <div class="what">nda red-line round 1 sent to counter-party · 8 changes accepted</div>
+            </div>
+            <div class="item bill">
+                <div class="when">14 apr · mon</div>
+                <div class="what">delaware llc final docs delivered — milestone 4/4 · <span class="ok">2 days early</span></div>
+            </div>
+            <div class="item meet">
+                <div class="when">09 apr · wed</div>
+                <div class="what">monthly retainer review with marta · 18 min · routine</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CONTACTS + DETAILS -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <h2>people &amp; book</h2>
+            <span class="count">/ 3 contacts · 1 primary</span>
+            <span class="right">
+                <a>+ contact</a>
+                <a class="dim">edit details</a>
+            </span>
+        </div>
+        <div class="two-col">
+
+            <div class="cards">
+                <div class="card">
+                    <div class="name">marta ortega</div>
+                    <div class="role">★ primary · coo · founder</div>
+                    <div class="lines">
+                        <span class="ink">m.ortega@acme.tech</span> · <span class="ink">+34 612 04 88 19</span><br>
+                        utc−8 · san francisco · prefers email · responds within 4h<br>
+                        <em style="color: var(--muted)">last 3 calls averaged 22 min · usually has more to say after term-sheet weeks.</em>
+                    </div>
+                    <div class="actions">
+                        <a>email</a>
+                        <a>log call</a>
+                        <a>schedule</a>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="name">david kim</div>
+                    <div class="role">cfo · billing &amp; ar</div>
+                    <div class="lines">
+                        <span class="ink">billing@acme.tech</span><br>
+                        receives all invoices · cc on legal · pays sepa within 9 days
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="name">jordan lee</div>
+                    <div class="role">outside counsel · morris nichols · de</div>
+                    <div class="lines">
+                        <span class="ink">j.lee@mnat.com</span><br>
+                        cooperating partner on incorporation &amp; series b matters
+                    </div>
+                </div>
+            </div>
+
+            <div class="details">
+                <span class="k">legal</span>
+                <span class="v">Acme Technology Holdings, Inc.</span>
+                <span class="k">ein</span>
+                <span class="v">87-1942033</span>
+                <span class="k">vat (es)</span>
+                <span class="v">ESB-87194203</span>
+                <span class="k">hq</span>
+                <span class="v">251 Little Falls Dr · Wilmington DE 19808</span>
+                <span class="k">bill to</span>
+                <span class="v">Calle Velázquez 27, 4º · Madrid</span>
+                <span class="k">currency</span>
+                <span class="v">EUR · invoiced in €</span>
+                <span class="k">industry</span>
+                <span class="v">SaaS · B2B</span>
+                <span class="k">engaged</span>
+                <span class="v">12 jan 2024 · referred by Vasylenko</span>
+                <span class="k">note</span>
+                <span class="v text">Founders are spanish nationals operating US Delaware C-corp; needs ES + DE coverage. Likes plain language. Always CC david@ on billing.</span>
+            </div>
+
+        </div>
+    </section>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>about this client</div>
+        <h2 class="ttl">acme · <span class="accent">06</span></h2>
+    </header>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">things to know · today</span>
+            <p class="text">
+                acme is your <strong>biggest single client</strong> — 51% of trailing-90-day revenue. that's healthy now (they pay 2 days ahead of average) but it's also the thing i'd watch.
+            </p>
+            <p class="text">
+                <em>m·006 retainer is at 78% scope with 5 days left. on past pace you'll spill 1-1.5h into overage — i'll pre-bundle it into may's invoice unless you say otherwise.</em>
+            </p>
+            <div class="actions-row">
+                <a>bundle into may</a>
+                <a class="dim">remind me on the 1st</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">drafted &amp; waiting on you</span>
+            <p class="text">
+                <strong>1.</strong> inv·042 — april bundle ready · €4,719 · <span class="accent">your review</span><br>
+                <strong>2.</strong> reply to marta · §6.4 + §11 positions · <span class="accent">draft ready</span><br>
+                <strong>3.</strong> intro email to morris nichols on series b · <em>only if you confirmed</em>
+            </p>
+            <div class="actions-row">
+                <a class="primary">walk me through 1</a>
+                <a>open 2</a>
+                <a class="dim">3 — confirm later</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">historical pattern · low-priority</span>
+            <p class="text">
+                acme has expanded scope <strong>4 times in 28 months</strong>: trademark, delaware llc, cap-table, now series b. each time you absorbed first ~5h before opening a new matter.
+            </p>
+            <p class="text">
+                <em>that's billable hours hiding in goodwill — about €3,000 over 28 months. not a problem, but worth knowing.</em>
+            </p>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="ask about acme · ‘draft me a status email to marta’…">
+        <span class="hint"><kbd>⌘K</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>

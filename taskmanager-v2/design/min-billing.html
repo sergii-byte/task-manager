@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · billing / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --saffron: #c98a00;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  body { overflow-x: hidden; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 64px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(24% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(340px, 24%); min-height: 100vh; }
+  .main { padding: 80px 64px 80px; }
+
+  .date-row { display: flex; align-items: baseline; gap: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 24px; }
+  .date-row .now { color: var(--ink); font-weight: 700; }
+  .date-row .sep { color: var(--faint); }
+  .date-row .arrow { color: var(--ink); cursor: pointer; padding: 0 4px; }
+  .date-row .arrow:hover { color: var(--accent); }
+
+  /* HERO */
+  .hero { padding-bottom: 32px; border-bottom: 1px solid var(--ink); display: grid; grid-template-columns: 1fr auto; gap: 56px; align-items: end; }
+  .hero .left .eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero .left h1 {
+      margin: 16px 0 0;
+      font-family: var(--font-sans);
+      font-size: 80px;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 0.92;
+      text-transform: lowercase;
+      color: var(--ink);
+  }
+  .hero .left h1 .accent { color: var(--accent); }
+  .hero .left h1 .punct { color: var(--faint); }
+  .hero .left .lede { margin-top: 18px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 56ch; }
+  .hero .left .lede strong { color: var(--ink); font-weight: 600; }
+  .hero .left .lede .accent { color: var(--accent); font-weight: 600; }
+
+  .hero .right { display: grid; grid-template-columns: repeat(2, auto); gap: 14px 36px; align-items: end; }
+  .hero .right .stat { text-align: right; }
+  .hero .right .stat .k { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero .right .stat .v { font-family: var(--font-sans); font-size: 28px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); margin-top: 4px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .hero .right .stat .v .small { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-left: 4px; font-weight: 500; }
+  .hero .right .stat .v.accent { color: var(--accent); }
+  .hero .right .stat .v.warn { color: var(--warn); }
+  .hero .right .stat .v.ok { color: var(--ok); }
+  .hero .right .stat .sub { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; margin-top: 3px; text-transform: uppercase; }
+
+  /* CASHFLOW STRIP — 12 weeks horizontal bar visualisation */
+  .cashflow { margin-top: 56px; padding-bottom: 32px; border-bottom: 1px solid var(--ink); }
+  .cashflow .head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
+  .cashflow .head h2 { margin: 0; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); }
+  .cashflow .head h2 .accent { color: var(--accent); }
+  .cashflow .head .toggle { display: flex; gap: 16px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .cashflow .head .toggle span { cursor: pointer; padding-bottom: 3px; }
+  .cashflow .head .toggle span.act { color: var(--ink); font-weight: 700; border-bottom: 1.5px solid var(--accent); }
+  .cashflow .head .toggle span:hover { color: var(--ink); }
+
+  .bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; align-items: end; height: 180px; padding: 0 0 0; border-bottom: 1px solid var(--line); }
+  .bar-col { display: flex; flex-direction: column; justify-content: end; gap: 2px; height: 100%; cursor: pointer; }
+  .bar-col .stack { display: flex; flex-direction: column-reverse; gap: 1px; }
+  .bar-col .seg { width: 100%; transition: opacity 80ms; }
+  .bar-col:hover .seg { opacity: 0.85; }
+  .seg.acme { background: var(--accent); }
+  .seg.maersk { background: var(--cobalt); }
+  .seg.solana { background: var(--saffron); }
+  .seg.priv { background: var(--ink); }
+  .bar-col.future .seg { background: var(--bg); border: 1px dashed var(--accent); }
+  .bar-col.future .seg.acme { border-color: var(--accent); }
+  .bar-col.future .seg.maersk { border-color: var(--cobalt); }
+  .bar-col.future .seg.solana { border-color: var(--saffron); }
+
+  .bar-labels { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; margin-top: 10px; }
+  .bar-labels .lbl { font-family: var(--font-mono); font-size: 9px; color: var(--muted); letter-spacing: 0.04em; text-align: left; line-height: 1.4; text-transform: uppercase; }
+  .bar-labels .lbl.now { color: var(--accent); font-weight: 700; }
+  .bar-labels .lbl.future { color: var(--faint); }
+  .bar-labels .lbl .v { display: block; color: var(--ink); font-weight: 700; font-size: 11px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .bar-labels .lbl.now .v { color: var(--accent); }
+  .bar-labels .lbl.future .v { color: var(--muted); }
+
+  .legend { display: flex; gap: 24px; margin-top: 18px; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+  .legend .sw { width: 10px; height: 10px; }
+  .legend .sw.acme { background: var(--accent); }
+  .legend .sw.maersk { background: var(--cobalt); }
+  .legend .sw.solana { background: var(--saffron); }
+  .legend .sw.priv { background: var(--ink); }
+  .legend .sw.future { background: transparent; border: 1px dashed var(--muted); }
+  .legend .item .v { color: var(--ink); font-weight: 700; margin-left: 4px; }
+
+  /* OUTSTANDING — outstanding invoices with payment forecast */
+  .outstand { margin-top: 56px; }
+  .outstand h2 { margin: 0 0 22px; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); display: flex; align-items: baseline; gap: 16px; }
+  .outstand h2 .accent { color: var(--accent); }
+  .outstand h2 .meta { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; font-weight: 500; text-transform: none; }
+
+  .inv-row {
+      display: grid;
+      grid-template-columns: 80px 1fr 90px 130px 140px;
+      gap: 24px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--line);
+      align-items: baseline;
+      cursor: pointer;
+      transition: background 80ms;
+      position: relative;
+      padding-left: 14px;
+      margin-left: -14px;
+      border-left: 2px solid transparent;
+  }
+  .inv-row:hover { background: var(--paper); border-left-color: var(--accent); }
+  .inv-row .num { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ink); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+  .inv-row .num .pre { color: var(--faint); font-weight: 400; }
+  .inv-row .what { font-family: var(--font-text); font-size: 16px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.4; font-weight: 500; }
+  .inv-row .what .ctx { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; font-weight: 500; }
+  .inv-row .what .ctx .acme { color: var(--accent); font-weight: 700; }
+  .inv-row .what .ctx .maersk { color: var(--cobalt); font-weight: 700; }
+  .inv-row .what .ctx .solana { color: var(--saffron); font-weight: 700; }
+
+  .inv-row .age { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; text-align: right; }
+  .inv-row .age.warn { color: var(--warn); font-weight: 700; }
+  .inv-row .age.ok { color: var(--ok); font-weight: 700; }
+  .inv-row .age.now { color: var(--accent); font-weight: 700; }
+
+  .inv-row .status { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; text-align: right; }
+  .inv-row .status.draft { color: var(--ink); }
+  .inv-row .status.sent { color: var(--cobalt); }
+  .inv-row .status.viewed { color: var(--saffron); }
+  .inv-row .status.overdue { color: var(--warn); }
+  .inv-row .status.paid { color: var(--ok); }
+  .inv-row .status .sub { display: block; color: var(--muted); font-weight: 500; font-size: 9px; margin-top: 3px; letter-spacing: 0.04em; }
+
+  .inv-row .amt { font-family: var(--font-sans); font-size: 26px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; line-height: 1; }
+  .inv-row .amt .cur { font-family: var(--font-mono); font-size: 13px; color: var(--faint); margin-right: 4px; font-weight: 500; vertical-align: top; }
+  .inv-row .amt .sub { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 5px; font-weight: 500; }
+
+  .inv-row.is-paid { opacity: 0.55; }
+  .inv-row.is-paid:hover { opacity: 0.9; border-left-color: var(--ok); background: var(--paper); }
+
+  .inv-row.is-overdue { border-left-color: var(--warn); }
+  .inv-row.is-overdue .amt { color: var(--warn); }
+
+  /* Pull-quote */
+  .pull {
+      margin: 64px 0 0;
+      padding: 24px 0 24px 28px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-sans);
+      font-size: 26px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.35;
+      color: var(--ink);
+      max-width: 56ch;
+  }
+  .pull .src { display: block; margin-top: 12px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  /* DIGEST 3-COL */
+  .digest { margin-top: 56px; padding-top: 40px; border-top: 1px solid var(--ink); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 48px; }
+  .digest .col h3 { margin: 0 0 16px; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .digest .col h3 .accent { color: var(--accent); }
+
+  /* DSO histogram */
+  .dso-rows { display: flex; flex-direction: column; gap: 14px; }
+  .dso-row { display: grid; grid-template-columns: 14px 110px 1fr auto; gap: 12px; align-items: center; }
+  .dso-row .sw { width: 10px; height: 10px; align-self: center; }
+  .dso-row .name { font-family: var(--font-text); font-size: 14px; color: var(--ink); letter-spacing: -0.005em; font-weight: 500; }
+  .dso-row .bar { height: 8px; background: var(--line); position: relative; }
+  .dso-row .bar .f { position: absolute; left: 0; top: 0; bottom: 0; }
+  .dso-row .bar .f.acme { background: var(--accent); }
+  .dso-row .bar .f.maersk { background: var(--cobalt); }
+  .dso-row .bar .f.solana { background: var(--saffron); }
+  .dso-row .bar .f.priv { background: var(--ink); }
+  .dso-row .v { font-family: var(--font-mono); font-size: 13px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .dso-row .v.warn { color: var(--warn); }
+  .dso-row .v.ok { color: var(--ok); }
+  .dso-row.avg { padding-top: 14px; border-top: 1px solid var(--line); margin-top: 4px; }
+  .dso-row.avg .name { font-weight: 700; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .dso-row.avg .v { color: var(--accent); font-size: 16px; }
+
+  /* Forecast */
+  .fcast { display: flex; flex-direction: column; gap: 16px; }
+  .fcast .row { display: grid; grid-template-columns: 80px 1fr auto; gap: 14px; align-items: baseline; padding-bottom: 14px; border-bottom: 1px dashed var(--line); }
+  .fcast .row:last-child { border-bottom: 0; padding-bottom: 0; }
+  .fcast .row .when { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+  .fcast .row .when.warn { color: var(--warn); font-weight: 700; }
+  .fcast .row .when.now { color: var(--accent); font-weight: 700; }
+  .fcast .row .what { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.45; font-weight: 500; }
+  .fcast .row .what .ctx { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 3px; font-weight: 500; }
+  .fcast .row .what .accent { color: var(--accent); font-weight: 600; }
+  .fcast .row .amt { font-family: var(--font-mono); font-size: 13px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .fcast .row .amt .cur { color: var(--faint); margin-right: 2px; font-size: 10px; }
+
+  /* Notes column */
+  .notes p { margin: 0 0 16px; font-family: var(--font-text); font-size: 14px; color: var(--ink); letter-spacing: -0.005em; line-height: 1.6; }
+  .notes p strong { font-weight: 600; }
+  .notes p .accent { color: var(--accent); font-weight: 600; }
+  .notes p em { font-style: normal; color: var(--muted); }
+  .notes .actions { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .notes .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .notes .actions a:hover { color: var(--accent); border-color: var(--accent); }
+  .notes .actions a.primary { color: var(--accent); border-color: var(--accent); }
+  .notes .actions a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 80px 28px 22px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.4} }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  .stream { flex: 1; padding: 22px 28px 0; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text .warn { color: var(--warn); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+
+  .actions-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions-row a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions-row a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 16px 28px 22px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1300px) {
+    .stage { grid-template-columns: 1fr; }
+    .main { padding: 64px 24px; }
+    .rail { display: none; }
+    .mini-nav { right: 24px; }
+    .digest { grid-template-columns: 1fr; gap: 32px; }
+    .hero { grid-template-columns: 1fr; }
+    .hero .right { grid-template-columns: repeat(3, 1fr); }
+    .inv-row { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a>today</a>
+    <a>week</a>
+    <a>matters</a>
+    <a class="act">billing</a>
+</nav>
+
+<div class="stage">
+
+<main class="main">
+
+    <div class="date-row">
+        <span class="now">may 2026 · cycle close · q2</span>
+        <span class="sep">/</span>
+        <span class="arrow">‹ april</span>
+        <span class="arrow">june ›</span>
+        <span class="sep">/</span>
+        <span>4 outstanding</span>
+        <span class="sep">/</span>
+        <span>1 overdue</span>
+    </div>
+
+    <header class="hero">
+        <div class="left">
+            <div class="eyebrow">cash · in &amp; expected · last 12 weeks</div>
+            <h1>seven thousand<span class="punct">,</span><br>two <span class="accent">overdue.</span></h1>
+            <p class="lede">
+                <strong>€7,164 outstanding</strong> across 4 invoices. one slipped past net-14 (maersk · inv·041 · <span class="accent">7 days late</span>) — david at acme always pays day 9. revenue is on a 3-week climb; <strong>june looks tight unless m·022 closes by friday.</strong>
+            </p>
+        </div>
+        <div class="right">
+            <div class="stat">
+                <div class="k">outstanding</div>
+                <div class="v accent">€7,164</div>
+                <div class="sub">4 invoices</div>
+            </div>
+            <div class="stat">
+                <div class="k">overdue</div>
+                <div class="v warn">€1,837</div>
+                <div class="sub">1 inv · 7d late</div>
+            </div>
+            <div class="stat">
+                <div class="k">received · 30d</div>
+                <div class="v ok">€8,440</div>
+                <div class="sub">5 paid · avg 9d</div>
+            </div>
+            <div class="stat">
+                <div class="k">dso · 4-mo</div>
+                <div class="v">11 <span class="small">d</span></div>
+                <div class="sub">vs 14d industry</div>
+            </div>
+            <div class="stat">
+                <div class="k">unbilled · live</div>
+                <div class="v">€2,830</div>
+                <div class="sub">14h · 3 matters</div>
+            </div>
+            <div class="stat">
+                <div class="k">forecast · jun</div>
+                <div class="v">€11,200</div>
+                <div class="sub">if m·022 closes</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- CASHFLOW BARS -->
+    <section class="cashflow">
+        <div class="head">
+            <h2>cashflow · <span class="accent">12 weeks</span></h2>
+            <div class="toggle">
+                <span class="act">received</span>
+                <span>billed</span>
+                <span>by client</span>
+            </div>
+        </div>
+        <div class="bars">
+            <!-- past 8 weeks (received) -->
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 28px"></div><div class="seg maersk" style="height: 18px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 32px"></div><div class="seg solana" style="height: 14px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg maersk" style="height: 38px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 32px"></div><div class="seg priv" style="height: 9px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 32px"></div><div class="seg maersk" style="height: 30px"></div><div class="seg solana" style="height: 18px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 48px"></div><div class="seg priv" style="height: 14px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 32px"></div><div class="seg maersk" style="height: 50px"></div><div class="seg solana" style="height: 28px"></div></div></div>
+            <div class="bar-col"><div class="stack"><div class="seg acme" style="height: 80px"></div><div class="seg maersk" style="height: 42px"></div><div class="seg solana" style="height: 22px"></div><div class="seg priv" style="height: 18px"></div></div></div>
+            <!-- future 4 weeks (forecast — dashed) -->
+            <div class="bar-col future"><div class="stack"><div class="seg acme" style="height: 110px"></div><div class="seg maersk" style="height: 38px"></div></div></div>
+            <div class="bar-col future"><div class="stack"><div class="seg acme" style="height: 32px"></div><div class="seg solana" style="height: 60px"></div></div></div>
+            <div class="bar-col future"><div class="stack"><div class="seg maersk" style="height: 64px"></div><div class="seg solana" style="height: 26px"></div></div></div>
+            <div class="bar-col future"><div class="stack"><div class="seg acme" style="height: 32px"></div><div class="seg maersk" style="height: 32px"></div></div></div>
+        </div>
+        <div class="bar-labels">
+            <div class="lbl">wk 09<span class="v">2.4k</span></div>
+            <div class="lbl">wk 10<span class="v">2.9k</span></div>
+            <div class="lbl">wk 11<span class="v">2.4k</span></div>
+            <div class="lbl">wk 12<span class="v">2.6k</span></div>
+            <div class="lbl">wk 13<span class="v">5.0k</span></div>
+            <div class="lbl">wk 14<span class="v">3.9k</span></div>
+            <div class="lbl">wk 15<span class="v">6.9k</span></div>
+            <div class="lbl now">wk 19 · now<span class="v">10.4k</span></div>
+            <div class="lbl future">wk 20<span class="v">9.3k</span></div>
+            <div class="lbl future">wk 21<span class="v">5.8k</span></div>
+            <div class="lbl future">wk 22<span class="v">5.6k</span></div>
+            <div class="lbl future">wk 23<span class="v">4.0k</span></div>
+        </div>
+        <div class="legend">
+            <div class="item"><span class="sw acme"></span>acme tech<span class="v">€18.2k · 51%</span></div>
+            <div class="item"><span class="sw maersk"></span>maersk-flag<span class="v">€11.4k · 32%</span></div>
+            <div class="item"><span class="sw solana"></span>solanapay<span class="v">€4.1k · 12%</span></div>
+            <div class="item"><span class="sw priv"></span>private<span class="v">€1.8k · 5%</span></div>
+            <div class="item"><span class="sw future"></span>forecast · 4 wks ahead</div>
+        </div>
+    </section>
+
+    <!-- OUTSTANDING -->
+    <section class="outstand">
+        <h2>outstanding · <span class="accent">04</span><span class="meta">sorted by urgency · 1 overdue · 1 due today · 2 in flight</span></h2>
+
+        <div class="inv-row is-overdue">
+            <span class="num"><span class="pre">inv·</span>041</span>
+            <div class="what">
+                charterparty review · march 2026
+                <span class="ctx"><span class="maersk">maersk-flag trading</span> · sent 14 apr · viewed 16 apr · m·019</span>
+            </div>
+            <span class="age warn">7d late</span>
+            <span class="status overdue">overdue<span class="sub">net-14 · 28 apr</span></span>
+            <span class="amt">
+                <span class="cur">€</span>1,837<span class="sub">2nd reminder due</span>
+            </span>
+        </div>
+
+        <div class="inv-row">
+            <span class="num"><span class="pre">inv·</span>042</span>
+            <div class="what">
+                april retainer + delaware llc + 1.4h overage
+                <span class="ctx"><span class="acme">acme tech us llc</span> · sent 02 may · viewed 02 may · m·006 + m·014</span>
+            </div>
+            <span class="age now">due today</span>
+            <span class="status sent">sent<span class="sub">david · wire scheduled</span></span>
+            <span class="amt">
+                <span class="cur">€</span>4,719<span class="sub">expected fri</span>
+            </span>
+        </div>
+
+        <div class="inv-row">
+            <span class="num"><span class="pre">inv·</span>040</span>
+            <div class="what">
+                ofac sanctions update · phase 1 of 3
+                <span class="ctx"><span class="solana">solanapay foundation</span> · sent 28 apr · m·022</span>
+            </div>
+            <span class="age">net-14 · 6d</span>
+            <span class="status viewed">viewed<span class="sub">2× · jen reviewed mon</span></span>
+            <span class="amt">
+                <span class="cur">€</span>608<span class="sub">phase 2 ships fri</span>
+            </span>
+        </div>
+
+        <div class="inv-row">
+            <span class="num"><span class="pre">inv·</span>043</span>
+            <div class="what">
+                may cycle · maersk-flag charterparty advisory
+                <span class="ctx"><span class="maersk">maersk-flag trading</span> · ★ ai-bundled · 5 timelogs · ready to send</span>
+            </div>
+            <span class="age">draft · auto</span>
+            <span class="status draft">draft<span class="sub">review &amp; send mon</span></span>
+            <span class="amt">
+                <span class="cur">€</span>—<span class="sub">est. €750</span>
+            </span>
+        </div>
+
+    </section>
+
+    <p class="pull">
+        “send the second reminder on inv·041 today — 7-day silence after a view is the maersk pattern. i drafted it warm; you sign &amp; ship in 30 seconds.”
+        <span class="src">— ordify · collections</span>
+    </p>
+
+    <!-- DIGEST -->
+    <section class="digest">
+
+        <div class="col">
+            <h3>dso by client · <span class="accent">11d avg</span></h3>
+            <div class="dso-rows">
+                <div class="dso-row">
+                    <span class="sw" style="background: var(--accent)"></span>
+                    <span class="name">acme tech</span>
+                    <span class="bar"><span class="f acme" style="width: 30%"></span></span>
+                    <span class="v ok">9d</span>
+                </div>
+                <div class="dso-row">
+                    <span class="sw" style="background: var(--cobalt)"></span>
+                    <span class="name">maersk-flag</span>
+                    <span class="bar"><span class="f maersk" style="width: 70%"></span></span>
+                    <span class="v warn">21d</span>
+                </div>
+                <div class="dso-row">
+                    <span class="sw" style="background: var(--saffron)"></span>
+                    <span class="name">solanapay</span>
+                    <span class="bar"><span class="f solana" style="width: 28%"></span></span>
+                    <span class="v ok">8d</span>
+                </div>
+                <div class="dso-row">
+                    <span class="sw" style="background: var(--ink)"></span>
+                    <span class="name">private (3)</span>
+                    <span class="bar"><span class="f priv" style="width: 36%"></span></span>
+                    <span class="v">11d</span>
+                </div>
+                <div class="dso-row avg">
+                    <span></span>
+                    <span class="name">portfolio · 4-mo</span>
+                    <span></span>
+                    <span class="v">11d</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <h3>cash forecast · <span class="accent">next 30 days</span></h3>
+            <div class="fcast">
+                <div class="row">
+                    <span class="when warn">today</span>
+                    <div class="what">
+                        send 2nd reminder · inv·041 · maersk
+                        <span class="ctx">drafted · warm tone · 7d post-view</span>
+                    </div>
+                    <span class="amt"><span class="cur">€</span>1,837</span>
+                </div>
+                <div class="row">
+                    <span class="when now">fri 09</span>
+                    <div class="what">
+                        inv·042 · acme · payment landing
+                        <span class="ctx"><span class="accent">david confirmed</span> · sepa · day 9 pattern</span>
+                    </div>
+                    <span class="amt"><span class="cur">€</span>4,719</span>
+                </div>
+                <div class="row">
+                    <span class="when">fri 09</span>
+                    <div class="what">
+                        inv·040 phase 2 · solana · ship + bill
+                        <span class="ctx">m·022 · ofac update · ready monday</span>
+                    </div>
+                    <span class="amt"><span class="cur">€</span>1,200</span>
+                </div>
+                <div class="row">
+                    <span class="when">mon 12</span>
+                    <div class="what">
+                        inv·043 · maersk · cycle close
+                        <span class="ctx">ai-bundled · review &amp; send</span>
+                    </div>
+                    <span class="amt"><span class="cur">€</span>750</span>
+                </div>
+                <div class="row">
+                    <span class="when">may 31</span>
+                    <div class="what">
+                        m·006 · acme · monthly retainer auto-issue
+                        <span class="ctx">+1.8h overage forecast · €270</span>
+                    </div>
+                    <span class="amt"><span class="cur">€</span>1,770</span>
+                </div>
+                <div class="row">
+                    <span class="when">jun 02</span>
+                    <div class="what">
+                        m·022 · solana · fixed-fee final 33%
+                        <span class="ctx">if delivered on time · risk: -1d slip</span>
+                    </div>
+                    <span class="amt"><span class="cur">€</span>1,200</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col notes">
+            <h3>ordify · <span class="accent">read of the cycle</span></h3>
+            <p>
+                <strong>portfolio is healthy</strong>, but concentration is creeping. acme is <span class="accent">51%</span> of trailing 90-day revenue. one disengagement and june dips by a third.
+            </p>
+            <p>
+                <em>the only real friction is maersk · 21d dso (twice acme, ~3× solana). pattern: they read fast, pay slow, respond well to a warm 2nd reminder. <strong>worth setting that as auto-send at d+5 silence.</strong></em>
+            </p>
+            <p>
+                <span class="accent">two decisions for monday:</span> auto-send 2nd reminders for maersk after 5 days, and whether to chase the 3 cold-leads sitting in capture from last week — adding any one stabilises june.
+            </p>
+            <div class="actions">
+                <a class="primary">enable auto-reminder</a>
+                <a>chase cold leads</a>
+                <a>diversify plan</a>
+                <a class="dim">later</a>
+            </div>
+        </div>
+
+    </section>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>working alongside</div>
+        <h2 class="ttl">cycle · <span class="accent">may.</span></h2>
+    </header>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">10:42 · pulse</span>
+            <p class="text">
+                you closed april at <strong>€8,440 received</strong>, <span class="accent">+18% vs march</span>. the climb is real but it's almost entirely acme. <em>they paid 3 invoices in 30 days — that's not a pattern, that's a season.</em>
+            </p>
+            <div class="actions-row">
+                <a>show 4-mo trend</a>
+                <a class="dim">later</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">3 things to clear today</span>
+            <p class="text">
+                <strong>1.</strong> send 2nd reminder · <span class="warn">inv·041 maersk</span> <em>(drafted)</em><br>
+                <strong>2.</strong> review &amp; sign · inv·043 draft <em>(ai-bundled mon-fri)</em><br>
+                <strong>3.</strong> nudge solanapay on phase-2 scope <em>(jen viewed but silent 4d)</em>
+            </p>
+            <div class="actions-row">
+                <a class="primary">do all 3</a>
+                <a>open inv·041</a>
+                <a class="dim">just 1</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">forecast · risk</span>
+            <p class="text">
+                base case for june: <strong>€11,200</strong>. the swing factor is m·022 final delivery — if it slips into july, june lands at <span class="warn">€8,400</span>. <em>i'm holding wed pm as a buffer to bring it forward.</em>
+            </p>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="ask, plan, or 'send reminder on 041'…">
+        <span class="hint"><kbd>⌘K</kbd> · hold <kbd>␣</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>

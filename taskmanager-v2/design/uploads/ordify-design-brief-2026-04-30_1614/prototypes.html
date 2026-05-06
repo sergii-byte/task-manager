@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · prototypes index</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body { background: var(--bg-1); }
+  .head-bar {
+      padding: 32px;
+      border-bottom: var(--rule-thick);
+      background: var(--bg);
+  }
+  .head-bar .crumbs {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-weight: 600;
+  }
+  .head-bar h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      text-transform: lowercase;
+      line-height: 0.95;
+      margin: 0;
+  }
+  .head-bar h1 .accent { color: var(--accent); }
+  .head-bar p {
+      font-family: var(--font-text);
+      font-size: var(--text-md);
+      color: var(--fg-muted);
+      max-width: 64ch;
+      margin: 12px 0 0;
+      line-height: 1.55;
+  }
+
+  .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 0;
+  }
+  @media (min-width: 1100px) { .grid { grid-template-columns: 1fr 1fr 1fr; } }
+
+  .card {
+      background: var(--bg);
+      border-right: var(--rule-thin);
+      border-bottom: var(--rule-thin);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      cursor: pointer;
+      transition: background var(--dur-fast) var(--ease-out);
+      text-decoration: none;
+      color: inherit;
+  }
+  .card:hover { background: var(--bg-1); }
+  .card .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+  }
+  .card .num {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: var(--tracking-ultra);
+      color: var(--accent);
+      text-transform: uppercase;
+      border-top: 2px solid var(--accent);
+      padding-top: 6px;
+      width: 64px;
+  }
+  .card .label {
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+  }
+  .card .title {
+      font-family: var(--font-sans);
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      text-transform: lowercase;
+      line-height: 1;
+      margin: 4px 0 0;
+  }
+  .card .title .accent { color: var(--accent); }
+  .card .desc {
+      font-family: var(--font-text);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      line-height: 1.55;
+  }
+  .card .pros {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+  }
+  .card .pros .row {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      gap: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      align-items: baseline;
+  }
+  .card .pros .k {
+      color: var(--fg-faint);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-wide);
+  }
+  .card .pros .v {
+      color: var(--ink);
+      font-family: var(--font-text);
+      line-height: 1.4;
+  }
+
+  .card .open {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  .card .open::after { content: "→"; }
+
+  .card.recommended { background: var(--bg); position: relative; }
+  .card.recommended::before {
+      content: "ORDIFY DEFAULT";
+      position: absolute;
+      top: 12px; right: 16px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: var(--tracking-ultra);
+  }
+
+  .meta-bar {
+      padding: 24px 32px;
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: var(--tracking-wide);
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+  }
+  .meta-bar .links a { color: var(--accent); margin-right: 16px; text-decoration: none; }
+  .meta-bar .links a:hover { color: var(--bg); }
+</style>
+</head>
+<body>
+
+<div class="head-bar">
+    <div class="crumbs">FILE 00 · TODAY-VIEW PROTOTYPES · 03 LAYOUTS</div>
+    <h1>same data, <span class="accent">three minds.</span></h1>
+    <p>Each card below is a fully-rendered prototype of «Today, 29 April 2026» — the same 10 tasks for the same lawyer, laid out three different ways. Pick the one that matches how <em>you</em> think about a working day. We build the chosen one in Phase 1.</p>
+</div>
+
+<div class="grid">
+
+    <a class="card recommended" href="/prototype.html">
+        <div class="top">
+            <span class="num">A · LIST</span>
+            <span class="label">EDITORIAL · TIME-BLOCKED</span>
+        </div>
+        <h2 class="title">today, <span class="accent">focused.</span></h2>
+        <div class="desc">Vertical list grouped into MORNING / AFTERNOON / DONE bars with mono time-ranges. Each task = one swiss row with idx · checkbox · title · priority · tag · AI mark · due. AI footer-bar at bottom suggests deferrals.</div>
+        <div class="pros">
+            <div class="row"><span class="k">FOR</span><span class="v">Linear-people. Like reading a printed schedule. Highest information density. Scrolls cleanly.</span></div>
+            <div class="row"><span class="k">AGAINST</span><span class="v">No visual weight on what's <em>most</em> important — the OFAC memo and a P3 errand look similar.</span></div>
+            <div class="row"><span class="k">CANON</span><span class="v">Müller-Brockmann editorial, FT broadsheet, Linear-meets-print.</span></div>
+        </div>
+        <div class="open">OPEN A</div>
+    </a>
+
+    <a class="card" href="/prototype-b-timeline.html">
+        <div class="top">
+            <span class="num">B · TIMELINE</span>
+            <span class="label">CALENDAR-DAY · TIME-AS-AXIS</span>
+        </div>
+        <h2 class="title">today, <span class="accent">scheduled.</span></h2>
+        <div class="desc">Vertical hours rail (08:00-18:00) on the left. Tasks appear as time-positioned blocks — height = duration, width = full lane. Vermillion «NOW · 14:32» line cuts across. Day-stats strip below: scheduled / done / overdue / billable / projected revenue.</div>
+        <div class="pros">
+            <div class="row"><span class="k">FOR</span><span class="v">Lawyer mind: time IS the resource. See blocked vs free at a glance. Drag-resize feel for re-planning.</span></div>
+            <div class="row"><span class="k">AGAINST</span><span class="v">Tasks without a time slot don't fit. «Whenever today» items have no place.</span></div>
+            <div class="row"><span class="k">CANON</span><span class="v">Cal.com, Linear cycle-view, paper Filofax week-spread.</span></div>
+        </div>
+        <div class="open">OPEN B</div>
+    </a>
+
+    <a class="card" href="/prototype-c-briefing.html">
+        <div class="top">
+            <span class="num">C · BRIEFING</span>
+            <span class="label">EXEC SUMMARY · CARDS-FIRST</span>
+        </div>
+        <h2 class="title">today, <span class="accent">brief.</span></h2>
+        <div class="desc">Big greeting hero with giant «29» numeral behind. 4-column stats strip (scheduled / overdue / billable / projected revenue). Top-3 «must-do before EOD» as full cards (overdue P0 = vermillion-fill). Secondary 7 tasks collapsed into one-line rows below.</div>
+        <div class="pros">
+            <div class="row"><span class="k">FOR</span><span class="v">Opens the day with «what's the situation». Visual hierarchy hard-codes priority — overdue/procedural can't hide.</span></div>
+            <div class="row"><span class="k">AGAINST</span><span class="v">More chrome per pixel. After 30 days you'll want list (A) or timeline (B) for speed.</span></div>
+            <div class="row"><span class="k">CANON</span><span class="v">FT morning briefing, Bloomberg terminal, Robinhood dashboard.</span></div>
+        </div>
+        <div class="open">OPEN C</div>
+    </a>
+
+</div>
+
+<div class="meta-bar">
+    <span>● FILE 00 · DATA SAME · LAYOUT VARIES · PICK ONE</span>
+    <div class="links">
+        <a href="/palette.html">PALETTE</a>
+        <a href="/colors.html">ACCENT</a>
+        <a href="/capture-options.html">CAPTURE</a>
+        <a href="/">LIVE APP</a>
+    </div>
+</div>
+
+</body>
+</html>

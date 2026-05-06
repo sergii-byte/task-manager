@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · matter / hourly (hi-fi 11.hourly)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 56px; display: grid; min-height: 100vh; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+  body { overflow: auto; }
+  #main { height: auto; min-height: 100vh; overflow: visible; }
+
+  .meta-banner { background: var(--ink); color: var(--bg); padding: 6px 16px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; text-align: center; font-weight: 700; }
+  .meta-banner a { color: var(--accent); margin: 0 8px; text-decoration: none; }
+
+  .omni-bar { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 2px solid var(--ink); background: var(--bg-1); box-shadow: 0 4px 12px -8px rgba(0,0,0,0.12); }
+  .omni-bar .glyph { width: 28px; height: 28px; display: grid; place-items: center; background: var(--accent); color: var(--bg); font-family: var(--font-mono); font-weight: 700; font-size: 14px; border-radius: 50%; flex-shrink: 0; }
+  .omni-bar .kbd { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); padding: 3px 7px; border: 1px solid var(--line-strong); font-weight: 600; background: var(--bg); flex-shrink: 0; }
+  .omni-bar input { flex: 1; appearance: none; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 17px; font-weight: 500; color: var(--ink); padding: 6px 0; }
+  .omni-bar .right-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; flex-shrink: 0; text-transform: uppercase; }
+  .omni-bar .mic-btn { appearance: none; background: var(--bg); border: 1px solid var(--line-strong); color: var(--fg-muted); cursor: pointer; padding: 6px; flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; }
+
+  .breadcrumb { padding: 8px 24px; border-bottom: 1px solid var(--line); background: var(--bg); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); }
+  .breadcrumb a { color: var(--fg-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--ink); }
+  .breadcrumb .sep { color: var(--fg-faint); margin: 0 6px; }
+  .breadcrumb .current { color: var(--ink); font-weight: 700; }
+
+  .hero { padding: 28px 24px 22px; border-bottom: 2px solid var(--ink); display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: end; background: var(--bg); }
+  .hero .left .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cobalt); font-weight: 700; }
+  .hero h1 { font-family: var(--font-sans); font-size: 56px; font-weight: 800; letter-spacing: -0.045em; line-height: 0.95; margin: 8px 0 14px; color: var(--ink); text-transform: lowercase; }
+  .hero h1 .accent { color: var(--accent); }
+  .hero .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 4px 8px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--line-strong); color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .badge.hr { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .badge.hr .dot { background: var(--cobalt); }
+  .hero .right { display: flex; flex-direction: column; gap: 8px; align-items: end; }
+  .hero .right .matter-id { font-family: var(--font-mono); font-size: 11px; color: var(--fg-faint); letter-spacing: 0.04em; }
+  .hero .right .actions { display: flex; gap: 6px; }
+  .hero .right .actions button { appearance: none; background: var(--bg); border: 1px solid var(--ink); color: var(--ink); padding: 7px 12px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+  .hero .right .actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+  /* HOURLY HERO STRIP — 3 cells: accumulator + rate + pending invoice */
+  .hr-hero { display: grid; grid-template-columns: 1.4fr 1fr 1.1fr; border-bottom: 2px solid var(--ink); background: var(--bg); }
+
+  .accum { background: var(--cobalt-50); padding: 28px 28px 26px; border-right: 2px solid var(--ink); display: flex; flex-direction: column; gap: 12px; }
+  .accum .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--cobalt); font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .accum .clock { font-family: var(--font-mono); font-size: 84px; font-weight: 700; color: var(--ink); letter-spacing: -0.04em; line-height: 0.9; font-variant-numeric: tabular-nums; }
+  .accum .clock .unit { font-size: 18px; color: var(--fg-muted); margin-left: 6px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .accum .breakdown { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; padding-top: 8px; border-top: 1px solid rgba(10,10,10,0.12); }
+  .accum .breakdown .k { font-family: var(--font-mono); font-size: 9px; color: var(--cobalt); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
+  .accum .breakdown .v { font-family: var(--font-mono); font-size: 18px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; margin-top: 2px; }
+  .accum .breakdown .v.muted { color: var(--fg-muted); }
+  .accum .breakdown .sub { font-family: var(--font-mono); font-size: 9px; color: var(--fg-muted); letter-spacing: 0.06em; margin-top: 2px; text-transform: uppercase; }
+
+  .rate { padding: 28px 24px 24px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .rate .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint); font-weight: 700; }
+  .rate .v { font-family: var(--font-sans); font-size: 56px; font-weight: 800; color: var(--ink); letter-spacing: -0.04em; line-height: 0.92; font-variant-numeric: tabular-nums; }
+  .rate .v .cur { font-size: 22px; color: var(--fg-faint); margin-right: 4px; font-weight: 500; vertical-align: top; }
+  .rate .v .per { font-size: 22px; color: var(--fg-muted); margin-left: 2px; font-weight: 500; }
+  .rate .sub { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; }
+  .rate .terms { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); margin-top: 4px; }
+  .rate .terms .row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; }
+  .rate .terms .row .k { color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .rate .terms .row .v2 { color: var(--ink); font-weight: 600; }
+
+  .pending { padding: 28px 24px 24px; background: var(--accent); color: var(--bg); display: flex; flex-direction: column; gap: 10px; position: relative; }
+  .pending .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.65); font-weight: 700; }
+  .pending .v { font-family: var(--font-sans); font-size: 64px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.92; font-variant-numeric: tabular-nums; }
+  .pending .v .cur { font-size: 24px; color: rgba(255,255,255,0.6); margin-right: 4px; font-weight: 500; vertical-align: top; }
+  .pending .sub { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.65); letter-spacing: 0.04em; text-transform: uppercase; }
+  .pending .cta { margin-top: auto; appearance: none; background: var(--bg); color: var(--accent); border: 0; padding: 12px 16px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .pending .cta .arr { font-size: 16px; }
+
+  /* Section heads */
+  .section-head { padding: 16px 24px 12px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; background: var(--bg); }
+  .section-head h2 { font-family: var(--font-sans); font-size: 22px; font-weight: 800; letter-spacing: -0.03em; margin: 0; color: var(--ink); text-transform: lowercase; }
+  .section-head h2 .accent { color: var(--accent); }
+  .section-head .meta { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); font-weight: 700; }
+  .section-head .right { margin-left: auto; display: flex; gap: 6px; }
+  .section-head .right button { appearance: none; background: transparent; border: 1px solid var(--line-strong); padding: 5px 10px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+  .section-head .right button:hover { background: var(--ink); color: var(--bg); }
+
+  /* UNBILLED TIMELOGS — main feature of hourly view */
+  .timelogs-head {
+      display: grid;
+      grid-template-columns: 22px 100px 1fr 90px 90px 100px 90px;
+      gap: 14px;
+      padding: 10px 24px;
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+  }
+  .timelogs-head .right { text-align: right; }
+  .tlog {
+      display: grid;
+      grid-template-columns: 22px 100px 1fr 90px 90px 100px 90px;
+      gap: 14px;
+      padding: 11px 24px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      position: relative;
+      transition: background 80ms;
+  }
+  .tlog:hover { background: var(--bg-1); }
+  .tlog::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--cobalt); }
+  .tlog.nb::before { background: var(--fg-faint); }
+  .tlog .check { width: 16px; height: 16px; border: 2px solid var(--cobalt); }
+  .tlog.checked .check { background: var(--cobalt); position: relative; }
+  .tlog.checked .check::after { content: ""; position: absolute; left: 2px; top: 4px; width: 8px; height: 4px; border-left: 2px solid var(--bg); border-bottom: 2px solid var(--bg); transform: rotate(-45deg); }
+  .tlog .when { font-family: var(--font-mono); font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .tlog .when .sub { display: block; font-size: 9px; color: var(--fg-faint); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; font-weight: 500; }
+  .tlog .desc { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); font-weight: 500; letter-spacing: -0.005em; }
+  .tlog .desc .ctx { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 3px; display: block; }
+  .tlog .desc .ai { color: var(--accent); font-weight: 700; }
+  .tlog .hours { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tlog .source { font-family: var(--font-mono); font-size: 9px; padding: 2px 6px; border: 1px solid var(--line-strong); color: var(--fg-muted); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; justify-self: start; }
+  .tlog .source.ai { color: var(--accent); border-color: var(--accent); }
+  .tlog .source.timer { color: var(--ink); }
+  .tlog .billable { font-family: var(--font-mono); font-size: 10px; padding: 3px 7px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; justify-self: start; }
+  .tlog .billable.b { background: var(--cobalt-50); color: var(--cobalt); }
+  .tlog .billable.nb { background: var(--bg-1); color: var(--fg-muted); border: 1px solid var(--line); }
+  .tlog .amt { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .tlog.nb .amt { color: var(--fg-faint); text-decoration: line-through; }
+  .tlog .amt .cur { font-size: 10px; color: var(--fg-faint); margin-right: 2px; }
+
+  /* Sub-totals row */
+  .subtotal-row {
+      display: grid;
+      grid-template-columns: 22px 100px 1fr 90px 90px 100px 90px;
+      gap: 14px;
+      padding: 12px 24px;
+      align-items: center;
+      background: var(--bg-1);
+      border-bottom: 2px solid var(--ink);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 700;
+  }
+  .subtotal-row .label { grid-column: 1 / span 3; color: var(--ink); }
+  .subtotal-row .hours-total { color: var(--ink); font-size: 14px; }
+  .subtotal-row .amt-total { text-align: right; color: var(--accent); font-size: 16px; }
+
+  /* PREVIOUSLY INVOICED — collapsed list */
+  .billed-row {
+      display: grid;
+      grid-template-columns: 100px 1fr 90px 100px 110px;
+      gap: 14px;
+      padding: 12px 24px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+      cursor: pointer;
+  }
+  .billed-row:hover { background: var(--bg-1); }
+  .billed-row .when { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .billed-row .desc { font-family: var(--font-text); font-size: 13px; color: var(--fg-muted); letter-spacing: -0.005em; }
+  .billed-row .desc strong { color: var(--ink); font-weight: 600; }
+  .billed-row .hours { font-family: var(--font-mono); font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .billed-row .inv { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; }
+  .billed-row .amt-cell { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .billed-row .amt-cell .cur { font-size: 10px; color: var(--fg-faint); margin-right: 2px; }
+
+  .annot { padding: 16px 24px; background: var(--bg-1); border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; line-height: 1.7; }
+  .annot strong { color: var(--ink); }
+  .annot .arrow { color: var(--accent); font-weight: 700; }
+
+  #ai-rail { background: var(--ink); }
+  #main { display: flex; flex-direction: column; }
+</style>
+</head>
+<body class="with-ai-rail">
+
+<div class="meta-banner">
+    HI-FI · 11.HR · MATTER · HOURLY — accumulator + unbilled timelogs
+    <a href="hifi-11-matter-fix.html">fixed (11.fix)</a>
+    <a href="index.html">all screens</a>
+</div>
+
+<div id="app">
+
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">8</span></div>
+        <div class="proj"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span><span class="proj-count">apr</span></div>
+        <div class="proj"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count">4:32</span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">14</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj"><span class="proj-num">06</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Tech (IT)</span><span class="proj-count">4</span></div>
+        <div class="proj active"><span class="proj-num">07</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Maersk-flag (B2B)</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">SolanaPay (Crypto)</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko (private)</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>ES</button></div>
+    </div>
+</aside>
+
+<main id="main">
+
+<div class="omni-bar">
+    <span class="glyph">o</span>
+    <span class="kbd">⌘K</span>
+    <input type="text" placeholder="tell ordify… ‘maersk 1h45m B/L review’ or ‘invoice april hours’">
+    <button class="mic-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg></button>
+    <span class="right-hint">⌘K to expand</span>
+</div>
+
+<div class="breadcrumb">
+    <a href="#">CLIENTS</a> <span class="sep">›</span>
+    <a href="#">MAERSK-FLAG TRADING</a> <span class="sep">›</span>
+    <a href="#">MATTERS</a> <span class="sep">›</span>
+    <span class="current">CHARTERPARTY &amp; B/L ADVISORY</span>
+</div>
+
+<section class="hero">
+    <div class="left">
+        <span class="eyebrow">CLIENT · MAERSK-FLAG TRADING LTD · B2B-TRADE</span>
+        <h1>charterparty &amp; b/l <span class="accent">advisory.</span></h1>
+        <div class="badges">
+            <span class="badge hr"><span class="dot"></span>HOURLY · €150/H</span>
+            <span class="badge">ACTIVE · APR 26</span>
+            <span class="badge">JURIS · MARSHALL IS · UK</span>
+            <span class="badge">CASE# CP-2026-014</span>
+        </div>
+    </div>
+    <div class="right">
+        <span class="matter-id">M-0019 · OPENED 12 JAN 2026</span>
+        <div class="actions">
+            <button type="button">Edit rate</button>
+            <button type="button">▶ Start timer</button>
+            <button class="primary" type="button">★ Invoice unbilled</button>
+        </div>
+    </div>
+</section>
+
+<!-- HOURLY HERO: accumulator + rate + pending invoice -->
+<section class="hr-hero">
+    <div class="accum">
+        <span class="eyebrow">UNBILLED HOURS · APR 2026</span>
+        <div class="clock">12:15<span class="unit">h&nbsp;m</span></div>
+        <div class="breakdown">
+            <div>
+                <div class="k">Billable</div>
+                <div class="v">11:30</div>
+                <div class="sub">8 entries</div>
+            </div>
+            <div>
+                <div class="k">Non-bill</div>
+                <div class="v muted">0:45</div>
+                <div class="sub">1 entry · admin</div>
+            </div>
+            <div>
+                <div class="k">This week</div>
+                <div class="v">4:50</div>
+                <div class="sub">wk 18 · 4 entries</div>
+            </div>
+        </div>
+    </div>
+    <div class="rate">
+        <span class="eyebrow">HOURLY RATE</span>
+        <span class="v"><span class="cur">€</span>150<span class="per">/h</span></span>
+        <span class="sub">net · ex-vat · €181.50/h incl 21%</span>
+        <div class="terms">
+            <div class="row"><span class="k">Min increment</span><span class="v2">15 min</span></div>
+            <div class="row"><span class="k">Travel</span><span class="v2">@ 50% rate</span></div>
+            <div class="row"><span class="k">Currency</span><span class="v2">EUR</span></div>
+            <div class="row"><span class="k">Cycle</span><span class="v2">monthly · NET-30</span></div>
+        </div>
+    </div>
+    <div class="pending">
+        <span class="eyebrow">PENDING INVOICE · APR</span>
+        <span class="v"><span class="cur">€</span>1,725</span>
+        <span class="sub">11:30 billable · ready to bill</span>
+        <button class="cta" type="button">★ DRAFT INVOICE NOW <span class="arr">→</span></button>
+    </div>
+</section>
+
+<!-- UNBILLED TIMELOGS -->
+<section>
+    <div class="section-head">
+        <h2>unbilled timelogs <span class="accent">·</span></h2>
+        <span class="meta">9 ENTRIES · APR 2026 · 12:15H · €1,725 (BILLABLE ONLY)</span>
+        <div class="right">
+            <button type="button">Filter</button>
+            <button type="button">⬇ CSV</button>
+            <button type="button">+ Manual entry</button>
+        </div>
+    </div>
+
+    <div class="timelogs-head">
+        <span></span>
+        <span>Date / start</span>
+        <span>Description</span>
+        <span class="right">Hours</span>
+        <span>Source</span>
+        <span>Bill?</span>
+        <span class="right">Amount</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">29 APR<span class="sub">14:00 → 16:30</span></span>
+        <div class="desc">
+            B/L red-line round 2 · counter-party comments
+            <span class="ctx">T-0138 · CHARTERPARTY · BILL · NEXT BUSINESS WEEK</span>
+        </div>
+        <span class="hours" style="text-align:right">2:30</span>
+        <span class="source timer">⏱ TIMER</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>375.00</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">28 APR<span class="sub">10:15 → 11:00</span></span>
+        <div class="desc">
+            Call w/ Capt. Kovalenko · INCOTERMS 2020 dispute on FOB clause
+            <span class="ctx"><span class="ai">★ AI · auto-logged from call summary</span></span>
+        </div>
+        <span class="hours" style="text-align:right">0:45</span>
+        <span class="source ai">★ AI · CALL</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>112.50</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">25 APR<span class="sub">09:00 → 10:30</span></span>
+        <div class="desc">
+            Research · Marshall Islands flag-of-convenience case law (5 cases)
+            <span class="ctx">T-0136 · RESEARCH · BILL · MEMO ATTACHED</span>
+        </div>
+        <span class="hours" style="text-align:right">1:30</span>
+        <span class="source timer">⏱ TIMER</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>225.00</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">23 APR<span class="sub">15:00 → 17:30</span></span>
+        <div class="desc">
+            Charterparty · NYPE 2015 markup · transmit to broker
+            <span class="ctx">T-0134 · CHARTERPARTY · BILL · 4-pp markup</span>
+        </div>
+        <span class="hours" style="text-align:right">2:30</span>
+        <span class="source timer">⏱ TIMER</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>375.00</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">22 APR<span class="sub">11:00 → 12:00</span></span>
+        <div class="desc">
+            Email exchange · UK arbitration clause forum-selection
+            <span class="ctx"><span class="ai">★ AI · derived from 6-email thread w/ Maria @ broker</span></span>
+        </div>
+        <span class="hours" style="text-align:right">1:00</span>
+        <span class="source ai">★ AI · EMAIL</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>150.00</span>
+    </div>
+
+    <div class="tlog">
+        <span class="check"></span>
+        <span class="when">19 APR<span class="sub">14:30 → 15:15</span></span>
+        <div class="desc">
+            Internal admin · file Marshall Is corp-renewal docs to drive
+            <span class="ctx">— ORPHAN · NON-BILLABLE BY POLICY</span>
+        </div>
+        <span class="hours" style="text-align:right">0:45</span>
+        <span class="source timer">⏱ TIMER</span>
+        <span class="billable nb">N/B</span>
+        <span class="amt"><span class="cur">€</span>0</span>
+    </div>
+
+    <div class="tlog checked nb" style="opacity:1">
+        <span class="check"></span>
+        <span class="when">17 APR<span class="sub">10:00 → 11:30</span></span>
+        <div class="desc">
+            B/L draft v1 · drafting from broker template
+            <span class="ctx">T-0131 · CHARTERPARTY · BILL · v1 sent</span>
+        </div>
+        <span class="hours" style="text-align:right">1:30</span>
+        <span class="source timer">⏱ TIMER</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>225.00</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">15 APR<span class="sub">16:00 → 17:00</span></span>
+        <div class="desc">
+            Maria call · cargo description &amp; demurrage clause edits
+            <span class="ctx"><span class="ai">★ AI · ortega meeting auto-log</span></span>
+        </div>
+        <span class="hours" style="text-align:right">1:00</span>
+        <span class="source ai">★ AI · MEET</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>150.00</span>
+    </div>
+
+    <div class="tlog checked">
+        <span class="check"></span>
+        <span class="when">11 APR<span class="sub">09:30 → 10:15</span></span>
+        <div class="desc">
+            Review · cargo manifest discrepancy · advise client
+            <span class="ctx">T-0128 · ADVISORY · BILL · short memo</span>
+        </div>
+        <span class="hours" style="text-align:right">0:45</span>
+        <span class="source timer">⏱ TIMER</span>
+        <span class="billable b">BILLABLE</span>
+        <span class="amt"><span class="cur">€</span>112.50</span>
+    </div>
+
+    <div class="subtotal-row">
+        <span class="label">SUBTOTAL · 8 BILLABLE ENTRIES (1 N/B EXCLUDED) · 11:30 H @ €150/H</span>
+        <span class="hours-total" style="text-align:right">11:30</span>
+        <span></span>
+        <span></span>
+        <span class="amt-total">€1,725.00</span>
+    </div>
+</section>
+
+<!-- PREVIOUSLY INVOICED -->
+<section>
+    <div class="section-head">
+        <h2>previously invoiced <span class="accent">·</span></h2>
+        <span class="meta">3 INVOICES · 38:45H BILLED YTD · €5,812.50</span>
+        <div class="right">
+            <button type="button">▤ Expand all</button>
+        </div>
+    </div>
+
+    <div class="billed-row">
+        <span class="when">15 MAR</span>
+        <div class="desc"><strong>Charterparty review · Feb 2026</strong> — 14 entries, mar 1 → mar 15</div>
+        <span class="hours">15:30 H</span>
+        <span class="inv">→ INV·036</span>
+        <span class="amt-cell"><span class="cur">€</span>3,140.00</span>
+    </div>
+    <div class="billed-row">
+        <span class="when">15 FEB</span>
+        <div class="desc"><strong>Cargo dispute · Jan 2026</strong> — 9 entries, jan 12 → jan 31</div>
+        <span class="hours">12:15 H</span>
+        <span class="inv">→ INV·031</span>
+        <span class="amt-cell"><span class="cur">€</span>1,837.50</span>
+    </div>
+    <div class="billed-row">
+        <span class="when">22 JAN</span>
+        <div class="desc"><strong>Initial intake + flag review · Jan W2</strong> — 7 entries, jan 12 → jan 21</div>
+        <span class="hours">11:00 H</span>
+        <span class="inv">→ INV·028</span>
+        <span class="amt-cell"><span class="cur">€</span>1,650.00</span>
+    </div>
+</section>
+
+<div class="annot">
+    <strong>3 ZONES · HOURLY MATTER:</strong>
+    <span class="arrow">①</span> <strong>HERO + HR-HERO STRIP</strong> — cobalt accumulator (unbilled hours w/ billable / non-bill / this-week split), rate (€/h + payment terms), <strong>plum pending-invoice block</strong> with one-tap “draft invoice now” CTA.
+    <span class="arrow">②</span> <strong>UNBILLED TIMELOGS</strong> — primary unit. Each row: date · description · hours · source (TIMER vs ★ AI auto-log) · billable toggle · €amount. Bulk-select drives the invoice draft. Non-billable entries dim and strike the amount.
+    <span class="arrow">③</span> <strong>PREVIOUSLY INVOICED</strong> — collapsed history of bundles already billed, each linked → INV·NNN.
+</div>
+
+</main>
+
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head"><div class="ai-glyph">o</div></div>
+        <div class="ai-collapsed-label">ASK ORDIFY</div>
+        <div class="ai-collapsed-arrow">‹</div>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>

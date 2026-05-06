@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · brand sketch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --plum-soft: #f4ecf8;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --saffron: #c98a00;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 80px 64px 120px; }
+
+  .crumbs { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 28px; }
+  .crumbs a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .crumbs a:hover { color: var(--ink); }
+  .crumbs .sep { color: var(--faint); margin: 0 8px; }
+  .crumbs .now { color: var(--ink); font-weight: 700; }
+
+  .hero { padding-bottom: 48px; border-bottom: 1px solid var(--ink); }
+  .hero .eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero h1 { margin: 18px 0 0; font-family: var(--font-sans); font-size: 96px; font-weight: 700; letter-spacing: -0.045em; line-height: 0.9; text-transform: lowercase; color: var(--ink); }
+  .hero h1 .accent { color: var(--accent); }
+  .hero h1 .punct { color: var(--faint); }
+  .hero .lede { margin-top: 22px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 60ch; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+
+  .sec { padding: 64px 0 24px; border-bottom: 1px solid var(--line); }
+  .sec:last-of-type { border-bottom: 0; }
+  .sec-hdr { display: flex; align-items: baseline; gap: 14px; margin-bottom: 32px; }
+  .sec-hdr .ord { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; font-weight: 700; }
+  .sec-hdr h2 { margin: 0; font-family: var(--font-sans); font-size: 28px; font-weight: 600; letter-spacing: -0.03em; text-transform: lowercase; color: var(--ink); }
+  .sec-hdr h2 .punct { color: var(--faint); }
+  .sec-hdr .meta { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+
+  /* WORDMARK display tile */
+  .mark-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 24px; }
+  .mark-tile { background: var(--paper); border: 1px solid var(--line); padding: 56px 48px; display: flex; flex-direction: column; justify-content: center; gap: 28px; min-height: 320px; position: relative; }
+  .mark-tile.dark { background: var(--ink); }
+  .mark-tile.plum { background: var(--accent); }
+  .mark-tile .corner { position: absolute; top: 14px; left: 18px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--faint); }
+  .mark-tile.dark .corner { color: rgba(255,255,255,0.4); }
+  .mark-tile.plum .corner { color: rgba(255,255,255,0.5); }
+  .mark-tile .corner-r { position: absolute; top: 14px; right: 18px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--faint); }
+  .mark-tile.dark .corner-r { color: rgba(255,255,255,0.4); }
+  .mark-tile.plum .corner-r { color: rgba(255,255,255,0.5); }
+
+  .wordmark { font-family: var(--font-sans); font-weight: 700; letter-spacing: -0.045em; line-height: 0.9; text-transform: lowercase; color: var(--ink); display: flex; align-items: baseline; }
+  .wordmark .a { color: var(--accent); }
+  .wordmark .dot { color: var(--faint); margin-left: -2px; }
+  .wordmark.lg { font-size: 144px; }
+  .wordmark.md { font-size: 72px; }
+  .wordmark.sm { font-size: 32px; }
+  .wordmark.xs { font-size: 18px; }
+  .mark-tile.dark .wordmark { color: var(--bg); }
+  .mark-tile.dark .wordmark .a { color: #d4a3e8; }
+  .mark-tile.dark .wordmark .dot { color: rgba(255,255,255,0.35); }
+  .mark-tile.plum .wordmark { color: #fff; }
+  .mark-tile.plum .wordmark .a { color: #f0d0ff; }
+  .mark-tile.plum .wordmark .dot { color: rgba(255,255,255,0.45); }
+
+  .tagline { font-family: var(--font-text); font-size: 14px; color: var(--muted); letter-spacing: -0.005em; max-width: 36ch; line-height: 1.5; }
+  .mark-tile.dark .tagline { color: rgba(255,255,255,0.6); }
+  .mark-tile.plum .tagline { color: rgba(255,255,255,0.85); }
+  .tagline strong { color: var(--ink); font-weight: 600; }
+  .mark-tile.dark .tagline strong { color: var(--bg); }
+  .mark-tile.plum .tagline strong { color: #fff; }
+
+  /* Symbol — just the dot */
+  .symbol-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .symbol-cell { background: var(--paper); border: 1px solid var(--line); padding: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; aspect-ratio: 1; }
+  .symbol-cell.dark { background: var(--ink); }
+  .symbol-cell.plum { background: var(--accent); }
+  .symbol-cell.bg { background: var(--bg); }
+
+  .symbol { width: 88px; height: 88px; position: relative; display: grid; place-items: center; font-family: var(--font-sans); font-weight: 800; letter-spacing: -0.06em; }
+  .symbol .o { font-size: 88px; line-height: 0.85; color: var(--ink); }
+  .symbol .y-dot { position: absolute; bottom: 4px; right: -4px; width: 16px; height: 16px; background: var(--accent); border-radius: 50%; }
+  .symbol-cell.dark .symbol .o { color: var(--bg); }
+  .symbol-cell.plum .symbol .o { color: #fff; }
+  .symbol-cell.plum .symbol .y-dot { background: #fff; }
+  .symbol-cell .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .symbol-cell.dark .lbl, .symbol-cell.plum .lbl { color: rgba(255,255,255,0.55); }
+
+  /* COLOR */
+  .swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .swatch { display: flex; flex-direction: column; }
+  .swatch .chip { height: 140px; border: 1px solid var(--line); position: relative; }
+  .swatch .chip .role { position: absolute; top: 10px; left: 12px; font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .swatch .body { padding: 12px 0 0; }
+  .swatch .name { font-family: var(--font-sans); font-size: 16px; font-weight: 600; letter-spacing: -0.015em; color: var(--ink); }
+  .swatch .hex { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; }
+  .swatch .use { font-family: var(--font-text); font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.45; letter-spacing: -0.005em; }
+
+  /* TYPE */
+  .type-row { padding: 22px 0; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: 180px 1fr; gap: 32px; align-items: baseline; }
+  .type-row:last-child { border-bottom: 0; }
+  .type-row .meta { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .type-row .meta .ttl { color: var(--ink); display: block; margin-bottom: 4px; font-size: 11px; }
+  .type-row .meta .acc { color: var(--accent); }
+  .type-sample.display { font-family: var(--font-sans); font-size: 64px; font-weight: 700; letter-spacing: -0.045em; line-height: 0.95; text-transform: lowercase; color: var(--ink); }
+  .type-sample.h1 { font-family: var(--font-sans); font-size: 36px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); }
+  .type-sample.h2 { font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--ink); }
+  .type-sample.body { font-family: var(--font-text); font-size: 16px; line-height: 1.55; color: var(--ink); letter-spacing: -0.005em; max-width: 56ch; }
+  .type-sample.sm { font-family: var(--font-text); font-size: 13px; color: var(--muted); letter-spacing: -0.005em; }
+  .type-sample.mono { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.02em; color: var(--ink); }
+  .type-sample.eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .type-sample .accent { color: var(--accent); }
+  .type-sample .punct { color: var(--faint); }
+
+  /* VOICE */
+  .voice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .voice-card { padding: 24px; border-left: 2px solid var(--accent); background: var(--plum-soft); }
+  .voice-card.no { background: var(--bg); border-left-color: var(--warn); }
+  .voice-card .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 12px; }
+  .voice-card.no .lbl { color: var(--warn); }
+  .voice-card .quote { font-family: var(--font-sans); font-size: 19px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.4; color: var(--ink); }
+  .voice-card .quote + .quote { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--line); }
+  .voice-card.no .quote { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+
+  /* PRINCIPLES */
+  .princ-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0; border-top: 1px solid var(--line); }
+  .princ {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--line-soft);
+      padding-right: 32px;
+  }
+  .princ:nth-child(odd) { border-right: 1px solid var(--line-soft); padding-right: 32px; }
+  .princ:nth-child(even) { padding-left: 32px; padding-right: 0; }
+  .princ .num { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.06em; font-weight: 700; }
+  .princ .ttl { margin: 8px 0 6px; font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); }
+  .princ .desc { font-family: var(--font-text); font-size: 14px; color: var(--muted); line-height: 1.55; letter-spacing: -0.005em; max-width: 52ch; }
+  .princ .desc strong { color: var(--ink); font-weight: 600; }
+
+  /* APPLICATIONS — favicon, app icon, footer */
+  .app-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .app-cell { background: var(--paper); border: 1px solid var(--line); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .app-cell .ttl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .favicon-16 { width: 16px; height: 16px; background: var(--ink); display: grid; place-items: center; image-rendering: pixelated; }
+  .favicon-16::before { content: ""; width: 4px; height: 4px; background: var(--accent); border-radius: 50%; transform: translate(2px, 2px); }
+  .favicon-32 { width: 32px; height: 32px; background: var(--ink); display: grid; place-items: center; }
+  .favicon-32::before { content: ""; width: 8px; height: 8px; background: var(--accent); border-radius: 50%; transform: translate(4px, 4px); }
+  .appicon { width: 88px; height: 88px; background: var(--ink); border-radius: 18px; display: grid; place-items: center; position: relative; }
+  .appicon .glyph { font-family: var(--font-sans); font-size: 56px; font-weight: 700; letter-spacing: -0.06em; color: var(--bg); line-height: 0.9; transform: translateY(2px); }
+  .appicon .pin { position: absolute; bottom: 18px; right: 18px; width: 12px; height: 12px; background: var(--accent); border-radius: 50%; }
+
+  .footer-prev { padding: 18px 24px; background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: space-between; width: 100%; }
+  .footer-prev .left { font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: -0.02em; text-transform: lowercase; color: var(--bg); }
+  .footer-prev .left .a { color: #d4a3e8; }
+  .footer-prev .left .dot { color: rgba(255,255,255,0.4); }
+  .footer-prev .right { font-family: var(--font-mono); font-size: 10px; color: rgba(255,255,255,0.55); letter-spacing: 0.12em; text-transform: uppercase; }
+
+  /* CONSTRUCTION — shows the y → dot relationship */
+  .constr { background: var(--paper); border: 1px solid var(--line); padding: 48px; display: grid; grid-template-columns: 1fr 280px; gap: 48px; align-items: center; }
+  .constr svg { width: 100%; height: auto; }
+  .constr .notes { display: flex; flex-direction: column; gap: 18px; }
+  .constr .note { font-family: var(--font-text); font-size: 13px; color: var(--muted); line-height: 1.55; letter-spacing: -0.005em; }
+  .constr .note .lbl { display: block; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+  .constr .note strong { color: var(--ink); font-weight: 600; }
+
+  @media (max-width: 1100px) {
+    .wrap { padding: 48px 24px 80px; }
+    .hero h1 { font-size: 56px; }
+    .mark-grid, .voice-grid, .constr { grid-template-columns: 1fr; }
+    .symbol-row, .swatch-grid, .app-grid { grid-template-columns: repeat(2, 1fr); }
+    .princ-list { grid-template-columns: 1fr; }
+    .princ:nth-child(odd) { border-right: 0; padding-right: 0; }
+    .princ:nth-child(even) { padding-left: 0; }
+    .wordmark.lg { font-size: 84px; }
+    .type-row { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+    <div class="crumbs">
+        <a href="index.html">all screens</a><span class="sep">/</span>
+        <span class="now">brand sketch</span>
+    </div>
+
+    <header class="hero">
+        <div class="eyebrow">brand · v0.1 · minimal direction</div>
+        <h1>ordif<span class="accent">y</span><span class="punct">.</span><br>brand sketch.</h1>
+        <p class="lede">
+            the wordmark, the dot, the colour, the voice — everything visible to a client. <strong>the dot is the brand.</strong> a small, deliberate plum mark that says <em style="font-style:normal; color:var(--accent); font-weight:600">the work has been seen and tagged</em>. lowercase, never shouting.
+        </p>
+    </header>
+
+    <!-- 01 WORDMARK -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">01</span>
+            <h2>wordmark<span class="punct">.</span></h2>
+            <span class="meta">primary identity · 3 lockups</span>
+        </div>
+
+        <div class="mark-grid">
+            <div class="mark-tile">
+                <span class="corner">primary · light</span>
+                <span class="corner-r">a / 144 / inter tight</span>
+                <div class="wordmark lg">ordif<span class="a">y</span><span class="dot">·</span></div>
+                <p class="tagline">the <strong>y</strong> tilts plum because it's the verb — <em>ordify</em>. the trailing dot is the punctuation of certainty: the thing has been logged.</p>
+            </div>
+            <div class="mark-tile dark">
+                <span class="corner">primary · dark</span>
+                <span class="corner-r">b / 72</span>
+                <div class="wordmark md">ordif<span class="a">y</span><span class="dot">·</span></div>
+                <p class="tagline">on ink: <strong>plum lifts to lilac</strong> for legibility. the dot fades to soft grey so the word breathes.</p>
+            </div>
+        </div>
+
+        <div class="mark-grid" style="margin-top: 20px; grid-template-columns: 1fr 1.4fr;">
+            <div class="mark-tile plum" style="min-height:200px;">
+                <span class="corner">reverse · plum</span>
+                <span class="corner-r">c / 56</span>
+                <div class="wordmark md" style="font-size:56px;">ordif<span class="a">y</span><span class="dot">·</span></div>
+                <p class="tagline">on plum: pure white. <strong>used sparingly</strong> — only in marketing breakouts and the auth screen.</p>
+            </div>
+            <div class="mark-tile" style="min-height:200px; gap:20px;">
+                <span class="corner">scale ladder</span>
+                <span class="corner-r">all sizes</span>
+                <div class="wordmark md">ordif<span class="a">y</span><span class="dot">·</span></div>
+                <div class="wordmark sm">ordif<span class="a">y</span><span class="dot">·</span></div>
+                <div class="wordmark xs">ordif<span class="a">y</span><span class="dot">·</span> me</div>
+                <p class="tagline" style="margin-top:8px;">at <strong>72</strong>: hero. at <strong>32</strong>: app chrome. at <strong>18</strong>: footers — paired with <span style="font-family:var(--font-mono); color:var(--ink)">.me</span> in muted ink.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 02 CONSTRUCTION -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">02</span>
+            <h2>construction<span class="punct">.</span></h2>
+            <span class="meta">how the mark is built</span>
+        </div>
+
+        <div class="constr">
+            <svg viewBox="0 0 720 280" xmlns="http://www.w3.org/2000/svg">
+                <!-- baseline -->
+                <line x1="40" y1="200" x2="700" y2="200" stroke="#c9c6bd" stroke-width="0.75" stroke-dasharray="2 4"/>
+                <!-- cap height -->
+                <line x1="40" y1="60" x2="700" y2="60" stroke="#c9c6bd" stroke-width="0.75" stroke-dasharray="2 4"/>
+                <!-- x-height -->
+                <line x1="40" y1="115" x2="700" y2="115" stroke="#c9c6bd" stroke-width="0.75" stroke-dasharray="2 4"/>
+                <!-- descent -->
+                <line x1="40" y1="245" x2="700" y2="245" stroke="#c9c6bd" stroke-width="0.75" stroke-dasharray="2 4"/>
+
+                <!-- guide labels -->
+                <text x="20" y="64" font-family="JetBrains Mono" font-size="9" fill="#c9c6bd" letter-spacing="1">CAP</text>
+                <text x="20" y="119" font-family="JetBrains Mono" font-size="9" fill="#c9c6bd" letter-spacing="1">X</text>
+                <text x="20" y="204" font-family="JetBrains Mono" font-size="9" fill="#c9c6bd" letter-spacing="1">BL</text>
+                <text x="20" y="249" font-family="JetBrains Mono" font-size="9" fill="#c9c6bd" letter-spacing="1">DC</text>
+
+                <!-- the wordmark itself -->
+                <text x="60" y="200" font-family="Inter Tight" font-weight="700" font-size="140" letter-spacing="-6" fill="#0a0a0a">ordif</text>
+                <text x="450" y="200" font-family="Inter Tight" font-weight="700" font-size="140" letter-spacing="-6" fill="#6a1b9a">y</text>
+
+                <!-- the dot — sits on baseline, 18% of cap height -->
+                <circle cx="556" cy="190" r="13" fill="#c9c6bd"/>
+
+                <!-- annotation arrows + labels -->
+                <line x1="510" y1="180" x2="510" y2="60" stroke="#6a1b9a" stroke-width="1" stroke-dasharray="2 3"/>
+                <text x="514" y="100" font-family="JetBrains Mono" font-size="9" fill="#6a1b9a" letter-spacing="1.2">y · DESCENDER · −0.32 EM</text>
+
+                <line x1="556" y1="170" x2="600" y2="100" stroke="#c9c6bd" stroke-width="1"/>
+                <text x="603" y="100" font-family="JetBrains Mono" font-size="9" fill="#8a8780" letter-spacing="1.2">DOT · 0.18 CAP-H</text>
+                <text x="603" y="115" font-family="JetBrains Mono" font-size="9" fill="#8a8780" letter-spacing="1.2">SITS ON BASELINE</text>
+
+                <!-- letter-spacing arrow -->
+                <line x1="60" y1="225" x2="556" y2="225" stroke="#c9c6bd" stroke-width="0.75"/>
+                <line x1="60" y1="222" x2="60" y2="228" stroke="#c9c6bd" stroke-width="0.75"/>
+                <line x1="556" y1="222" x2="556" y2="228" stroke="#c9c6bd" stroke-width="0.75"/>
+                <text x="290" y="240" font-family="JetBrains Mono" font-size="9" fill="#8a8780" letter-spacing="1.2">TRACKING · −0.045 EM</text>
+            </svg>
+
+            <div class="notes">
+                <div class="note">
+                    <span class="lbl">type</span>
+                    Inter Tight 700, lowercase, tracking <strong>−0.045 em</strong>. The descender on <strong>y</strong> drops 0.32 em — deeper than default — so the plum letter holds visual weight against the larger ink word.
+                </div>
+                <div class="note">
+                    <span class="lbl">the dot</span>
+                    A circle 0.18× cap-height, sitting <strong>on the baseline</strong>, offset 0.05 em from the <strong>y</strong>. It is the only ornamental element in the mark. It reads as a period — a sentence that has ended cleanly.
+                </div>
+                <div class="note">
+                    <span class="lbl">colour</span>
+                    Black at <strong>#0a0a0a</strong>, never pure black. Plum at <strong>#6a1b9a</strong> only on the y. The dot is muted grey <strong>#c9c6bd</strong> — never plum, never ink. It must look <em style="color:var(--ink); font-style:normal">said</em>, not stamped.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 03 SYMBOL — the dot as standalone -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">03</span>
+            <h2>symbol<span class="punct">.</span></h2>
+            <span class="meta">favicon · app icon · square contexts</span>
+        </div>
+
+        <div class="symbol-row">
+            <div class="symbol-cell">
+                <div class="symbol"><span class="o">o</span><span class="y-dot"></span></div>
+                <span class="lbl">primary · ink + plum</span>
+            </div>
+            <div class="symbol-cell dark">
+                <div class="symbol"><span class="o">o</span><span class="y-dot"></span></div>
+                <span class="lbl">dark · paper-on-ink</span>
+            </div>
+            <div class="symbol-cell plum">
+                <div class="symbol"><span class="o">o</span><span class="y-dot"></span></div>
+                <span class="lbl">plum · paper + paper-dot</span>
+            </div>
+            <div class="symbol-cell bg">
+                <div class="symbol"><span class="o">o</span><span class="y-dot"></span></div>
+                <span class="lbl">bg · soft on paper</span>
+            </div>
+        </div>
+
+        <p class="tagline" style="margin-top: 24px; font-family: var(--font-text); font-size: 14px; color: var(--muted); max-width: 60ch; line-height: 1.55;">
+            the symbol is just the <strong style="color:var(--ink)">o</strong> with a plum dot at the y-position. <strong style="color:var(--ink)">never use the dot alone</strong> — it loses its meaning. the o without the dot is also fine for ultra-small contexts (8px favicon).
+        </p>
+    </section>
+
+    <!-- 04 COLOUR -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">04</span>
+            <h2>colour<span class="punct">.</span></h2>
+            <span class="meta">8 tokens · paper-warm · plum-singular</span>
+        </div>
+
+        <div class="swatch-grid">
+            <div class="swatch">
+                <div class="chip" style="background: var(--ink);"><span class="role" style="color: rgba(255,255,255,0.5)">primary · ink</span></div>
+                <div class="body">
+                    <div class="name">ink</div>
+                    <div class="hex">#0a0a0a</div>
+                    <div class="use">All body text. Never pure black — softens on warm paper.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--bg); border-color: var(--line);"><span class="role" style="color: var(--muted)">paper · bg</span></div>
+                <div class="body">
+                    <div class="name">paper</div>
+                    <div class="hex">#fafaf7</div>
+                    <div class="use">Default canvas. Warm-grey, not white. Brand's quietest decision.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--accent);"><span class="role" style="color: rgba(255,255,255,0.7)">accent · plum</span></div>
+                <div class="body">
+                    <div class="name">plum</div>
+                    <div class="hex">#6a1b9a</div>
+                    <div class="use">The single accent. Used <strong>once per screen</strong>: amount, the dot, action verb.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--plum-soft); border-color: var(--line);"><span class="role" style="color: var(--accent)">plum · soft</span></div>
+                <div class="body">
+                    <div class="name">plum-soft</div>
+                    <div class="hex">#f4ecf8</div>
+                    <div class="use">Backing for ai-rail callouts. The only tinted background.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--muted);"><span class="role" style="color: rgba(255,255,255,0.7)">muted</span></div>
+                <div class="body">
+                    <div class="name">muted</div>
+                    <div class="hex">#8a8780</div>
+                    <div class="use">Secondary text — descriptions, meta, captions.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--faint);"><span class="role" style="color: var(--muted)">faint</span></div>
+                <div class="body">
+                    <div class="name">faint</div>
+                    <div class="hex">#c9c6bd</div>
+                    <div class="use">Punctuation, dividers, trailing ‘.’ in titles.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--ok);"><span class="role" style="color: rgba(255,255,255,0.8)">ok</span></div>
+                <div class="body">
+                    <div class="name">ok</div>
+                    <div class="hex">#5a7400</div>
+                    <div class="use">Olive-green. Used only for <em>paid</em> + <em>on-track</em> states.</div>
+                </div>
+            </div>
+            <div class="swatch">
+                <div class="chip" style="background: var(--warn);"><span class="role" style="color: rgba(255,255,255,0.8)">warn</span></div>
+                <div class="body">
+                    <div class="name">warn</div>
+                    <div class="hex">#c33c1d</div>
+                    <div class="use">Brick-red. Reserved for danger-zone and overdue.</div>
+                </div>
+            </div>
+        </div>
+
+        <p class="tagline" style="margin-top: 28px; font-family: var(--font-text); font-size: 14px; color: var(--muted); max-width: 64ch; line-height: 1.55; padding-left: 24px; border-left: 2px solid var(--accent);">
+            <strong style="color: var(--ink)">cobalt and saffron</strong> exist as legacy hi-fi accents (calendar pins, source tags) but the minimal direction uses them <em style="color:var(--ink); font-style:normal">at most once per surface</em> and never together with plum. when in doubt: <strong style="color:var(--accent)">use plum or use nothing.</strong>
+        </p>
+    </section>
+
+    <!-- 05 TYPE -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">05</span>
+            <h2>type<span class="punct">.</span></h2>
+            <span class="meta">3 families · 7 roles</span>
+        </div>
+
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">display</span>
+                Inter Tight 700<br>
+                <span class="acc">−0.045 em</span> · 0.95 lh
+            </div>
+            <div class="type-sample display">today<span class="punct">.</span></div>
+        </div>
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">h1</span>
+                Inter Tight 600<br>
+                36 / 1.2 · −0.025 em
+            </div>
+            <div class="type-sample h1">april bundle is ready for your <span class="accent">review</span>.</div>
+        </div>
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">h2</span>
+                Inter Tight 600<br>
+                22 / 1.25 · −0.02 em
+            </div>
+            <div class="type-sample h2">previously invoiced — last 6 of 28</div>
+        </div>
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">eyebrow</span>
+                JetBrains Mono 700<br>
+                11 · 0.18 em · plum
+            </div>
+            <div class="type-sample eyebrow">client · 06 · it · delaware c-corp</div>
+        </div>
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">body</span>
+                Inter 400<br>
+                16 / 1.55 · −0.005 em
+            </div>
+            <div class="type-sample body">
+                with you since <strong style="font-weight:600">jan 2024</strong> — 28 months, 28 invoices, all paid. they pay <strong style="font-weight:600">9 days</strong> from invoice, two ahead of your average.
+            </div>
+        </div>
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">small</span>
+                Inter 400<br>
+                13 / 1.45
+            </div>
+            <div class="type-sample sm">↳ field-meta caption · explains what changes when you save</div>
+        </div>
+        <div class="type-row">
+            <div class="meta">
+                <span class="ttl">mono</span>
+                JetBrains Mono 500<br>
+                13 · numerals + ids
+            </div>
+            <div class="type-sample mono">€4,719.00 · INV·042 · 14:34 · ESX-7842910-K</div>
+        </div>
+    </section>
+
+    <!-- 06 VOICE -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">06</span>
+            <h2>voice<span class="punct">.</span></h2>
+            <span class="meta">how ordify speaks · client-facing &amp; ai-rail</span>
+        </div>
+
+        <div class="voice-grid">
+            <div class="voice-card">
+                <div class="lbl">★ ordify says</div>
+                <p class="quote">“acme retainer m·006 jumps from ‘ok’ to ‘warning’ — it's at 78% and rising. i'll start drafting an overage email when you cross 85%.”</p>
+                <p class="quote">“i'd rather ask once than guess wrong twice.”</p>
+                <p class="quote">“the work has been seen and tagged.”</p>
+                <p class="quote">“past clients won't notice; new clients see €150 from day one.”</p>
+            </div>
+            <div class="voice-card no">
+                <div class="lbl">⊘ never says</div>
+                <p class="quote">“Successfully synced 47 records to your workspace.”</p>
+                <p class="quote">“Don't worry, we'll handle that for you!”</p>
+                <p class="quote">“Unleash your productivity with AI-powered insights.”</p>
+                <p class="quote">“Your dashboard is ready 🚀”</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 07 PRINCIPLES -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">07</span>
+            <h2>principles<span class="punct">.</span></h2>
+            <span class="meta">six rules · in order of priority</span>
+        </div>
+
+        <div class="princ-list">
+            <div class="princ">
+                <span class="num">01</span>
+                <h3 class="ttl">paper, not panel.</h3>
+                <p class="desc">Surfaces read like <strong>edited documents</strong>, not configured dashboards. White space is content. Containers are the exception, not the default.</p>
+            </div>
+            <div class="princ">
+                <span class="num">02</span>
+                <h3 class="ttl">one accent, used once.</h3>
+                <p class="desc">Plum appears <strong>once per screen</strong> — on the thing that matters most. If everything is plum, nothing is. The dot is the only exception.</p>
+            </div>
+            <div class="princ">
+                <span class="num">03</span>
+                <h3 class="ttl">lowercase, deliberate.</h3>
+                <p class="desc">All copy is lowercase except proper nouns. <strong>not a stylistic affectation</strong> — it's the volume control. ordify never raises its voice.</p>
+            </div>
+            <div class="princ">
+                <span class="num">04</span>
+                <h3 class="ttl">the rail is a voice.</h3>
+                <p class="desc">The ai-rail is conversation, not toolbar. It writes in <strong>second person, sentence form</strong>, and shows its work. It says <em>i</em>, never <em>we</em>.</p>
+            </div>
+            <div class="princ">
+                <span class="num">05</span>
+                <h3 class="ttl">numbers are sacred.</h3>
+                <p class="desc">Money, hours, ids — always JetBrains Mono, always tabular nums. <strong>never break alignment</strong>. €4,719.00 is the same width as €1,500.00.</p>
+            </div>
+            <div class="princ">
+                <span class="num">06</span>
+                <h3 class="ttl">show the impact, then save.</h3>
+                <p class="desc">Every change ordify proposes shows <strong>what shifts</strong> before commit. Settings preview rate-bump impact. Drafts preview send. Confidence is shown, not hidden.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 08 APPLICATIONS -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">08</span>
+            <h2>applications<span class="punct">.</span></h2>
+            <span class="meta">where the mark lives</span>
+        </div>
+
+        <div class="app-grid">
+            <div class="app-cell">
+                <div class="favicon-16"></div>
+                <span class="ttl">favicon · 16 px</span>
+            </div>
+            <div class="app-cell">
+                <div class="favicon-32"></div>
+                <span class="ttl">favicon · 32 px</span>
+            </div>
+            <div class="app-cell">
+                <div class="appicon"><span class="glyph">o</span><span class="pin"></span></div>
+                <span class="ttl">app icon · 88 px</span>
+            </div>
+            <div class="app-cell" style="padding: 0; align-items: stretch; justify-content: flex-end;">
+                <div class="footer-prev">
+                    <span class="left">ordif<span class="a">y</span><span class="dot">·</span> me</span>
+                    <span class="right">v0.4.2 · ❤ madrid</span>
+                </div>
+                <span class="ttl" style="padding: 16px;">app footer · ink-bg</span>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,905 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · settings (hi-fi 13)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 56px; display: grid; min-height: 100vh; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+  body { overflow: auto; }
+  #main { height: auto; min-height: 100vh; overflow: visible; display: flex; flex-direction: column; }
+
+  .meta-banner { background: var(--ink); color: var(--bg); padding: 6px 16px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; text-align: center; font-weight: 700; }
+  .meta-banner a { color: var(--accent); margin: 0 8px; text-decoration: none; }
+
+  .omni-bar { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 2px solid var(--ink); background: var(--bg-1); }
+  .omni-bar .glyph { width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent); color: var(--bg); font-family: var(--font-mono); font-weight: 700; font-size: 14px; border-radius: 50%; }
+  .omni-bar .kbd { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); padding: 3px 7px; border: 1px solid var(--line-strong); flex-shrink: 0; font-weight: 600; background: var(--bg); }
+  .omni-bar input { flex: 1; appearance: none; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 17px; font-weight: 500; color: var(--ink); padding: 6px 0; }
+  .omni-bar .right-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; flex-shrink: 0; text-transform: uppercase; }
+
+  /* HEADER */
+  .head {
+      padding: 28px 32px 22px;
+      border-bottom: 2px solid var(--ink);
+      background: var(--bg);
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+  }
+  .head .eyebrow { grid-column: 1 / -1; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: -8px; }
+  .head h1 { font-family: var(--font-sans); font-size: 64px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.9; margin: 0; color: var(--ink); text-transform: lowercase; }
+  .head h1 .accent { color: var(--accent); }
+  .head .meta { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); letter-spacing: 0.04em; text-align: right; line-height: 1.7; }
+  .head .meta .v { color: var(--ink); font-weight: 700; }
+
+  /* 2-COL: nav + body */
+  .layout { display: grid; grid-template-columns: 240px 1fr; flex: 1; }
+  .nav { border-right: 1px solid var(--line); background: var(--bg-1); padding: 18px 0; position: sticky; top: 0; align-self: flex-start; }
+  .nav .group { padding: 0 0 8px; }
+  .nav .group-title { font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint); padding: 8px 22px 8px; }
+  .nav a { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center; padding: 7px 22px; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); cursor: pointer; text-decoration: none; border-left: 3px solid transparent; }
+  .nav a:hover { color: var(--ink); background: var(--bg); }
+  .nav a.active { color: var(--ink); background: var(--bg); border-left-color: var(--accent); }
+  .nav a .num { color: var(--fg-faint); font-weight: 500; font-size: 10px; }
+  .nav a.active .num { color: var(--accent); font-weight: 700; }
+
+  .body { padding: 0; }
+
+  /* SECTION */
+  .section { padding: 28px 40px; border-bottom: 1px solid var(--line); }
+  .section .sec-head { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--ink); }
+  .section .sec-head h2 { font-family: var(--font-sans); font-size: 28px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); margin: 0; text-transform: lowercase; line-height: 0.95; }
+  .section .sec-head h2 .accent { color: var(--accent); }
+  .section .sec-head .id { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .section .sec-head .lede { margin-left: auto; font-family: var(--font-text); font-size: 13px; color: var(--fg-muted); max-width: 380px; line-height: 1.45; text-align: right; }
+
+  /* FIELD ROW */
+  .field {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 24px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--line);
+      align-items: start;
+  }
+  .field:last-child { border-bottom: 0; }
+  .field .lhs { display: flex; flex-direction: column; gap: 4px; }
+  .field .lhs .lbl { font-family: var(--font-text); font-size: 14px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+  .field .lhs .help { font-family: var(--font-text); font-size: 12px; color: var(--fg-muted); line-height: 1.45; max-width: 200px; }
+  .field .rhs { display: flex; flex-direction: column; gap: 8px; }
+
+  /* INPUTS */
+  .input, .select {
+      appearance: none;
+      background: var(--bg);
+      border: 1px solid var(--line-strong);
+      padding: 9px 12px;
+      font-family: var(--font-text);
+      font-size: 13.5px;
+      color: var(--ink);
+      width: 100%;
+      max-width: 420px;
+      letter-spacing: -0.005em;
+  }
+  .input:focus, .select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .input.mono { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.02em; }
+  .input.short { max-width: 200px; }
+  .input.tiny { max-width: 100px; }
+  textarea.input { min-height: 80px; resize: vertical; line-height: 1.5; }
+  .help-after { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; }
+
+  /* DUO */
+  .duo { display: flex; gap: 8px; align-items: stretch; }
+  .duo .input { flex: 1; }
+
+  /* SEGMENTED */
+  .seg { display: inline-flex; border: 1px solid var(--line-strong); }
+  .seg button { appearance: none; background: var(--bg); border: 0; padding: 8px 14px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-muted); cursor: pointer; min-width: 64px; }
+  .seg button + button { border-left: 1px solid var(--line-strong); }
+  .seg button.active { background: var(--ink); color: var(--bg); }
+  .seg button.active.accent { background: var(--accent); color: var(--bg); }
+
+  /* TOGGLE */
+  .toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+  .toggle .switch { width: 38px; height: 22px; background: var(--bg-3); border: 1px solid var(--line-strong); position: relative; flex-shrink: 0; transition: background 120ms; }
+  .toggle .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: var(--bg); border: 1px solid var(--line-strong); transition: transform 120ms; }
+  .toggle.on .switch { background: var(--accent); border-color: var(--accent); }
+  .toggle.on .switch::after { transform: translateX(16px); border-color: var(--accent); }
+  .toggle .lbl { font-family: var(--font-text); font-size: 13px; color: var(--ink); }
+
+  /* ROW LIST (clients colors / kbd shortcuts) */
+  .rlist { display: flex; flex-direction: column; }
+  .rlist .row { display: grid; grid-template-columns: 24px 1fr auto auto; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .rlist .row:last-child { border-bottom: 0; }
+  .rlist .row .sw { width: 18px; height: 18px; border: 1px solid var(--line-strong); }
+  .rlist .row .name { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); font-weight: 500; }
+  .rlist .row .name .mono { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); margin-left: 8px; letter-spacing: 0.04em; }
+  .rlist .row .meta { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; }
+  .rlist .row .kbd { font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; border: 1px solid var(--line-strong); background: var(--bg); color: var(--ink); font-weight: 600; letter-spacing: 0.04em; }
+
+  /* ACCOUNT IDENTITY card */
+  .identity {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 18px;
+      padding: 18px;
+      border: 1px solid var(--ink);
+      background: var(--bg);
+      align-items: center;
+      max-width: 540px;
+  }
+  .identity .av {
+      width: 96px; height: 96px;
+      background: var(--accent);
+      color: var(--bg);
+      display: grid;
+      place-items: center;
+      font-family: var(--font-sans);
+      font-size: 48px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+  }
+  .identity .info .name { font-family: var(--font-sans); font-size: 22px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; line-height: 1.1; text-transform: lowercase; }
+  .identity .info .role { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; margin-top: 2px; }
+  .identity .info .who { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; margin-top: 8px; line-height: 1.7; }
+  .identity .info .actions { display: flex; gap: 6px; margin-top: 10px; }
+  .identity .info .actions button { appearance: none; background: var(--bg); border: 1px solid var(--line-strong); padding: 4px 8px; font-family: var(--font-mono); font-size: 9px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+  .identity .info .actions button:hover { background: var(--ink); color: var(--bg); }
+
+  /* INTEGRATIONS */
+  .integrations { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .ig {
+      border: 1px solid var(--line-strong);
+      padding: 14px 16px;
+      display: grid;
+      grid-template-columns: 36px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      background: var(--bg);
+  }
+  .ig .glyph {
+      width: 36px; height: 36px;
+      background: var(--ink);
+      color: var(--bg);
+      display: grid;
+      place-items: center;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+  }
+  .ig.connected .glyph { background: var(--accent); }
+  .ig .meta .name { font-family: var(--font-text); font-size: 14px; font-weight: 600; color: var(--ink); }
+  .ig .meta .desc { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; }
+  .ig.connected .meta .desc { color: var(--accent); font-weight: 700; }
+  .ig .cta { appearance: none; background: var(--bg); border: 1px solid var(--ink); padding: 5px 10px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; color: var(--ink); }
+  .ig .cta:hover { background: var(--ink); color: var(--bg); }
+  .ig.connected .cta { color: var(--fg-muted); border-color: var(--line); }
+
+  /* BANK BLOCK — ink */
+  .bank-block { background: var(--ink); color: var(--bg); padding: 18px 20px; max-width: 540px; }
+  .bank-block .iban { font-family: var(--font-mono); font-size: 18px; font-weight: 700; letter-spacing: 0.08em; }
+  .bank-block .swift { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 0.06em; margin-top: 6px; }
+  .bank-block .lbl { font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,0.5); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 6px; }
+
+  /* DANGER ZONE */
+  .danger {
+      border: 1px solid var(--vermillion);
+      padding: 18px 20px;
+      background: #fff8f7;
+  }
+  .danger .ttl { font-family: var(--font-mono); font-size: 10px; color: var(--vermillion); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 6px; }
+  .danger .desc { font-family: var(--font-text); font-size: 13px; color: var(--ink); margin-bottom: 10px; }
+  .danger button { appearance: none; background: var(--bg); border: 1px solid var(--vermillion); color: var(--vermillion); padding: 7px 12px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+  .danger button:hover { background: var(--vermillion); color: var(--bg); }
+  .danger button + button { margin-left: 6px; }
+
+  /* SAVE BAR */
+  .savebar {
+      position: sticky; bottom: 0;
+      background: var(--ink);
+      color: var(--bg);
+      padding: 12px 32px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      border-top: 2px solid var(--accent);
+      z-index: 5;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+  }
+  .savebar .pill { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 700; }
+  .savebar .pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: blink 1.4s infinite; }
+  @keyframes blink { 0%,100% {opacity: 1} 50% {opacity: 0.3} }
+  .savebar .right { margin-left: auto; display: flex; gap: 8px; }
+  .savebar button { appearance: none; background: transparent; color: var(--bg); border: 1px solid var(--bg); padding: 7px 12px; font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; }
+  .savebar button.primary { background: var(--accent); border-color: var(--accent); }
+  .savebar button.primary:hover { background: var(--accent-700); border-color: var(--accent-700); }
+  .savebar .hint { color: rgba(255,255,255,0.5); font-weight: 500; }
+
+  .annot { padding: 16px 24px; background: var(--bg-1); border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; line-height: 1.7; }
+  .annot strong { color: var(--ink); }
+  .annot .arrow { color: var(--accent); font-weight: 700; }
+
+  #ai-rail { background: var(--ink); }
+</style>
+</head>
+<body class="with-ai-rail">
+
+<div class="meta-banner">
+    HI-FI · 13 · SETTINGS
+    <a href="index.html">all screens</a>
+</div>
+
+<div id="app">
+
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">8</span></div>
+        <div class="proj"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span></div>
+        <div class="proj"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count">4:32</span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">14</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj"><span class="proj-num">06</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Tech (IT)</span><span class="proj-count">4</span></div>
+        <div class="proj"><span class="proj-num">07</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Maersk-flag (B2B)</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">SolanaPay (Crypto)</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko (private)</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn" style="border-color:var(--accent); color:var(--accent)">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>ES</button></div>
+    </div>
+</aside>
+
+<main id="main">
+
+<div class="omni-bar">
+    <span class="glyph">o</span>
+    <span class="kbd">⌘K</span>
+    <input type="text" placeholder="tell ordify… ‘change my hourly rate to €160’">
+    <span class="right-hint">⌘K to expand</span>
+</div>
+
+<div class="head">
+    <div class="eyebrow">SETTINGS · WORKSPACE</div>
+    <h1>your <span class="accent">workspace.</span></h1>
+    <div class="meta">
+        <span class="v">sergiy@ordify.me</span><br>
+        plan · solo · €0 / mo<br>
+        last sync · 12 sec ago
+    </div>
+</div>
+
+<div class="layout">
+
+<!-- NAV -->
+<nav class="nav">
+    <div class="group">
+        <div class="group-title">YOU</div>
+        <a class="active"><span class="num">01</span><span>Profile</span></a>
+        <a><span class="num">02</span><span>Brand &amp; lang</span></a>
+        <a><span class="num">03</span><span>Notifications</span></a>
+    </div>
+    <div class="group">
+        <div class="group-title">PRACTICE</div>
+        <a><span class="num">04</span><span>Rates &amp; defaults</span></a>
+        <a><span class="num">05</span><span>Invoicing</span></a>
+        <a><span class="num">06</span><span>Tax</span></a>
+        <a><span class="num">07</span><span>Bank &amp; payment</span></a>
+    </div>
+    <div class="group">
+        <div class="group-title">DATA</div>
+        <a><span class="num">08</span><span>Clients colors</span></a>
+        <a><span class="num">09</span><span>Integrations</span></a>
+        <a><span class="num">10</span><span>Import / export</span></a>
+    </div>
+    <div class="group">
+        <div class="group-title">SYSTEM</div>
+        <a><span class="num">11</span><span>AI &amp; capture</span></a>
+        <a><span class="num">12</span><span>Shortcuts</span></a>
+        <a><span class="num">13</span><span>Privacy</span></a>
+    </div>
+</nav>
+
+<!-- BODY -->
+<div class="body">
+
+<!-- 01 PROFILE -->
+<section class="section" id="profile">
+    <div class="sec-head">
+        <h2><span class="accent">01.</span> profile.</h2>
+        <span class="id">YOU</span>
+        <span class="lede">Identity that appears on invoices &amp; emails. Your real name and stamp on everything.</span>
+    </div>
+
+    <div class="identity">
+        <div class="av">SV</div>
+        <div class="info">
+            <div class="name">sergiy vasylenko</div>
+            <div class="role">★ INTERNATIONAL COUNSEL · MADRID</div>
+            <div class="who">sergiy@ordify.me · ESX-3719842K</div>
+            <div class="actions">
+                <button type="button">Replace photo</button>
+                <button type="button">Change email</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="height: 12px"></div>
+
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Display name</div>
+            <div class="help">Shown across the app, in invoices, and in emails to clients.</div>
+        </div>
+        <div class="rhs">
+            <input class="input" type="text" value="Sergiy V.">
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Legal name &amp; title</div>
+            <div class="help">Used on invoice headers and document signatures.</div>
+        </div>
+        <div class="rhs">
+            <div class="duo">
+                <input class="input" type="text" value="Sergiy Vasylenko" placeholder="Legal name">
+                <input class="input short" type="text" value="LL.M., abogado">
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Time zone</div>
+            <div class="help">Affects timer, calendar &amp; deadline display.</div>
+        </div>
+        <div class="rhs">
+            <select class="select">
+                <option>Europe / Madrid · CET (UTC+1)</option>
+                <option>Europe / Kyiv · EET</option>
+                <option>America / New_York · EST</option>
+            </select>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Date format</div>
+            <div class="help">Locale-independent way to write deadlines.</div>
+        </div>
+        <div class="rhs">
+            <div class="seg">
+                <button class="active accent" type="button">DD.MM.YYYY</button>
+                <button type="button">MM/DD/YYYY</button>
+                <button type="button">ISO 8601</button>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Working hours</div>
+            <div class="help">Lets the AI know when to suggest meetings &amp; capture you off-hours.</div>
+        </div>
+        <div class="rhs">
+            <div class="duo">
+                <input class="input tiny mono" type="text" value="09:00">
+                <span style="align-self:center; color: var(--fg-faint); font-family: var(--font-mono)">→</span>
+                <input class="input tiny mono" type="text" value="19:00">
+                <span class="help-after" style="align-self:center; margin-left: 8px">MON · TUE · WED · THU · FRI</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 04 RATES -->
+<section class="section" id="rates">
+    <div class="sec-head">
+        <h2><span class="accent">04.</span> rates &amp; defaults.</h2>
+        <span class="id">PRACTICE</span>
+        <span class="lede">The numbers behind every new matter, timer, and invoice line.</span>
+    </div>
+
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Default currency</div>
+            <div class="help">Fallback when a client has none set.</div>
+        </div>
+        <div class="rhs">
+            <div class="seg">
+                <button class="active accent" type="button">EUR €</button>
+                <button type="button">USD $</button>
+                <button type="button">GBP £</button>
+                <button type="button">UAH ₴</button>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Default hourly rate</div>
+            <div class="help">Starting point for new hourly matters. Per-client overrides take precedence.</div>
+        </div>
+        <div class="rhs">
+            <div class="duo">
+                <input class="input tiny mono" type="text" value="€150.00">
+                <span class="help-after" style="align-self:center">/ hour · billable</span>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Rate variants</div>
+            <div class="help">Pre-set rates you can pick when starting a timer or making a matter.</div>
+        </div>
+        <div class="rhs">
+            <div class="rlist" style="max-width: 540px">
+                <div class="row">
+                    <span class="sw" style="background:var(--accent)"></span>
+                    <span class="name">Standard <span class="mono">DEFAULT</span></span>
+                    <span class="meta">€150 / H</span>
+                    <span class="kbd">EDIT</span>
+                </div>
+                <div class="row">
+                    <span class="sw" style="background:var(--cobalt)"></span>
+                    <span class="name">Procedural · court appearance</span>
+                    <span class="meta">€220 / H</span>
+                    <span class="kbd">EDIT</span>
+                </div>
+                <div class="row">
+                    <span class="sw" style="background:var(--saffron)"></span>
+                    <span class="name">Discounted · long-term clients</span>
+                    <span class="meta">€120 / H</span>
+                    <span class="kbd">EDIT</span>
+                </div>
+                <div class="row">
+                    <span class="sw" style="background:var(--ink)"></span>
+                    <span class="name">Pro bono</span>
+                    <span class="meta">€0 / H</span>
+                    <span class="kbd">EDIT</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Default invoice terms</div>
+            <div class="help">Appears as net-N on every new invoice.</div>
+        </div>
+        <div class="rhs">
+            <div class="seg">
+                <button type="button">NET 7</button>
+                <button class="active accent" type="button">NET 14</button>
+                <button type="button">NET 30</button>
+                <button type="button">DUE ON RECEIPT</button>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Round timer to</div>
+            <div class="help">When you stop a timer, snap to the nearest increment.</div>
+        </div>
+        <div class="rhs">
+            <div class="seg">
+                <button type="button">1 MIN</button>
+                <button class="active accent" type="button">6 MIN · 1/10H</button>
+                <button type="button">15 MIN</button>
+                <button type="button">EXACT</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 06 TAX -->
+<section class="section" id="tax">
+    <div class="sec-head">
+        <h2><span class="accent">06.</span> tax.</h2>
+        <span class="id">PRACTICE</span>
+        <span class="lede">Spain (IVA) + IRPF withholding for individual clients. Add jurisdictions per matter.</span>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Tax id</div>
+            <div class="help">Spanish NIE/CIF used on EU-issued invoices.</div>
+        </div>
+        <div class="rhs">
+            <input class="input mono" type="text" value="ESX-3719842K" style="max-width: 240px">
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">VAT (IVA) rate</div>
+            <div class="help">Default for Spain · 21% · auto-applied unless reverse-charge applies.</div>
+        </div>
+        <div class="rhs">
+            <div class="duo">
+                <input class="input tiny mono" type="text" value="21.00 %">
+                <span class="help-after" style="align-self:center">IVA general · ES</span>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">IRPF retention</div>
+            <div class="help">Withheld by individual / corporate clients in Spain.</div>
+        </div>
+        <div class="rhs">
+            <div class="duo">
+                <input class="input tiny mono" type="text" value="15.00 %">
+                <span class="help-after" style="align-self:center">subject to retention</span>
+            </div>
+            <div class="toggle on" style="margin-top: 6px">
+                <span class="switch"></span>
+                <span class="lbl">Auto-apply IRPF when client is Spanish &amp; invoiced in EUR</span>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Reverse-charge</div>
+            <div class="help">Used for cross-border B2B in EU; OFAC blocks set per client.</div>
+        </div>
+        <div class="rhs">
+            <div class="toggle on">
+                <span class="switch"></span>
+                <span class="lbl">Apply reverse-charge for EU clients with valid VAT-ID</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 07 BANK -->
+<section class="section" id="bank">
+    <div class="sec-head">
+        <h2><span class="accent">07.</span> bank &amp; payment.</h2>
+        <span class="id">PRACTICE</span>
+        <span class="lede">Appears at the bottom of every PDF invoice.</span>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Primary IBAN</div>
+            <div class="help">For SEPA &amp; international wires. Shown on invoices.</div>
+        </div>
+        <div class="rhs">
+            <div class="bank-block">
+                <div class="lbl">CAIXABANK · ES · EUR</div>
+                <div class="iban">ES91 2100 0418 4502 0005 1332</div>
+                <div class="swift">SWIFT · CAIXESBBXXX · ABOGADO HOLDING SL</div>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Crypto wallets</div>
+            <div class="help">Shown to clients who opt into crypto settlement (e.g. SolanaPay).</div>
+        </div>
+        <div class="rhs">
+            <div class="rlist" style="max-width: 540px">
+                <div class="row">
+                    <span class="sw" style="background:var(--saffron)"></span>
+                    <span class="name">USDC <span class="mono">SOL · 7v1m…f3Tk</span></span>
+                    <span class="meta">PRIMARY</span>
+                    <span class="kbd">EDIT</span>
+                </div>
+                <div class="row">
+                    <span class="sw" style="background:var(--cobalt)"></span>
+                    <span class="name">USDC <span class="mono">ETH · 0x91a2…b4F1</span></span>
+                    <span class="meta">FALLBACK</span>
+                    <span class="kbd">EDIT</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 09 INTEGRATIONS -->
+<section class="section" id="integrations">
+    <div class="sec-head">
+        <h2><span class="accent">09.</span> integrations.</h2>
+        <span class="id">DATA</span>
+        <span class="lede">Where Ordify reads &amp; writes. Each scope is minimal and revocable.</span>
+    </div>
+    <div class="integrations">
+        <div class="ig connected">
+            <span class="glyph">G</span>
+            <div class="meta">
+                <div class="name">Gmail · sergiy@ordify.me</div>
+                <div class="desc">CONNECTED · READ + DRAFT · 2 MIN AGO</div>
+            </div>
+            <button class="cta" type="button">DISCONNECT</button>
+        </div>
+        <div class="ig connected">
+            <span class="glyph">C</span>
+            <div class="meta">
+                <div class="name">Google Calendar</div>
+                <div class="desc">CONNECTED · 2 CALENDARS</div>
+            </div>
+            <button class="cta" type="button">DISCONNECT</button>
+        </div>
+        <div class="ig">
+            <span class="glyph">D</span>
+            <div class="meta">
+                <div class="name">Drive · documents</div>
+                <div class="desc">NOT CONNECTED</div>
+            </div>
+            <button class="cta" type="button">CONNECT</button>
+        </div>
+        <div class="ig">
+            <span class="glyph">S</span>
+            <div class="meta">
+                <div class="name">Stripe · invoice payments</div>
+                <div class="desc">NOT CONNECTED</div>
+            </div>
+            <button class="cta" type="button">CONNECT</button>
+        </div>
+        <div class="ig">
+            <span class="glyph">W</span>
+            <div class="meta">
+                <div class="name">Wise · multi-currency</div>
+                <div class="desc">NOT CONNECTED</div>
+            </div>
+            <button class="cta" type="button">CONNECT</button>
+        </div>
+        <div class="ig connected">
+            <span class="glyph">i</span>
+            <div class="meta">
+                <div class="name">iCloud · contacts read-only</div>
+                <div class="desc">CONNECTED · 1,247 CONTACTS</div>
+            </div>
+            <button class="cta" type="button">MANAGE</button>
+        </div>
+    </div>
+</section>
+
+<!-- 11 AI -->
+<section class="section" id="ai">
+    <div class="sec-head">
+        <h2><span class="accent">11.</span> ai &amp; capture.</h2>
+        <span class="id">SYSTEM</span>
+        <span class="lede">Where the AI helps automatically vs. where it waits for your nod.</span>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Voice capture</div>
+            <div class="help">Hold-to-talk on the omni-bar &amp; dictation in capture pad.</div>
+        </div>
+        <div class="rhs">
+            <div class="toggle on"><span class="switch"></span><span class="lbl">Voice capture enabled · whisper-1 model</span></div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Email triage</div>
+            <div class="help">Read new client emails &amp; suggest tasks. Drafts only — never sends.</div>
+        </div>
+        <div class="rhs">
+            <div class="toggle on"><span class="switch"></span><span class="lbl">Suggest tasks from new emails</span></div>
+            <div class="toggle on"><span class="switch"></span><span class="lbl">Auto-attach to existing matters by domain</span></div>
+            <div class="toggle"><span class="switch"></span><span class="lbl">Suggest reply drafts (off — opt-in per client)</span></div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Auto-bundle for invoices</div>
+            <div class="help">When you click <em>generate invoice</em>, ordify rolls up timelogs into clean lines.</div>
+        </div>
+        <div class="rhs">
+            <div class="toggle on"><span class="switch"></span><span class="lbl">AI-bundle line items (always editable before send)</span></div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Confidence threshold</div>
+            <div class="help">Below this, the AI asks for confirmation instead of acting.</div>
+        </div>
+        <div class="rhs">
+            <div class="seg">
+                <button type="button">PERMISSIVE · 50%</button>
+                <button class="active accent" type="button">BALANCED · 75%</button>
+                <button type="button">STRICT · 90%</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 08 CLIENTS COLORS -->
+<section class="section" id="colors">
+    <div class="sec-head">
+        <h2><span class="accent">08.</span> clients colors.</h2>
+        <span class="id">DATA</span>
+        <span class="lede">Each client gets a single color, used everywhere — calendar pins, sidebar dots, invoice swatches.</span>
+    </div>
+    <div class="rlist" style="max-width: 600px">
+        <div class="row">
+            <span class="sw" style="background:var(--accent)"></span>
+            <span class="name">Acme Tech US LLC <span class="mono">CLIENT · 06</span></span>
+            <span class="meta">#6A1B9A · PLUM</span>
+            <span class="kbd">CHANGE</span>
+        </div>
+        <div class="row">
+            <span class="sw" style="background:var(--cobalt)"></span>
+            <span class="name">Maersk-flag Trading Ltd <span class="mono">CLIENT · 07</span></span>
+            <span class="meta">#1A3DD8 · COBALT</span>
+            <span class="kbd">CHANGE</span>
+        </div>
+        <div class="row">
+            <span class="sw" style="background:var(--saffron)"></span>
+            <span class="name">SolanaPay Foundation <span class="mono">CLIENT · 08</span></span>
+            <span class="meta">#F5B700 · SAFFRON</span>
+            <span class="kbd">CHANGE</span>
+        </div>
+        <div class="row">
+            <span class="sw" style="background:var(--ink)"></span>
+            <span class="name">Vasylenko, A. <span class="mono">CLIENT · 09 · PRIVATE</span></span>
+            <span class="meta">#0A0A0A · INK</span>
+            <span class="kbd">CHANGE</span>
+        </div>
+    </div>
+</section>
+
+<!-- 12 SHORTCUTS -->
+<section class="section" id="shortcuts">
+    <div class="sec-head">
+        <h2><span class="accent">12.</span> shortcuts.</h2>
+        <span class="id">SYSTEM</span>
+        <span class="lede">Keyboard-first. Most actions take one keystroke after ⌘K.</span>
+    </div>
+    <div class="rlist" style="max-width: 640px">
+        <div class="row">
+            <span></span>
+            <span class="name">Open omni-bar (capture / command)</span>
+            <span class="meta">EVERYWHERE</span>
+            <span class="kbd">⌘ K</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Quick add task</span>
+            <span class="meta">VIEW: TODAY · TASKS</span>
+            <span class="kbd">⌘ N</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Start / stop timer</span>
+            <span class="meta">EVERYWHERE</span>
+            <span class="kbd">⌘ ;</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Toggle ai rail</span>
+            <span class="meta">EVERYWHERE</span>
+            <span class="kbd">⌘ J</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Jump to today</span>
+            <span class="meta">VIEWS</span>
+            <span class="kbd">G T</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Jump to invoices</span>
+            <span class="meta">VIEWS</span>
+            <span class="kbd">G I</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Mark task done</span>
+            <span class="meta">FOCUSED ROW</span>
+            <span class="kbd">X</span>
+        </div>
+        <div class="row">
+            <span></span>
+            <span class="name">Bulk-select toggle</span>
+            <span class="meta">FOCUSED ROW</span>
+            <span class="kbd">SHIFT · X</span>
+        </div>
+    </div>
+</section>
+
+<!-- 13 PRIVACY + DANGER -->
+<section class="section" id="privacy">
+    <div class="sec-head">
+        <h2><span class="accent">13.</span> privacy.</h2>
+        <span class="id">SYSTEM</span>
+        <span class="lede">Your data, your jurisdiction. Explicit controls below.</span>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Data residency</div>
+            <div class="help">Where your matter data is stored at rest.</div>
+        </div>
+        <div class="rhs">
+            <div class="seg">
+                <button class="active accent" type="button">EU · FRANKFURT</button>
+                <button type="button">US · OREGON</button>
+                <button type="button">SELF-HOST</button>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Telemetry</div>
+            <div class="help">Anonymous usage stats — no matter content ever sent.</div>
+        </div>
+        <div class="rhs">
+            <div class="toggle on"><span class="switch"></span><span class="lbl">Send anonymous product analytics</span></div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Export &amp; delete</div>
+            <div class="help">Walk-away rights. Full export in JSON + PDF, deletion within 30 days.</div>
+        </div>
+        <div class="rhs">
+            <div style="display: flex; gap: 8px">
+                <button class="cta" style="appearance: none; background: var(--bg); border: 1px solid var(--ink); padding: 7px 12px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; color: var(--ink)" type="button">⬇ EXPORT ALL DATA · JSON</button>
+                <button class="cta" style="appearance: none; background: var(--bg); border: 1px solid var(--ink); padding: 7px 12px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; color: var(--ink)" type="button">⬇ ALL INVOICES · PDF</button>
+            </div>
+        </div>
+    </div>
+    <div class="field">
+        <div class="lhs">
+            <div class="lbl">Danger zone</div>
+            <div class="help">Irreversible. Affects matters, timelogs, and invoices.</div>
+        </div>
+        <div class="rhs">
+            <div class="danger" style="max-width: 540px">
+                <div class="ttl">⚠ DESTRUCTIVE</div>
+                <div class="desc">Reset all AI suggestions / wipe workspace / delete account. Each requires explicit confirmation.</div>
+                <button type="button">RESET AI</button>
+                <button type="button">WIPE WORKSPACE</button>
+                <button type="button">DELETE ACCOUNT</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="annot">
+    <strong>3 ZONES:</strong>
+    <span class="arrow">①</span> <strong>HEADER</strong> with 64px lowercase title + email/plan/sync meta-grid.
+    <span class="arrow">②</span> <strong>NAV</strong> 240px sticky — 4 groups (You / Practice / Data / System) · 13 numbered sections, plum left-rule on active.
+    <span class="arrow">③</span> <strong>BODY</strong> — fields with 220px lhs (label + help) and 1fr rhs. Mix of inputs, segmented controls, toggles, ink bank-block, plum integration cards, vermillion danger zone. Sticky ink savebar with blinking plum unsaved-pill.
+</div>
+
+<!-- SAVE BAR -->
+<div class="savebar">
+    <span class="pill"><span class="dot"></span>3 UNSAVED CHANGES</span>
+    <span class="hint">profile · rates · privacy</span>
+    <span class="right">
+        <button type="button">DISCARD</button>
+        <button class="primary" type="button">SAVE CHANGES ⌘ S</button>
+    </span>
+</div>
+
+</div><!-- /body -->
+</div><!-- /layout -->
+
+</main>
+
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head"><div class="ai-glyph">o</div></div>
+        <div class="ai-collapsed-label">ASK ORDIFY</div>
+        <div class="ai-collapsed-arrow">‹</div>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>

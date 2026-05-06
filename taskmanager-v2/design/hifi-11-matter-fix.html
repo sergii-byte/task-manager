@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · matter / fixed (hi-fi 11.fix)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 56px; display: grid; min-height: 100vh; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+  body { overflow: auto; }
+  #main { height: auto; min-height: 100vh; overflow: visible; }
+
+  .meta-banner { background: var(--ink); color: var(--bg); padding: 6px 16px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; text-align: center; font-weight: 700; }
+  .meta-banner a { color: var(--accent); margin: 0 8px; text-decoration: none; }
+
+  .omni-bar { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 2px solid var(--ink); background: var(--bg-1); box-shadow: 0 4px 12px -8px rgba(0,0,0,0.12); }
+  .omni-bar .glyph { width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent); color: var(--bg); font-family: var(--font-mono); font-weight: 700; font-size: 14px; border-radius: 50%; }
+  .omni-bar .kbd { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); padding: 3px 7px; border: 1px solid var(--line-strong); flex-shrink: 0; font-weight: 600; background: var(--bg); }
+  .omni-bar input { flex: 1; appearance: none; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 17px; font-weight: 500; color: var(--ink); padding: 6px 0; }
+  .omni-bar .right-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; flex-shrink: 0; text-transform: uppercase; }
+  .omni-bar .mic-btn { appearance: none; background: var(--bg); border: 1px solid var(--line-strong); color: var(--fg-muted); cursor: pointer; padding: 6px; flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; }
+
+  /* breadcrumb */
+  .breadcrumb { padding: 8px 24px; border-bottom: 1px solid var(--line); background: var(--bg); font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); }
+  .breadcrumb a { color: var(--fg-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--ink); }
+  .breadcrumb .sep { color: var(--fg-faint); margin: 0 6px; }
+  .breadcrumb .current { color: var(--ink); font-weight: 700; }
+
+  /* HERO */
+  .hero { padding: 28px 24px 22px; border-bottom: 2px solid var(--ink); display: grid; grid-template-columns: 1fr 280px; gap: 24px; align-items: end; background: var(--bg); }
+  .hero .left .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .hero h1 { font-family: var(--font-sans); font-size: 56px; font-weight: 800; letter-spacing: -0.045em; line-height: 0.95; margin: 8px 0 14px; color: var(--ink); text-transform: lowercase; text-wrap: balance; }
+  .hero h1 .accent { color: var(--accent); }
+  .hero .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 4px 8px; letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--line-strong); color: var(--ink); display: inline-flex; align-items: center; gap: 5px; }
+  .badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .badge.fix { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .badge.fix .dot { background: var(--saffron); }
+  .badge.status .dot { background: var(--saffron); }
+
+  .hero .right { display: flex; flex-direction: column; gap: 8px; align-items: end; }
+  .hero .right .matter-id { font-family: var(--font-mono); font-size: 11px; color: var(--fg-faint); letter-spacing: 0.04em; }
+  .hero .right .actions { display: flex; gap: 6px; }
+  .hero .right .actions button { appearance: none; background: var(--bg); border: 1px solid var(--ink); color: var(--ink); padding: 7px 12px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+  .hero .right .actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+  /* ==============================================================
+     SCOPE — fixed-price hero block: deadline countdown + delivered milestones
+     ============================================================== */
+  .fix-hero {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr 1fr;
+      border-bottom: 2px solid var(--ink);
+      background: var(--bg);
+  }
+
+  /* COUNTDOWN — saffron bg (DUE SOON tint feel), ink text */
+  .countdown {
+      background: var(--saffron-50);
+      padding: 28px 28px 26px;
+      border-right: 2px solid var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      overflow: hidden;
+  }
+  .countdown .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #5a4500; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .countdown .eyebrow .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--saffron); box-shadow: 0 0 0 0 var(--saffron); animation: pulse-saf 1.6s ease-out infinite; }
+  @keyframes pulse-saf { 0% { box-shadow: 0 0 0 0 rgba(245,183,0,0.6); } 100% { box-shadow: 0 0 0 14px rgba(245,183,0,0); } }
+  .countdown .clock { font-family: var(--font-mono); font-size: 84px; font-weight: 700; color: var(--ink); letter-spacing: -0.04em; line-height: 0.9; font-variant-numeric: tabular-nums; }
+  .countdown .clock .unit { font-size: 18px; color: var(--fg-muted); margin-left: 4px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .countdown .clock .sep { color: var(--fg-faint); margin: 0 4px; }
+  .countdown .target { font-family: var(--font-text); font-size: 14px; color: var(--ink); letter-spacing: -0.005em; }
+  .countdown .target strong { font-family: var(--font-mono); letter-spacing: 0.02em; }
+  .countdown .bar { height: 6px; background: rgba(10,10,10,0.1); position: relative; }
+  .countdown .bar .fill { position: absolute; left: 0; top: 0; bottom: 0; width: 73%; background: var(--ink); }
+  .countdown .bar-meta { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* AMOUNT block */
+  .amount {
+      padding: 28px 24px 24px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+  }
+  .amount .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint); font-weight: 700; }
+  .amount .v { font-family: var(--font-sans); font-size: 56px; font-weight: 800; color: var(--ink); letter-spacing: -0.04em; line-height: 0.92; font-variant-numeric: tabular-nums; }
+  .amount .v .cur { font-size: 22px; color: var(--fg-faint); margin-right: 4px; font-weight: 500; vertical-align: top; }
+  .amount .sub { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 6px; }
+  .amount .terms { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); margin-top: 4px; }
+  .amount .terms .row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; }
+  .amount .terms .row .k { color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .amount .terms .row .v2 { color: var(--ink); font-weight: 600; }
+
+  /* DELIVERED block */
+  .delivered {
+      padding: 28px 24px 24px;
+      background: var(--ink);
+      color: var(--bg);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+  }
+  .delivered .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.55); font-weight: 700; }
+  .delivered .ratio { font-family: var(--font-sans); font-size: 56px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.92; font-variant-numeric: tabular-nums; }
+  .delivered .ratio .accent { color: var(--saffron); }
+  .delivered .ratio .total { color: rgba(255,255,255,0.4); font-size: 32px; font-weight: 600; }
+  .delivered .sub { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,0.55); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 4px; }
+  .delivered .pips { display: flex; gap: 4px; padding-top: 10px; }
+  .delivered .pip { flex: 1; height: 6px; background: rgba(255,255,255,0.15); }
+  .delivered .pip.done { background: var(--saffron); }
+  .delivered .pip.now { background: var(--saffron); position: relative; }
+  .delivered .pip.now::after { content: ""; position: absolute; right: -3px; top: -3px; bottom: -3px; width: 3px; background: var(--bg); }
+
+  /* ==============================================================
+     MILESTONE CHECKLIST — the main feature of fixed-price view
+     ============================================================== */
+  .milestones-section { background: var(--bg); }
+  .section-head {
+      padding: 16px 24px 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+  }
+  .section-head h2 { font-family: var(--font-sans); font-size: 22px; font-weight: 800; letter-spacing: -0.03em; margin: 0; color: var(--ink); text-transform: lowercase; }
+  .section-head h2 .accent { color: var(--accent); }
+  .section-head .meta { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-muted); font-weight: 700; }
+  .section-head .right { margin-left: auto; display: flex; gap: 6px; }
+  .section-head .right button { appearance: none; background: transparent; border: 1px solid var(--line-strong); padding: 5px 10px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+  .section-head .right button:hover { background: var(--ink); color: var(--bg); }
+
+  .ms {
+      display: grid;
+      grid-template-columns: 26px 36px 1fr 130px 130px 110px 30px;
+      gap: 16px;
+      padding: 16px 24px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      position: relative;
+      transition: background 80ms;
+  }
+  .ms:hover { background: var(--bg-1); }
+  .ms .num-big { font-family: var(--font-mono); font-size: 22px; font-weight: 700; color: var(--fg-faint); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .ms.done .num-big { color: var(--ink); }
+  .ms.now .num-big { color: var(--accent); }
+
+  .ms .check { width: 22px; height: 22px; border: 2px solid var(--line-strong); display: grid; place-items: center; flex-shrink: 0; }
+  .ms.done .check { background: var(--ink); border-color: var(--ink); }
+  .ms.done .check::after { content: ""; width: 12px; height: 7px; border-left: 2px solid var(--bg); border-bottom: 2px solid var(--bg); transform: rotate(-45deg) translate(2px, -2px); }
+  .ms.now .check { border-color: var(--accent); position: relative; }
+  .ms.now .check::after { content: ""; position: absolute; inset: 4px; background: var(--accent); animation: pip 1.4s ease-in-out infinite; }
+  @keyframes pip { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .ms .what .title { font-family: var(--font-text); font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: -0.01em; line-height: 1.3; }
+  .ms.done .what .title { text-decoration: line-through; color: var(--fg-muted); }
+  .ms .what .deliv { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; margin-top: 4px; text-transform: uppercase; display: flex; gap: 12px; flex-wrap: wrap; }
+  .ms .what .deliv .ai { color: var(--accent); font-weight: 700; }
+  .ms.now .what .deliv .doing { color: var(--ink); font-weight: 700; }
+  .ms .what .deliv .late { color: var(--vermillion); font-weight: 700; }
+  .ms.late .what .title { color: var(--vermillion); }
+
+  .ms .deadline { font-family: var(--font-mono); font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; font-weight: 600; }
+  .ms .deadline .sub { display: block; font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; font-weight: 500; }
+  .ms.done .deadline { color: var(--fg-muted); }
+  .ms.now .deadline .sub { color: var(--accent); font-weight: 700; }
+  .ms.late .deadline { color: var(--vermillion); }
+  .ms.late .deadline .sub { color: var(--vermillion); font-weight: 700; }
+
+  .ms .ms-amt { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+  .ms .ms-amt .cur { font-size: 11px; color: var(--fg-faint); margin-right: 2px; font-weight: 500; }
+
+  .ms .ms-status { font-family: var(--font-mono); font-size: 9px; font-weight: 700; padding: 3px 7px; letter-spacing: 0.12em; text-transform: uppercase; justify-self: end; }
+  .ms.done .ms-status { background: #f7ffd6; color: #5a7400; }
+  .ms.now .ms-status  { background: var(--accent-50); color: var(--accent); }
+  .ms.todo .ms-status { background: var(--bg-1); color: var(--fg-muted); border: 1px solid var(--line); }
+  .ms.late .ms-status { background: var(--danger-bg); color: var(--vermillion); }
+
+  .ms .arr { color: var(--fg-faint); font-family: var(--font-mono); font-size: 16px; }
+  .ms:hover .arr { color: var(--ink); }
+
+  /* CONTENT GRID — side-by-side: tasks + meta */
+  .content-grid {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      border-top: 2px solid var(--ink);
+  }
+
+  /* TASKS list (in this matter) */
+  .tasks { background: var(--bg); }
+  .tasks-head {
+      display: grid;
+      grid-template-columns: 22px 1fr 100px 110px 60px;
+      gap: 14px;
+      padding: 10px 24px;
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+  }
+  .task-row {
+      display: grid;
+      grid-template-columns: 22px 1fr 100px 110px 60px;
+      gap: 14px;
+      padding: 12px 24px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      position: relative;
+  }
+  .task-row::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; }
+  .task-row.over::before { background: var(--vermillion); }
+  .task-row.soon::before { background: var(--saffron); }
+  .task-row.done::before { background: var(--ink); }
+  .task-row:hover { background: var(--bg-1); }
+  .task-row .check { width: 16px; height: 16px; border: 2px solid var(--line-strong); }
+  .task-row.done .check { background: var(--ink); border-color: var(--ink); position: relative; }
+  .task-row.done .check::after { content: ""; position: absolute; left: 2px; top: 4px; width: 8px; height: 4px; border-left: 2px solid var(--bg); border-bottom: 2px solid var(--bg); transform: rotate(-45deg); }
+  .task-row .title { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); font-weight: 500; letter-spacing: -0.005em; }
+  .task-row.done .title { text-decoration: line-through; color: var(--fg-muted); }
+  .task-row.over .title { color: var(--vermillion); font-weight: 600; }
+  .task-row .ms-link { font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 700; }
+  .task-row .due { font-family: var(--font-mono); font-size: 11px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .task-row.over .due { color: var(--vermillion); font-weight: 700; }
+  .task-row.soon .due { color: #5a4500; font-weight: 700; }
+  .task-row .pri { font-family: var(--font-mono); font-size: 10px; font-weight: 700; padding: 1px 5px; border: 1px solid var(--line-strong); letter-spacing: 0.04em; justify-self: end; }
+  .task-row .pri.p0 { background: var(--vermillion); color: var(--bg); border-color: var(--vermillion); }
+  .task-row .pri.p1 { color: var(--ink); }
+
+  /* META aside */
+  .meta-aside {
+      border-left: 1px solid var(--line);
+      background: var(--bg-1);
+      padding: 0;
+  }
+  .meta-block { padding: 18px 22px; border-bottom: 1px solid var(--line); }
+  .meta-block .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-faint); font-weight: 700; margin-bottom: 10px; display: block; }
+  .meta-block .row-kv { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; font-size: 12px; }
+  .meta-block .row-kv .k { font-family: var(--font-mono); color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; font-size: 11px; }
+  .meta-block .row-kv .v { font-family: var(--font-text); color: var(--ink); font-weight: 600; }
+  .meta-block .row-kv .v.mono { font-family: var(--font-mono); font-size: 12px; }
+  .meta-block .body { font-family: var(--font-text); font-size: 13px; color: var(--ink); line-height: 1.5; letter-spacing: -0.005em; }
+  .meta-block .ai-mark { font-family: var(--font-mono); font-size: 9px; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; margin-top: 8px; display: inline-block; }
+
+  .annot { padding: 16px 24px; background: var(--bg-1); border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; line-height: 1.7; }
+  .annot strong { color: var(--ink); }
+  .annot .arrow { color: var(--accent); font-weight: 700; }
+
+  #ai-rail { background: var(--ink); }
+  #main { display: flex; flex-direction: column; }
+</style>
+</head>
+<body class="with-ai-rail">
+
+<div class="meta-banner">
+    HI-FI · 11.FIX · MATTER · FIXED-PRICE — countdown + milestones checklist
+    <a href="hifi-09-invoices-list.html">invoices (09)</a>
+    <a href="index.html">all screens</a>
+</div>
+
+<div id="app">
+
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">8</span></div>
+        <div class="proj"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span><span class="proj-count">apr</span></div>
+        <div class="proj"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count">4:32</span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">14</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj active"><span class="proj-num">06</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Tech (IT)</span><span class="proj-count">4</span></div>
+        <div class="proj"><span class="proj-num">07</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Maersk-flag (B2B)</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">SolanaPay (Crypto)</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko (private)</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>ES</button></div>
+    </div>
+</aside>
+
+<main id="main">
+
+<div class="omni-bar">
+    <span class="glyph">o</span>
+    <span class="kbd">⌘K</span>
+    <input type="text" placeholder="tell ordify… ‘mark delaware filing as delivered’ or ‘push articles to next week’">
+    <button class="mic-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg></button>
+    <span class="right-hint">⌘K to expand</span>
+</div>
+
+<div class="breadcrumb">
+    <a href="#">CLIENTS</a> <span class="sep">›</span>
+    <a href="#">ACME TECH</a> <span class="sep">›</span>
+    <a href="#">MATTERS</a> <span class="sep">›</span>
+    <span class="current">DELAWARE LLC INCORPORATION</span>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+    <div class="left">
+        <span class="eyebrow">CLIENT · ACME TECH (US LLC) · IT</span>
+        <h1>delaware llc <span class="accent">incorporation.</span></h1>
+        <div class="badges">
+            <span class="badge fix"><span class="dot"></span>FIXED · €2,400</span>
+            <span class="badge status"><span class="dot"></span>ON TRACK · 73%</span>
+            <span class="badge">⏱ DEADLINE 15 MAY</span>
+            <span class="badge">JURIS · US-DE</span>
+        </div>
+    </div>
+    <div class="right">
+        <span class="matter-id">M-0024 · OPENED 02 APR 2026</span>
+        <div class="actions">
+            <button type="button">Edit</button>
+            <button type="button">+ Milestone</button>
+            <button class="primary" type="button">★ Deliver &amp; invoice</button>
+        </div>
+    </div>
+</section>
+
+<!-- FIX HERO STRIP — countdown + amount + delivered -->
+<section class="fix-hero">
+    <div class="countdown">
+        <span class="eyebrow"><span class="pulse"></span>DEADLINE COUNTDOWN · 73% ELAPSED</span>
+        <div class="clock">15<span class="sep">·</span>06<span class="sep">·</span>42<span class="unit">d&nbsp;h&nbsp;m</span></div>
+        <div class="target">target delivery <strong>FRI 15 MAY 2026 · 17:00 CET</strong></div>
+        <div class="bar"><span class="fill"></span></div>
+        <div class="bar-meta"><span>OPENED · 02 APR</span><span>NOW · 30 APR</span><span>DUE · 15 MAY</span></div>
+    </div>
+    <div class="amount">
+        <span class="eyebrow">FIXED AMOUNT</span>
+        <span class="v"><span class="cur">€</span>2,400</span>
+        <span class="sub">net · ex-vat · €2,904 incl 21%</span>
+        <div class="terms">
+            <div class="row"><span class="k">Invoiced</span><span class="v2">€800 · 33%</span></div>
+            <div class="row"><span class="k">On delivery</span><span class="v2">€1,600 · 67%</span></div>
+            <div class="row"><span class="k">Currency</span><span class="v2">EUR</span></div>
+            <div class="row"><span class="k">Payment</span><span class="v2">NET-30</span></div>
+        </div>
+    </div>
+    <div class="delivered">
+        <span class="eyebrow">MILESTONES DELIVERED</span>
+        <div class="ratio"><span class="accent">3</span><span class="total"> / 5</span></div>
+        <div class="sub">2 remaining · 1 in flight</div>
+        <div class="pips">
+            <div class="pip done"></div>
+            <div class="pip done"></div>
+            <div class="pip done"></div>
+            <div class="pip now"></div>
+            <div class="pip"></div>
+        </div>
+    </div>
+</section>
+
+<!-- MILESTONES -->
+<section class="milestones-section">
+    <div class="section-head">
+        <h2>milestones <span class="accent">·</span></h2>
+        <span class="meta">5 TOTAL · 3 DELIVERED · 1 IN FLIGHT · 1 PENDING</span>
+        <div class="right">
+            <button type="button">Reorder</button>
+            <button type="button">⬇ CSV</button>
+            <button type="button">+ Add</button>
+        </div>
+    </div>
+
+    <!-- MS 1 -->
+    <div class="ms done">
+        <span class="num-big">01</span>
+        <span class="check"></span>
+        <div class="what">
+            <div class="title">Engagement letter signed · KYC complete</div>
+            <div class="deliv"><span>DELIVERED 04 APR · ON TIME</span><span>3 TASKS · 4.2H LOGGED</span><span class="ai">AI · auto-detected from docusign event</span></div>
+        </div>
+        <div class="deadline">04 APR<span class="sub">on time</span></div>
+        <div class="ms-amt"><span class="cur">€</span>240</div>
+        <span class="ms-status">DELIVERED</span>
+        <span class="arr">›</span>
+    </div>
+
+    <!-- MS 2 -->
+    <div class="ms done">
+        <span class="num-big">02</span>
+        <span class="check"></span>
+        <div class="what">
+            <div class="title">Name reservation · Delaware Division of Corporations</div>
+            <div class="deliv"><span>DELIVERED 11 APR · ON TIME</span><span>2 TASKS · 1.8H</span><span>FILE# 7732891</span></div>
+        </div>
+        <div class="deadline">11 APR<span class="sub">on time</span></div>
+        <div class="ms-amt"><span class="cur">€</span>320</div>
+        <span class="ms-status">DELIVERED</span>
+        <span class="arr">›</span>
+    </div>
+
+    <!-- MS 3 -->
+    <div class="ms done">
+        <span class="num-big">03</span>
+        <span class="check"></span>
+        <div class="what">
+            <div class="title">Articles of Organization · drafted &amp; reviewed</div>
+            <div class="deliv"><span>DELIVERED 24 APR · ON TIME</span><span>5 TASKS · 6.4H</span><span>SIGNED ACME-AOO-V3.PDF</span></div>
+        </div>
+        <div class="deadline">25 APR<span class="sub">1d early</span></div>
+        <div class="ms-amt"><span class="cur">€</span>240</div>
+        <span class="ms-status">DELIVERED</span>
+        <span class="arr">›</span>
+    </div>
+
+    <!-- MS 4 — IN FLIGHT -->
+    <div class="ms now">
+        <span class="num-big">04</span>
+        <span class="check"></span>
+        <div class="what">
+            <div class="title">File AoO with Delaware DoC · obtain stamped copy</div>
+            <div class="deliv"><span class="doing">IN FLIGHT · 80% DONE</span><span>4 TASKS · 2 OPEN</span><span class="ai">AI · suggested filing window thu 09:00 EST</span></div>
+        </div>
+        <div class="deadline">06 MAY<span class="sub">in 6 days</span></div>
+        <div class="ms-amt"><span class="cur">€</span>320</div>
+        <span class="ms-status">IN FLIGHT</span>
+        <span class="arr">›</span>
+    </div>
+
+    <!-- MS 5 — PENDING -->
+    <div class="ms todo">
+        <span class="num-big">05</span>
+        <span class="check"></span>
+        <div class="what">
+            <div class="title">Operating Agreement · EIN · bank-pack delivered</div>
+            <div class="deliv"><span>PENDING · 0%</span><span>SCOPE 6 TASKS</span><span>DEPENDS ON #04</span></div>
+        </div>
+        <div class="deadline">15 MAY<span class="sub">deadline</span></div>
+        <div class="ms-amt"><span class="cur">€</span>1,280</div>
+        <span class="ms-status">PENDING</span>
+        <span class="arr">›</span>
+    </div>
+</section>
+
+<!-- TASKS + META aside -->
+<section class="content-grid">
+    <div class="tasks">
+        <div class="section-head" style="background: var(--bg);">
+            <h2>tasks <span class="accent">·</span></h2>
+            <span class="meta">12 TOTAL · 5 OPEN · 7 DONE · MAPPED TO 5 MILESTONES</span>
+            <div class="right">
+                <button type="button">▤ List</button>
+                <button type="button">▦ Table</button>
+                <button type="button">+ Task</button>
+            </div>
+        </div>
+        <div class="tasks-head">
+            <span></span>
+            <span>Task</span>
+            <span>Milestone</span>
+            <span>Due</span>
+            <span class="right">Pri</span>
+        </div>
+
+        <div class="task-row over">
+            <span class="check"></span>
+            <span class="title">Confirm registered-agent address with CSC Wilmington</span>
+            <span class="ms-link">→ MS·04</span>
+            <span class="due">02 MAY · −2d</span>
+            <span class="pri p0">P0</span>
+        </div>
+        <div class="task-row soon">
+            <span class="check"></span>
+            <span class="title">Submit cover letter + AoO to Delaware DoC e-filing portal</span>
+            <span class="ms-link">→ MS·04</span>
+            <span class="due">06 MAY</span>
+            <span class="pri p0">P0</span>
+        </div>
+        <div class="task-row">
+            <span class="check"></span>
+            <span class="title">Draft Operating Agreement v1 (single-member, manager-managed)</span>
+            <span class="ms-link">→ MS·05</span>
+            <span class="due">09 MAY</span>
+            <span class="pri p1">P1</span>
+        </div>
+        <div class="task-row">
+            <span class="check"></span>
+            <span class="title">SS-4 form · obtain EIN from IRS</span>
+            <span class="ms-link">→ MS·05</span>
+            <span class="due">12 MAY</span>
+            <span class="pri p1">P1</span>
+        </div>
+        <div class="task-row">
+            <span class="check"></span>
+            <span class="title">Mercury bank-pack: prepare resolutions + KYB packet</span>
+            <span class="ms-link">→ MS·05</span>
+            <span class="due">14 MAY</span>
+            <span class="pri p1">P1</span>
+        </div>
+        <div class="task-row done">
+            <span class="check"></span>
+            <span class="title">AoO · review with Acme founders (zoom)</span>
+            <span class="ms-link">→ MS·03</span>
+            <span class="due">23 APR · done</span>
+            <span class="pri p1">P1</span>
+        </div>
+        <div class="task-row done">
+            <span class="check"></span>
+            <span class="title">AoO · final draft signed</span>
+            <span class="ms-link">→ MS·03</span>
+            <span class="due">24 APR · done</span>
+            <span class="pri p1">P1</span>
+        </div>
+        <div class="task-row done">
+            <span class="check"></span>
+            <span class="title">Reserve “Acme Tech US LLC” name</span>
+            <span class="ms-link">→ MS·02</span>
+            <span class="due">11 APR · done</span>
+            <span class="pri p1">P1</span>
+        </div>
+    </div>
+
+    <aside class="meta-aside">
+        <div class="meta-block">
+            <span class="eyebrow">Engagement</span>
+            <div class="row-kv"><span class="k">Mode</span><span class="v">Fixed</span></div>
+            <div class="row-kv"><span class="k">Amount</span><span class="v mono">€2,400</span></div>
+            <div class="row-kv"><span class="k">Deposit</span><span class="v mono">€800 · paid 03 apr</span></div>
+            <div class="row-kv"><span class="k">Balance</span><span class="v mono">€1,600 · on delivery</span></div>
+            <div class="row-kv"><span class="k">Penalty</span><span class="v">none if &lt;7d late</span></div>
+        </div>
+
+        <div class="meta-block">
+            <span class="eyebrow">Jurisdiction · entity</span>
+            <div class="row-kv"><span class="k">State</span><span class="v">Delaware (US-DE)</span></div>
+            <div class="row-kv"><span class="k">Form</span><span class="v">Single-member LLC</span></div>
+            <div class="row-kv"><span class="k">Reg. agent</span><span class="v">CSC Wilmington</span></div>
+            <div class="row-kv"><span class="k">Tax election</span><span class="v">disregarded</span></div>
+            <div class="row-kv"><span class="k">Bank target</span><span class="v">Mercury</span></div>
+        </div>
+
+        <div class="meta-block">
+            <span class="eyebrow">Delivery brief · AI summary</span>
+            <p class="body">Acme is incorporating a US wrapper for its EU SaaS to onboard US enterprise. Single-member, disregarded; no investors yet. Founders prefer Mercury to AmEx for treasury. Notarisation handled by CSC.</p>
+            <span class="ai-mark">★ AI · 6 EMAILS · 2 CALLS · 4 DOCS</span>
+        </div>
+
+        <div class="meta-block">
+            <span class="eyebrow">Risks &amp; flags</span>
+            <div class="row-kv"><span class="k">Beneficial owner</span><span class="v">FinCEN BOI · 90d</span></div>
+            <div class="row-kv"><span class="k">EIN delay risk</span><span class="v" style="color:var(--saffron)">5–7 biz days</span></div>
+            <div class="row-kv"><span class="k">Notarisation</span><span class="v">apostille not req'd</span></div>
+        </div>
+    </aside>
+</section>
+
+<div class="annot">
+    <strong>3 ZONES · FIXED-PRICE MATTER:</strong>
+    <span class="arrow">①</span> <strong>HERO + FIX-HERO STRIP</strong> — 3-column block: <strong>countdown</strong> (saffron tint, big mono clock to deadline), <strong>amount</strong> (fixed price + payment terms), <strong>milestones delivered</strong> (ink block, big ratio + pip-bar).
+    <span class="arrow">②</span> <strong>MILESTONE CHECKLIST</strong> — primary unit of work in fixed-price mode. Numbered, deadline + amount per row, status (DELIVERED · IN FLIGHT · PENDING · LATE). The checkbox uses ink-fill for done, plum pulse for in-flight.
+    <span class="arrow">③</span> <strong>TASKS + META</strong> — tasks list (each tagged with → MS·NN milestone link) + sidebar with engagement / jurisdiction / AI delivery brief / risks.
+</div>
+
+</main>
+
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head"><div class="ai-glyph">o</div></div>
+        <div class="ai-collapsed-label">ASK ORDIFY</div>
+        <div class="ai-collapsed-arrow">‹</div>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>

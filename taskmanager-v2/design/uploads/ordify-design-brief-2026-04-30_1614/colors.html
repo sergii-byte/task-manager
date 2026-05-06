@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · accent colour studies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body { padding: 0; background: var(--bg-1); }
+
+  .head-bar {
+      padding: 24px 32px;
+      border-bottom: var(--rule-thick);
+      background: var(--bg);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+      flex-wrap: wrap;
+  }
+  .head-bar .crumbs {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--accent);
+      margin-bottom: 8px;
+      font-weight: 600;
+  }
+  .head-bar h1 {
+      font-family: var(--font-sans);
+      font-size: clamp(28px, 4vw, 40px);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      text-transform: lowercase;
+      line-height: 0.95;
+      margin: 0;
+  }
+  .head-bar h1 .accent { color: var(--accent); }
+  .head-bar p {
+      font-family: var(--font-text);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      max-width: 56ch;
+      margin: 8px 0 0;
+  }
+
+  .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 0;
+      border-top: var(--rule-thin);
+  }
+
+  .swatch-card {
+      background: var(--bg);
+      border-right: var(--rule-thin);
+      border-bottom: var(--rule-thin);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      cursor: pointer;
+      transition: background var(--dur-fast) var(--ease-out);
+      position: relative;
+  }
+  .swatch-card:hover { background: var(--bg-1); }
+  .swatch-card.applied {
+      box-shadow: inset 0 0 0 3px var(--swatch-accent);
+  }
+  .swatch-card.applied::after {
+      content: "● APPLIED";
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: var(--tracking-ultra);
+      color: var(--swatch-accent);
+      font-weight: 700;
+  }
+
+  /* Each card defines --swatch-accent locally and overrides --accent inside it */
+  .swatch-card { --accent: var(--swatch-accent); --accent-700: var(--swatch-hover); }
+
+  .swatch-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+  }
+  .swatch-num {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: var(--tracking-wide);
+      color: var(--fg-faint);
+  }
+  .swatch-meta {
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: var(--text-2xs);
+      letter-spacing: var(--tracking-wide);
+      color: var(--fg-faint);
+      text-transform: uppercase;
+  }
+  .swatch-meta .hex { color: var(--swatch-accent); font-weight: 700; }
+
+  .swatch-name {
+      font-family: var(--font-sans);
+      font-weight: 800;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+      text-transform: lowercase;
+      line-height: 1;
+      color: var(--ink);
+  }
+  .swatch-name .accent { color: var(--swatch-accent); }
+
+  .swatch-canon {
+      font-family: var(--font-text);
+      font-size: var(--text-sm);
+      color: var(--fg-muted);
+      line-height: 1.5;
+  }
+
+  .swatch-mini {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line);
+  }
+  .mini-brand {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      font-family: var(--font-sans);
+      font-weight: 800;
+      font-size: 20px;
+      letter-spacing: -0.04em;
+      text-transform: lowercase;
+      line-height: 1;
+  }
+  .mini-brand .accent { color: var(--swatch-accent); }
+  .mini-brand .domain {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-faint);
+      font-weight: 400;
+  }
+
+  .mini-row-active {
+      display: grid;
+      grid-template-columns: 24px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-text);
+      font-size: 12px;
+      font-weight: 500;
+  }
+  .mini-row-active .num {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--swatch-accent);
+      letter-spacing: 0.04em;
+  }
+  .mini-row-active .count {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: rgba(255,255,255,0.55);
+  }
+
+  .mini-actions {
+      display: flex;
+      gap: 8px;
+  }
+  .mini-btn {
+      background: var(--swatch-accent);
+      color: white;
+      border: 1px solid var(--swatch-accent);
+      padding: 6px 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      border-radius: 0;
+  }
+  .mini-btn.ghost {
+      background: transparent;
+      color: var(--ink);
+      border-color: var(--ink);
+  }
+  .mini-btn.ghost:hover {
+      background: var(--ink);
+      color: var(--bg);
+  }
+  .mini-tag-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+  }
+  .mini-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 6px;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border: 1px solid var(--ink);
+      background: var(--bg);
+  }
+  .mini-tag.urgent {
+      background: var(--swatch-accent);
+      color: white;
+      border-color: var(--swatch-accent);
+  }
+
+  .footer-cta {
+      padding: 24px 32px;
+      border-top: var(--rule-thick);
+      background: var(--bg);
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+  }
+  .footer-cta .hint {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+  }
+</style>
+</head>
+<body>
+
+<div class="head-bar">
+    <div>
+        <div class="crumbs">FILE 00 · ACCENT STUDY · 08 OPTIONS</div>
+        <h1>red, or <span class="accent">not red.</span></h1>
+        <p>The Neo-Swiss canon allows one bold single-hue accent against the white+ink base. Below: 8 design-historical alternatives. Click a card to apply it live to this page (and nothing else — refresh resets).</p>
+    </div>
+    <div>
+        <a href="/" class="btn ghost sm" style="text-decoration:none">‹ Back to app</a>
+    </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="footer-cta">
+    <span class="hint">Pick one. I'll wire it as the live accent across tokens.css and bump cache.</span>
+    <span class="hint" id="picked-out">CURRENT · #6A1B9A PLUM</span>
+</div>
+
+<script>
+const OPTIONS = [
+    {
+        num: "01",
+        accent: "#e63312", hover: "#c5260a",
+        name: "vermillion",
+        canon: "Swiss-poster red. Müller-Brockmann, Hofmann, the original choice on most editorial-engineering work. Loud, alarm-like at scale.",
+    },
+    {
+        num: "02",
+        accent: "#1a3dd8", hover: "#0e29b0",
+        name: "klein blue",
+        canon: "International Klein Blue (IKB) — Yves Klein 1957. Bauhaus-aligned. Calm, intellectual, doesn't read as alert/error.",
+    },
+    {
+        num: "03",
+        accent: "#f5b700", hover: "#d09d00",
+        name: "saffron",
+        canon: "Mondrian-primary yellow. Editorial, warm, very Swiss-poster-adjacent without the urgency of red.",
+    },
+    {
+        num: "04",
+        accent: "#c5f000", hover: "#9bc000",
+        name: "acid lime",
+        canon: "Brutalist-tech: Linear, Aphex Twin, current Berlin clubs. Energetic, kinetic, slightly aggressive.",
+    },
+    {
+        num: "05",
+        accent: "#ff2e93", hover: "#d61f78",
+        name: "hot magenta",
+        canon: "Riso-print zine, Memphis Group, fashion-week catalogues. Punchy, contemporary, unmistakably non-corporate.",
+    },
+    {
+        num: "06",
+        accent: "#6a1b9a", hover: "#501374",
+        name: "plum",
+        canon: "Editorial refined — NYT magazine spreads, Wallpaper*. Quieter than red, premium, lawyerly.",
+        current: true,
+    },
+    {
+        num: "07",
+        accent: "#0a6b3a", hover: "#074d29",
+        name: "forest",
+        canon: "FT pink-paper green, professional services, banking. Calm, trustworthy, never reads as warning.",
+    },
+    {
+        num: "08",
+        accent: "#d75e2c", hover: "#b14a20",
+        name: "burnt orange",
+        canon: "Warmer than vermillion, less emergency-room. Mid-century editorial, Penguin paperbacks, Eames-era posters.",
+    },
+];
+
+const grid = document.getElementById('grid');
+grid.innerHTML = OPTIONS.map((o, i) => `
+    <div class="swatch-card${o.current ? ' applied' : ''}"
+         data-i="${i}"
+         style="--swatch-accent:${o.accent};--swatch-hover:${o.hover}">
+        <div class="swatch-head">
+            <span class="swatch-num">${o.num}</span>
+            <div class="swatch-meta">
+                <div>${o.name.toUpperCase()}</div>
+                <div class="hex">${o.accent.toUpperCase()}</div>
+            </div>
+        </div>
+        <div>
+            <div class="swatch-name">${o.name.split(' ')[0]} <span class="accent">${o.name.split(' ').slice(1).join(' ') || '—'}</span></div>
+        </div>
+        <div class="swatch-canon">${o.canon}</div>
+        <div class="swatch-mini">
+            <div class="mini-brand">
+                <span>ordif<span class="accent">y</span></span>
+                <span class="domain">.me</span>
+            </div>
+            <div class="mini-row-active">
+                <span class="num">02</span>
+                <span>today</span>
+                <span class="count">8</span>
+            </div>
+            <div class="mini-tag-row">
+                <span class="mini-tag urgent">P0</span>
+                <span class="mini-tag">P1</span>
+                <span class="mini-tag">DESIGN</span>
+                <span class="mini-tag">RESEARCH</span>
+            </div>
+            <div class="mini-actions">
+                <button class="mini-btn">+ NEW</button>
+                <button class="mini-btn ghost">FILTER</button>
+            </div>
+        </div>
+    </div>
+`).join('');
+
+// Click → apply this accent to the whole page (live)
+grid.addEventListener('click', (e) => {
+    const card = e.target.closest('.swatch-card');
+    if (!card) return;
+    const i = parseInt(card.dataset.i, 10);
+    const o = OPTIONS[i];
+    document.documentElement.style.setProperty('--accent', o.accent);
+    document.documentElement.style.setProperty('--accent-700', o.hover);
+    document.documentElement.style.setProperty('--accent-500', o.accent);
+    document.documentElement.style.setProperty('--accent-600', o.hover);
+    document.documentElement.style.setProperty('--accent-200', o.accent + '55');
+    document.documentElement.style.setProperty('--accent-100', o.accent + '22');
+    document.documentElement.style.setProperty('--accent-50', o.accent + '11');
+    document.documentElement.style.setProperty('--danger', o.accent);
+    document.documentElement.style.setProperty('--danger-bg', o.accent + '11');
+    grid.querySelectorAll('.swatch-card').forEach(c => c.classList.remove('applied'));
+    card.classList.add('applied');
+    document.getElementById('picked-out').textContent =
+        `PICKED · ${o.accent.toUpperCase()} ${o.name.toUpperCase()}`;
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · screen index</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --saffron: #c98a00;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 80px 64px 120px; }
+
+  .brand { font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+
+  .meta-row { display: flex; align-items: baseline; gap: 18px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 32px; }
+  .meta-row .now { color: var(--ink); font-weight: 700; }
+  .meta-row .sep { color: var(--faint); }
+
+  .hero { margin-top: 24px; padding-bottom: 48px; border-bottom: 1px solid var(--ink); display: grid; grid-template-columns: 1fr auto; gap: 56px; align-items: end; }
+  .hero h1 {
+      margin: 0;
+      font-family: var(--font-sans);
+      font-size: 96px;
+      font-weight: 700;
+      letter-spacing: -0.045em;
+      line-height: 0.9;
+      text-transform: lowercase;
+      color: var(--ink);
+  }
+  .hero h1 .accent { color: var(--accent); }
+  .hero h1 .punct { color: var(--faint); }
+  .hero .lede { margin-top: 18px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 60ch; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .hero .lede .accent { color: var(--accent); font-weight: 600; }
+  .hero .stats { display: grid; grid-template-columns: repeat(2, auto); gap: 14px 36px; align-items: end; }
+  .hero .stats .stat { text-align: right; }
+  .hero .stats .k { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero .stats .v { font-family: var(--font-sans); font-size: 32px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); margin-top: 4px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .hero .stats .v.accent { color: var(--accent); }
+  .hero .stats .sub { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; margin-top: 3px; text-transform: uppercase; }
+
+  .group { margin-top: 64px; }
+  .group h2 { display: flex; align-items: baseline; gap: 16px; margin: 0 0 20px; font-family: var(--font-sans); font-size: 14px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink); padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .group h2 .n { color: var(--accent); }
+  .group h2 .meta { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; font-weight: 500; text-transform: none; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+
+  .card {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      padding: 22px 22px 20px;
+      transition: border-color 80ms, transform 80ms;
+      position: relative;
+  }
+  .card:hover { border-color: var(--ink); transform: translateY(-1px); }
+  .card.hero-card { border-left: 2px solid var(--accent); }
+  .card.hero-card:hover { border-color: var(--accent); }
+
+  .card .num { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.12em; font-weight: 700; }
+  .card .num .ink { color: var(--ink); }
+  .card .num .acc { color: var(--accent); }
+  .card .ttl { margin: 10px 0 6px; font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; text-transform: lowercase; color: var(--ink); }
+  .card .ttl .accent { color: var(--accent); }
+  .card .desc { font-family: var(--font-text); font-size: 13px; color: var(--muted); line-height: 1.5; letter-spacing: -0.005em; }
+  .card .desc strong { color: var(--ink); font-weight: 600; }
+  .card .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+  .card .tag { font-family: var(--font-mono); font-size: 9px; padding: 2px 6px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; color: var(--muted); border: 1px solid var(--line); }
+  .card .tag.acc { color: var(--accent); border-color: var(--accent); }
+  .card .tag.cob { color: var(--cobalt); border-color: var(--cobalt); }
+  .card .tag.lim { color: var(--ok); border-color: var(--ok); }
+  .card .tag.saf { color: var(--saffron); border-color: var(--saffron); }
+
+  .card .arrow { position: absolute; top: 22px; right: 22px; font-family: var(--font-mono); font-size: 13px; color: var(--faint); transition: color 80ms, transform 80ms; }
+  .card:hover .arrow { color: var(--accent); transform: translate(2px, -2px); }
+
+  .pull {
+      margin: 64px 0 0;
+      padding: 24px 0 24px 28px;
+      border-left: 2px solid var(--accent);
+      font-family: var(--font-sans);
+      font-size: 24px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      line-height: 1.4;
+      color: var(--ink);
+      max-width: 60ch;
+  }
+  .pull .src { display: block; margin-top: 12px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  @media (max-width: 900px) {
+    .wrap { padding: 48px 24px 80px; }
+    .hero { grid-template-columns: 1fr; gap: 32px; }
+    .hero h1 { font-size: 56px; }
+    .hero .stats { grid-template-columns: repeat(3, 1fr); }
+    .grid, .grid.two { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+    <header>
+        <div class="brand">ordif<span class="a">y</span><span class="dot">·</span> me</div>
+        <div class="meta-row">
+            <span class="now">design package · v2</span>
+            <span class="sep">/</span>
+            <span>22 screens</span>
+            <span class="sep">/</span>
+            <span>2 directions</span>
+            <span class="sep">/</span>
+            <span>solo · multi-jurisdiction</span>
+        </div>
+    </header>
+
+    <section class="hero">
+        <div>
+            <h1>ai-first<br>practice <span class="accent">manager.</span></h1>
+            <p class="lede">
+                two visual directions for the same product. <strong>minimal</strong> (editorial calm, ai-rail companion, lowercase voice) is where the work wants to live. <strong>hi-fi</strong> (neo-swiss / dense metadata) is the original brief — kept for reference and detail. start with <span class="accent">min-today</span>.
+            </p>
+        </div>
+        <div class="stats">
+            <div class="stat"><div class="k">minimal · v2</div><div class="v accent">8</div><div class="sub">today · week · matter · invoice · billing · capture · client · settings</div></div>
+            <div class="stat"><div class="k">hi-fi · v1</div><div class="v">13</div><div class="sub">capture → settings · numbered</div></div>
+            <div class="stat"><div class="k">flow studies</div><div class="v">3</div><div class="sub">interaction prototypes</div></div>
+            <div class="stat"><div class="k">design system</div><div class="v">∞</div><div class="sub">tokens + styles · shared</div></div>
+        </div>
+    </section>
+
+    <!-- MINIMAL — primary -->
+    <section class="group">
+        <h2><span class="n">★</span> minimal direction <span class="meta">editorial · ai-rail · lowercase voice · primary</span></h2>
+        <div class="grid">
+            <a class="card hero-card" href="min-today.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 01</span> · today</div>
+                <div class="ttl">today<span class="accent">.</span></div>
+                <div class="desc">Editorial daily view — single-column timeline of what's already happened, what's next, and what ordify is doing alongside. <strong>Ai-rail</strong> as conversation, not toolbar.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag">TIMELINE</span>
+                    <span class="tag">AI-RAIL</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-week.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 02</span> · week</div>
+                <div class="ttl">week<span class="accent">.</span></div>
+                <div class="desc">7-column hour-band grid with NOW-line. <strong>AI-suggest blocks</strong> appear dashed (held flex, contingency buffers). Bottom: distribution by client + 30-day forecast + read-of-the-week.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag">CALENDAR</span>
+                    <span class="tag cob">CONTINGENCY</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-matter.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 03</span> · matter</div>
+                <div class="ttl">matter<span class="accent">.</span></div>
+                <div class="desc">Single matter as a long-form document. Hero · scope-gauge · activity timeline · ai brief on what's left. <strong>Reads like a case file</strong>, not a kanban.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag">CASE-FILE</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-invoice.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 04</span> · invoice</div>
+                <div class="ttl">invoice<span class="accent">.</span></div>
+                <div class="desc">Editorial invoice document — plum AMOUNT block as the editorial pinnacle. Line items as numbered paragraphs. <strong>Ledger feel</strong>, not table.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag">DOCUMENT</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-billing.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 05</span> · billing</div>
+                <div class="ttl">billing<span class="accent">.</span></div>
+                <div class="desc">12-week cashflow (8 past + 4 forecast dashed). 4 outstanding sorted by urgency. <strong>DSO by client</strong>, 30-day cash forecast, concentration-risk read.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag cob">CASHFLOW</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-capture.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 06</span> · capture</div>
+                <div class="ttl">capture<span class="accent">.</span></div>
+                <div class="desc">Voice-first intake. Live transcript with confidence-marked extractions. <strong>Single question</strong> when ordify isn't sure — “i'd rather ask once than guess wrong twice”.</div>
+                <div class="tags">
+                    <span class="tag acc">VOICE-FIRST</span>
+                    <span class="tag">CONFIDENCE</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-client.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 07</span> · client</div>
+                <div class="ttl">client<span class="accent">.</span></div>
+                <div class="desc">Editorial client detail — 5-stat hero · matters with inline scope-gauges · invoice ledger · activity timeline · contacts &amp; book. <strong>Concentration-risk</strong> pull-quote.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag">DETAIL</span>
+                </div>
+            </a>
+            <a class="card hero-card" href="min-settings.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">min · 08</span> · settings</div>
+                <div class="ttl">settings<span class="accent">.</span></div>
+                <div class="desc">Sticky TOC · 7 numbered sections (identity → danger). Inline underline-style fields. <strong>Rail = impact preview</strong> showing what shifts before you save.</div>
+                <div class="tags">
+                    <span class="tag acc">PRIMARY</span>
+                    <span class="tag">IMPACT-PREVIEW</span>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <p class="pull">
+        “the rail is not a panel. it's the second voice in a working conversation. everything else is paper.”
+        <span class="src">— design principle · v2</span>
+    </p>
+
+    <!-- HI-FI -->
+    <section class="group">
+        <h2><span class="n">·</span> hi-fi direction <span class="meta">neo-swiss · dense metadata · numbered · v1 reference</span></h2>
+        <div class="grid">
+            <a class="card" href="hifi-01-capture.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 01</span> · capture</div>
+                <div class="ttl">capture pad</div>
+                <div class="desc">Voice + text intake. The daily entry point.</div>
+                <div class="tags"><span class="tag">CAPTURE</span></div>
+            </a>
+            <a class="card" href="hifi-02-today.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 02</span> · today</div>
+                <div class="ttl">today</div>
+                <div class="desc">Dashboard with task stack, lime timer, AI suggestions strip.</div>
+                <div class="tags"><span class="tag lim">LIME-TIMER</span></div>
+            </a>
+            <a class="card" href="hifi-03-logcall.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 03</span> · log call</div>
+                <div class="ttl">log call</div>
+                <div class="desc">Post-call assistive form, AI extracts tasks &amp; matter binding.</div>
+                <div class="tags"><span class="tag">AI-EXTRACT</span></div>
+            </a>
+            <a class="card" href="hifi-04-tasks-table.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 04</span> · tasks table</div>
+                <div class="ttl">tasks · table</div>
+                <div class="desc">Dense table view, multi-filter, bulk-select &amp; promote-to-invoice.</div>
+                <div class="tags"><span class="tag">TABLE</span></div>
+            </a>
+            <a class="card" href="hifi-05-omni-input.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 05</span> · omni</div>
+                <div class="ttl">omni input</div>
+                <div class="desc">⌘K command surface — capture, navigate, and act in one keystroke.</div>
+                <div class="tags"><span class="tag">⌘K</span></div>
+            </a>
+            <a class="card" href="hifi-06-integrated.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 06</span> · integrated</div>
+                <div class="ttl">integrated · today + log</div>
+                <div class="desc">Reference fusion of today + log-call + tasks. Style baseline for the system.</div>
+                <div class="tags"><span class="tag acc">REFERENCE</span></div>
+            </a>
+            <a class="card" href="hifi-07-calendar.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 07</span> · calendar</div>
+                <div class="ttl">calendar</div>
+                <div class="desc">Month grid with deadlines, billable mass, AI scheduling pins.</div>
+                <div class="tags"><span class="tag">MONTH</span></div>
+            </a>
+            <a class="card" href="hifi-08-time.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 08</span> · time</div>
+                <div class="ttl">time tracker</div>
+                <div class="desc">Lime running-timer block + heatmap calendar + week-stack + timelogs ledger.</div>
+                <div class="tags"><span class="tag lim">LIME</span><span class="tag">TIMER</span></div>
+            </a>
+            <a class="card" href="hifi-09-invoices-list.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 09</span> · invoices</div>
+                <div class="ttl">invoices · list</div>
+                <div class="desc">Status-pill table — draft / sent / overdue / paid · with bulk actions.</div>
+                <div class="tags"><span class="tag">LIST</span></div>
+            </a>
+            <a class="card" href="hifi-10-invoice-document.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 10</span> · invoice doc</div>
+                <div class="ttl">invoice document</div>
+                <div class="desc">Editorial pdf-quality layout — plum AMOUNT block, numbered line items.</div>
+                <div class="tags"><span class="tag acc">EDITORIAL</span></div>
+            </a>
+            <a class="card" href="hifi-11-matter-sub.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 11.sub</span> · matter</div>
+                <div class="ttl">matter · subscription</div>
+                <div class="desc">Retainer matter with scope-gauge ring, hour pacing, monthly cycle.</div>
+                <div class="tags"><span class="tag">SUBSCRIPTION</span></div>
+            </a>
+            <a class="card" href="hifi-11-matter-fix.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 11.fix</span> · matter</div>
+                <div class="ttl">matter · fixed</div>
+                <div class="desc">Milestone checklist · countdown · fixed-fee matter with delivery cadence.</div>
+                <div class="tags"><span class="tag">MILESTONES</span></div>
+            </a>
+            <a class="card" href="hifi-11-matter-hourly.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 11.hr</span> · matter</div>
+                <div class="ttl">matter · hourly</div>
+                <div class="desc">Cobalt accumulator + unbilled timelogs ledger + plum pending-invoice CTA.</div>
+                <div class="tags"><span class="tag cob">HOURLY</span></div>
+            </a>
+            <a class="card" href="hifi-12-client.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 12</span> · client</div>
+                <div class="ttl">client detail</div>
+                <div class="desc">Plum hero · matters list (sub/fix/hr left-rule) · invoicing strip · contacts.</div>
+                <div class="tags"><span class="tag acc">CLIENT</span></div>
+            </a>
+            <a class="card" href="hifi-13-settings.html">
+                <span class="arrow">↗</span>
+                <div class="num"><span class="ink">hi-fi · 13</span> · settings</div>
+                <div class="ttl">settings</div>
+                <div class="desc">13 numbered sections · profile · rates · tax · bank · integrations · ai · privacy.</div>
+                <div class="tags"><span class="tag">SETTINGS</span></div>
+            </a>
+        </div>
+    </section>
+
+    <!-- FLOW STUDIES -->
+    <section class="group">
+        <h2><span class="n">·</span> flow studies <span class="meta">interaction prototypes · capture → matter → invoice</span></h2>
+        <div class="grid">
+            <a class="card" href="hifi-XX-flow.html">
+                <span class="arrow">↗</span>
+                <div class="num">flow · v1</div>
+                <div class="ttl">capture → invoice</div>
+                <div class="desc">First end-to-end flow study. Click-through narrative.</div>
+                <div class="tags"><span class="tag">FLOW · V1</span></div>
+            </a>
+            <a class="card" href="hifi-XX-flow-v2.html">
+                <span class="arrow">↗</span>
+                <div class="num">flow · v2</div>
+                <div class="ttl">capture → invoice · v2</div>
+                <div class="desc">Tightened transitions, ai annotations.</div>
+                <div class="tags"><span class="tag">FLOW · V2</span></div>
+            </a>
+            <a class="card" href="hifi-XX-flow-min.html">
+                <span class="arrow">↗</span>
+                <div class="num">flow · min</div>
+                <div class="ttl">flow · minimal</div>
+                <div class="desc">Same flow re-skinned in the minimal direction.</div>
+                <div class="tags"><span class="tag acc">MINIMAL</span></div>
+            </a>
+        </div>
+    </section>
+
+</div>
+
+</body>
+</html>

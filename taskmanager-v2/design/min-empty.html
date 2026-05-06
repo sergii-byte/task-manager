@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · first run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a; --bg: #fafaf7; --paper: #fff; --line: #e8e6df; --line-soft: #f0eee7;
+    --muted: #8a8780; --faint: #c9c6bd; --accent: #6a1b9a; --plum-soft: #f4ecf8;
+    --warn: #c33c1d; --ok: #5a7400;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 96px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); } .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(28% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--faint); }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(360px, 28%); min-height: 100vh; }
+  .main { padding: 96px 96px 100px; max-width: 1100px; }
+
+  .crumbs { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 28px; font-weight: 700; }
+  .crumbs .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+
+  .hero { padding-bottom: 40px; border-bottom: 1px solid var(--ink); }
+  .hero h1 { margin: 0; font-family: var(--font-sans); font-size: 96px; font-weight: 700; letter-spacing: -0.045em; line-height: 0.92; text-transform: lowercase; }
+  .hero h1 .accent { color: var(--accent); } .hero h1 .punct { color: var(--faint); }
+  .hero .lede { margin-top: 24px; font-family: var(--font-text); font-size: 19px; color: var(--muted); line-height: 1.55; max-width: 56ch; letter-spacing: -0.005em; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .hero .lede .accent { color: var(--accent); font-weight: 600; }
+
+  .steps { margin-top: 40px; display: flex; flex-direction: column; }
+  .step { display: grid; grid-template-columns: 60px 1fr 200px; gap: 32px; padding: 28px 0; border-bottom: 1px solid var(--line-soft); align-items: start; cursor: pointer; }
+  .step:last-child { border-bottom: 0; }
+  .step .ord { font-family: var(--font-sans); font-size: 36px; font-weight: 700; letter-spacing: -0.04em; line-height: 0.9; color: var(--faint); padding-top: 4px; transition: color 80ms; }
+  .step.done .ord { color: var(--ok); }
+  .step.now .ord { color: var(--accent); }
+  .step .body .head { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: var(--muted); margin-bottom: 6px; }
+  .step.done .body .head { color: var(--ok); }
+  .step.now .body .head { color: var(--accent); }
+  .step .body .ttl { font-family: var(--font-sans); font-size: 26px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.25; color: var(--ink); }
+  .step .body .desc { margin-top: 8px; font-family: var(--font-text); font-size: 15px; color: var(--muted); line-height: 1.55; max-width: 56ch; letter-spacing: -0.005em; }
+  .step .body .desc .accent { color: var(--accent); font-weight: 600; }
+  .step .body .desc strong { color: var(--ink); font-weight: 600; }
+  .step .right { text-align: right; padding-top: 6px; }
+  .step .right .meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+  .step .right .meta.ok { color: var(--ok); font-weight: 700; }
+  .step .right a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); }
+  .step.now .right a { color: var(--accent); border-color: var(--accent); }
+  .step.done .right a { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .pull { margin-top: 56px; padding: 24px 0 24px 24px; border-left: 2px solid var(--accent); font-family: var(--font-sans); font-size: 22px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.4; color: var(--ink); max-width: 56ch; }
+  .pull .src { display: block; margin-top: 12px; font-family: var(--font-mono); font-size: 10px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 96px 32px 24px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; animation: pulse 1.4s infinite; }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+  .stream { flex: 1; padding: 24px 32px; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+  .turn .text { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0 0 8px; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+  .turn .text strong { font-weight: 600; }
+
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: 1fr; } .rail { display: none; }
+    .main { padding: 56px 24px; } .hero h1 { font-size: 56px; }
+    .step { grid-template-columns: 40px 1fr; } .step .right { grid-column: 2; text-align: left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a class="act">setup</a><a>today</a><a>week</a><a>clients</a>
+</nav>
+
+<div class="stage">
+<main class="main">
+
+    <div class="crumbs"><span class="pulse"></span>welcome · day 0 of 7</div>
+
+    <header class="hero">
+        <h1>let's get you<br>working<span class="accent">.</span></h1>
+        <p class="lede">
+            ordify learns by reading the <strong>real</strong> things — your inbox, your calendar, the way you write. <span class="accent">five steps · about twelve minutes.</span> nothing gets sent on your behalf during week one.
+        </p>
+    </header>
+
+    <section class="steps">
+
+        <div class="step done">
+            <span class="ord">01</span>
+            <div class="body">
+                <div class="head">✓ done · 4 min ago</div>
+                <div class="ttl">your identity &amp; jurisdictions</div>
+                <div class="desc">trade name, tax id, where you practice. <strong>andriy vasylenko · es + de</strong> · vat verified against agencia tributaria.</div>
+            </div>
+            <div class="right">
+                <div class="meta ok">complete</div>
+                <a>review</a>
+            </div>
+        </div>
+
+        <div class="step done">
+            <span class="ord">02</span>
+            <div class="body">
+                <div class="head">✓ done · just now</div>
+                <div class="ttl">connect gmail &amp; calendar</div>
+                <div class="desc">read-only · 6 labels selected · 2 calendars. <strong>187 sent emails</strong> indexed to learn your tone — takes ~3 min in the background.</div>
+            </div>
+            <div class="right">
+                <div class="meta ok">indexing · 62%</div>
+                <a>see what's read</a>
+            </div>
+        </div>
+
+        <div class="step now">
+            <span class="ord">03</span>
+            <div class="body">
+                <div class="head">★ now · your turn</div>
+                <div class="ttl">name your first client</div>
+                <div class="desc">just one to start — the one you'll work with this week. ordify will <span class="accent">find their last 90 days of email</span> and propose matters from real work, not from a blank form.</div>
+            </div>
+            <div class="right">
+                <div class="meta">≈ 2 min</div>
+                <a>add client</a>
+            </div>
+        </div>
+
+        <div class="step">
+            <span class="ord">04</span>
+            <div class="body">
+                <div class="head">next</div>
+                <div class="ttl">set your default rate</div>
+                <div class="desc">just one number — your hourly rate for new matters. <em>you can override per-matter, per-client, per-anything.</em> ordify suggests €120-180/h based on your jurisdiction average.</div>
+            </div>
+            <div class="right">
+                <div class="meta">≈ 1 min</div>
+                <a>locked · do step 03 first</a>
+            </div>
+        </div>
+
+        <div class="step">
+            <span class="ord">05</span>
+            <div class="body">
+                <div class="head">last</div>
+                <div class="ttl">choose autonomy level</div>
+                <div class="desc">how much ordify can do alone. start with <strong>cautious</strong> — it asks before every action. you can loosen later, after the first week.</div>
+            </div>
+            <div class="right">
+                <div class="meta">≈ 1 min</div>
+                <a>locked</a>
+            </div>
+        </div>
+
+    </section>
+
+    <p class="pull">
+        “week one is observation, not action. i'll watch how you reply to clients, when you start work, what you bill. by friday i'll have proposals — never sends.”
+        <span class="src">— ordify · setup principle</span>
+    </p>
+
+</main>
+
+<aside class="rail">
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>about setup</div>
+        <h2 class="ttl">i'm <span class="accent">reading</span>, not deciding yet</h2>
+    </header>
+    <div class="stream">
+        <div class="turn">
+            <div class="when">right now · indexing</div>
+            <p class="text">i've read <strong>114 of 187</strong> sent emails so far. <span class="accent">i can already tell you write short.</span> avg 47 words per reply, no exclamation marks in 90 days.</p>
+            <p class="text"><em>this becomes the tone i use when i draft on your behalf — never before you approve.</em></p>
+        </div>
+        <div class="turn">
+            <div class="when">what i'll do this week</div>
+            <p class="text"><strong>day 1-2:</strong> finish reading. propose your first 2-3 clients from email patterns.</p>
+            <p class="text"><strong>day 3-5:</strong> auto-log timer entries from calls. show drafts of timelogs, ask before saving.</p>
+            <p class="text"><strong>day 6-7:</strong> first invoice draft. <span class="accent">you click send</span>, not me.</p>
+        </div>
+        <div class="turn">
+            <div class="when">your control</div>
+            <p class="text">disconnect anything, any time. <strong>nothing about you leaves your account.</strong> the index lives encrypted; deletion is one click in settings · 07.</p>
+        </div>
+    </div>
+</aside>
+</div>
+</body>
+</html>

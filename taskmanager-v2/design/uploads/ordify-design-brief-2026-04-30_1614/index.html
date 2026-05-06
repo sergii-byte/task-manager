@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify.me</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=11">
+<link rel="stylesheet" href="css/styles.css?v=11">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236a1b9a' stroke-width='2.5'%3E%3Crect x='3' y='3' width='18' height='18'/%3E%3Cpath d='M7.5 9.5h9'/%3E%3Cpath d='M7.5 13.5h6'/%3E%3Cpath d='M7.5 17.5h3'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+
+    <!-- ============================================================
+         SIDEBAR
+         ============================================================ -->
+    <aside id="sidebar" aria-label="Navigation">
+        <div class="brand" id="brand-btn" role="button" tabindex="0" title="Today">
+            <span>ordif<span class="accent">y</span></span>
+            <span class="domain">.me</span>
+        </div>
+
+        <div class="sidebar-section-label">
+            <span data-i18n="navViews">VIEWS</span>
+        </div>
+        <div id="nav-views"></div>
+
+        <div class="sidebar-section-label">
+            <span data-i18n="navClients">CLIENTS · <span id="clients-count">0</span></span>
+            <button class="add-btn" id="btn-add-client" title="Add client" type="button">+</button>
+        </div>
+        <div id="clients-list"></div>
+
+        <div class="sidebar-footer">
+            <button class="icon-btn" id="btn-settings" title="Settings" type="button" aria-label="Settings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+            </button>
+            <div class="toggle-group" role="group" aria-label="Theme">
+                <button id="theme-light" class="active" type="button" title="Light theme" aria-label="Light">☀</button>
+                <button id="theme-dark" type="button" title="Dark theme" aria-label="Dark">☾</button>
+            </div>
+            <div class="toggle-group" role="group" aria-label="Language">
+                <button id="lang-en" class="active" type="button">EN</button>
+                <button id="lang-uk" type="button">UA</button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ============================================================
+         MAIN
+         ============================================================ -->
+    <main id="main" aria-label="Workspace">
+        <div id="view-root"></div>
+    </main>
+
+    <!-- ============================================================
+         AI RIGHT RAIL (≥ 1400px)
+         ============================================================ -->
+    <aside id="ai-rail" aria-label="ordify AI assistant">
+        <div class="ai-panel">
+            <div class="ai-panel-head">
+                <div class="ai-glyph">o</div>
+                <div class="ai-title">ordify <small id="ai-rail-context">· today</small></div>
+                <button class="btn icon ghost" id="ai-rail-close" type="button" aria-label="Hide assistant" style="margin-left:auto;color:var(--bg);border-color:transparent;padding:4px 8px;font-size:14px">&#x2715;</button>
+            </div>
+            <div class="ai-collapsed-label">ASK ORDIFY</div>
+            <div class="ai-collapsed-arrow">&#x2039;</div>
+            <div class="ai-panel-body" id="ai-rail-body">
+                <div class="ai-bubble">Готовий допомогти. Опиши задачу — розкладу на клієнта, матер і кроки.</div>
+            </div>
+            <form class="ai-input" id="ai-rail-form" onsubmit="return false">
+                <input id="ai-rail-input" placeholder="Ask ordify…" autocomplete="off">
+                <span class="kbd">&#x23CE;</span>
+            </form>
+        </div>
+    </aside>
+
+    <!-- Quick-log-call spotlight popover (hidden by default, opens on ⌘L) -->
+    <div class="scrim" id="logcall-scrim" hidden>
+        <div class="spotlight" role="dialog" aria-modal="true" aria-labelledby="sl-title">
+            <div class="sl-head">
+                <span class="kbd-tag">&#8984;L</span>
+                <span id="sl-title">LOG CALL</span>
+                <span class="grow"></span>
+                <span class="esc">ESC TO CLOSE</span>
+            </div>
+            <div class="sl-input-wrap">
+                <input class="sl-input" id="sl-input" type="text" autocomplete="off"
+                       placeholder="just hung up… maria 12min EU stablecoin">
+            </div>
+            <div class="sl-parse" id="sl-parse" hidden>
+                <div class="sl-parse-label"><span class="dot"></span>AI &#x25B8; DETECTED</div>
+                <div class="sl-fields" id="sl-fields"></div>
+            </div>
+            <div class="sl-foot">
+                <span class="hint" id="sl-hint">Type to start · Enter to log</span>
+                <span class="grow"></span>
+                <button type="button" class="btn-sl" id="sl-cancel">Cancel</button>
+                <button type="button" class="btn-sl primary" id="sl-log">&check; Log <span class="kbd-inline">&#x23CE;</span></button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="js/icons.js?v=11"></script>
+<script src="js/dom.js?v=11"></script>
+<script src="js/i18n.js?v=11"></script>
+<script src="js/store.js?v=11"></script>
+<script src="js/app.js?v=11"></script>
+</body>
+</html>

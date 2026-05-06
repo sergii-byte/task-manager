@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · settings / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --line-soft: #f0eee7;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --ok: #5a7400;
+    --cobalt: #1a3dd8;
+    --saffron: #c98a00;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font-family: var(--font-text); -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--accent); color: #fff; }
+
+  .brand { position: fixed; top: 32px; left: 96px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(28% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  .stage { display: grid; grid-template-columns: 240px 1fr minmax(360px, 28%); min-height: 100vh; }
+
+  /* TOC */
+  .toc { padding: 96px 24px 40px 96px; position: sticky; top: 0; max-height: 100vh; overflow-y: auto; }
+  .toc .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 18px; }
+  .toc nav { display: flex; flex-direction: column; }
+  .toc nav a {
+      font-family: var(--font-text);
+      font-size: 14px;
+      color: var(--muted);
+      text-decoration: none;
+      padding: 7px 0 7px 18px;
+      border-left: 1.5px solid var(--line);
+      letter-spacing: -0.005em;
+      cursor: pointer;
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      transition: all 80ms;
+  }
+  .toc nav a .num { font-family: var(--font-mono); font-size: 10px; color: var(--faint); font-weight: 700; letter-spacing: 0.08em; min-width: 18px; }
+  .toc nav a:hover { color: var(--ink); border-color: var(--ink); }
+  .toc nav a.act { color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .toc nav a.act .num { color: var(--accent); }
+
+  .main { padding: 80px 64px 100px 40px; max-width: 880px; }
+
+  /* HERO */
+  .hero { padding-bottom: 32px; border-bottom: 1px solid var(--ink); }
+  .hero .eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .hero h1 { margin: 16px 0 0; font-family: var(--font-sans); font-size: 84px; font-weight: 700; letter-spacing: -0.045em; line-height: 0.92; text-transform: lowercase; color: var(--ink); }
+  .hero h1 .accent { color: var(--accent); }
+  .hero h1 .punct { color: var(--faint); }
+  .hero .lede { margin-top: 22px; font-family: var(--font-text); font-size: 17px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.55; max-width: 56ch; }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .hero .lede .accent { color: var(--accent); font-weight: 600; }
+
+  /* SECTION */
+  .sec { padding: 56px 0 16px; border-bottom: 1px solid var(--line); scroll-margin-top: 32px; }
+  .sec:last-of-type { border-bottom: 0; }
+  .sec-hdr { display: flex; align-items: baseline; gap: 14px; margin-bottom: 24px; }
+  .sec-hdr .ord { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.04em; font-weight: 700; }
+  .sec-hdr h2 { margin: 0; font-family: var(--font-sans); font-size: 32px; font-weight: 600; letter-spacing: -0.03em; text-transform: lowercase; color: var(--ink); }
+  .sec-hdr h2 .punct { color: var(--faint); }
+  .sec-hdr .meta { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .sec-hdr .meta.saved { color: var(--ok); }
+
+  /* ROW — settings unit */
+  .row {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 48px;
+      padding: 22px 0;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: start;
+  }
+  .row:last-of-type { border-bottom: 0; }
+  .row.stack { grid-template-columns: 1fr; gap: 18px; }
+
+  .row .label { font-family: var(--font-text); font-size: 16px; color: var(--ink); font-weight: 600; letter-spacing: -0.01em; line-height: 1.35; }
+  .row .label .req { color: var(--accent); font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; margin-left: 8px; vertical-align: 2px; }
+  .row .desc { margin-top: 6px; font-family: var(--font-text); font-size: 14px; color: var(--muted); letter-spacing: -0.005em; line-height: 1.5; max-width: 48ch; font-weight: 400; }
+  .row .desc em { font-style: normal; color: var(--ink); font-weight: 500; }
+  .row .desc .accent { color: var(--accent); font-weight: 600; }
+
+  /* CONTROLS */
+  .input, .select {
+      width: 100%;
+      appearance: none;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      border-bottom: 1.5px solid var(--ink);
+      padding: 8px 0;
+      font-family: var(--font-text);
+      font-size: 16px;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      font-weight: 500;
+  }
+  .input:focus, .select:focus { border-color: var(--accent); }
+  .input.mono { font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.02em; }
+  .input::placeholder { color: var(--faint); font-style: italic; }
+
+  .input-grp { display: flex; gap: 12px; align-items: baseline; }
+  .input-grp .pre { font-family: var(--font-mono); font-size: 13px; color: var(--faint); letter-spacing: 0.04em; }
+  .input-grp .input { flex: 1; }
+
+  .select-wrap { position: relative; }
+  .select-wrap::after { content: "↓"; position: absolute; right: 0; top: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); pointer-events: none; }
+
+  .field-meta { font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 8px; }
+  .field-meta .ok { color: var(--ok); font-weight: 700; }
+  .field-meta .accent { color: var(--accent); font-weight: 700; }
+
+  /* TOGGLE — line-style */
+  .toggle {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      cursor: pointer;
+      user-select: none;
+  }
+  .toggle .track {
+      position: relative;
+      width: 42px;
+      height: 22px;
+      border: 1.5px solid var(--ink);
+      border-radius: 12px;
+      background: transparent;
+      transition: all 120ms;
+      flex-shrink: 0;
+  }
+  .toggle .knob {
+      position: absolute;
+      left: 2px;
+      top: 2px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--ink);
+      transition: all 120ms;
+  }
+  .toggle.on .track { border-color: var(--accent); background: var(--accent); }
+  .toggle.on .knob { background: #fff; left: 22px; }
+  .toggle .state { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 700; }
+  .toggle .state.on { color: var(--accent); }
+  .toggle .state.off { color: var(--muted); }
+
+  /* RADIO PILLS — option set */
+  .radio-set { display: flex; flex-direction: column; gap: 8px; }
+  .radio {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      padding: 12px 0;
+      cursor: pointer;
+      border-bottom: 1px dashed var(--line);
+  }
+  .radio:last-child { border-bottom: 0; }
+  .radio .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink); flex-shrink: 0; position: relative; transform: translateY(2px); }
+  .radio.on .dot { border-color: var(--accent); }
+  .radio.on .dot::after { content: ""; position: absolute; left: 2px; top: 2px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .radio .body { flex: 1; }
+  .radio .ttl { font-family: var(--font-text); font-size: 15px; color: var(--ink); font-weight: 500; letter-spacing: -0.005em; }
+  .radio.on .ttl { color: var(--accent); font-weight: 600; }
+  .radio .sub { font-family: var(--font-text); font-size: 13px; color: var(--muted); margin-top: 4px; letter-spacing: -0.005em; line-height: 1.45; }
+  .radio .sub .mono { font-family: var(--font-mono); font-size: 11px; color: var(--ink); }
+
+  /* SLIDER row */
+  .slider-row { display: flex; flex-direction: column; gap: 12px; }
+  .slider-row .top { display: flex; justify-content: space-between; align-items: baseline; }
+  .slider-row .v { font-family: var(--font-sans); font-size: 28px; font-weight: 600; letter-spacing: -0.025em; color: var(--accent); line-height: 1; font-variant-numeric: tabular-nums; }
+  .slider-row .v .unit { font-family: var(--font-mono); font-size: 13px; color: var(--muted); letter-spacing: 0.04em; margin-left: 4px; font-weight: 500; }
+  .slider-row .range { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.08em; text-transform: uppercase; }
+  .slider-row .track { position: relative; height: 2px; background: var(--line); }
+  .slider-row .track .f { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); }
+  .slider-row .track .knob { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 14px; height: 14px; border-radius: 50%; background: var(--accent); }
+  .slider-row .ticks { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.04em; }
+
+  /* CONNECTIONS — list */
+  .conn-list { display: flex; flex-direction: column; }
+  .conn {
+      display: grid;
+      grid-template-columns: 56px 1fr 110px 120px;
+      gap: 18px;
+      padding: 18px 0;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: center;
+  }
+  .conn:last-child { border-bottom: 0; }
+  .conn .glyph { width: 36px; height: 36px; border: 1.5px solid var(--ink); display: grid; place-items: center; font-family: var(--font-sans); font-size: 16px; font-weight: 700; color: var(--ink); }
+  .conn .glyph.gmail { background: var(--ink); color: var(--bg); }
+  .conn .glyph.cal { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .conn .glyph.zoom { background: var(--cobalt); color: #fff; border-color: var(--cobalt); }
+  .conn .glyph.drive { background: var(--saffron); color: #fff; border-color: var(--saffron); }
+  .conn .glyph.bank { color: var(--muted); border-color: var(--line); border-style: dashed; }
+  .conn .body .name { font-family: var(--font-text); font-size: 16px; color: var(--ink); font-weight: 600; letter-spacing: -0.01em; }
+  .conn .body .meta { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; margin-top: 3px; }
+  .conn .body .meta .ok { color: var(--ok); font-weight: 700; }
+  .conn .body .meta .accent { color: var(--accent); font-weight: 700; }
+  .conn .scope { font-family: var(--font-mono); font-size: 10px; color: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600; }
+  .conn .scope.dim { color: var(--muted); font-weight: 500; }
+  .conn .action { text-align: right; }
+  .conn .action a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .conn .action a:hover { color: var(--accent); border-color: var(--accent); }
+  .conn .action a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+  .conn .action a.danger:hover { color: var(--warn); border-color: var(--warn); }
+
+  /* DANGER */
+  .danger-zone { padding: 24px 0; }
+  .danger-zone .head { font-family: var(--font-mono); font-size: 11px; color: var(--warn); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 14px; }
+  .danger-zone .row { padding: 18px 0; border-bottom: 1px solid var(--line-soft); }
+  .danger-zone .row:last-child { border-bottom: 0; }
+  .danger-zone .label { color: var(--warn); }
+
+  /* SAVE FOOTER */
+  .save-bar {
+      position: sticky;
+      bottom: 0;
+      margin: 40px -64px -100px -40px;
+      padding: 16px 64px 16px 40px;
+      background: var(--paper);
+      border-top: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      z-index: 4;
+  }
+  .save-bar .status { font-family: var(--font-mono); font-size: 11px; color: var(--ok); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .save-bar .status .dot { width: 6px; height: 6px; background: var(--ok); border-radius: 50%; }
+  .save-bar .right { margin-left: auto; display: flex; gap: 18px; }
+  .save-bar .right a { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 6px 0; cursor: pointer; }
+  .save-bar .right a.discard { color: var(--muted); border-bottom: 1.5px solid var(--line); }
+  .save-bar .right a.discard:hover { color: var(--warn); border-color: var(--warn); }
+  .save-bar .right a.cta { color: var(--accent); border-bottom: 1.5px solid var(--accent); }
+
+  /* RAIL — same as min-client */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; max-height: 100vh; }
+  .rail-hdr { padding: 80px 32px 24px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  .stream { flex: 1; padding: 24px 32px 0; display: flex; flex-direction: column; gap: 28px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+
+  .actions-row { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions-row a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions-row a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions-row a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 18px 32px 24px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14.5px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1280px) {
+    .stage { grid-template-columns: 200px 1fr 320px; }
+    .toc { padding-left: 32px; }
+  }
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: 1fr; }
+    .toc, .rail { display: none; }
+    .main { padding: 64px 24px; }
+    .row { grid-template-columns: 1fr; gap: 16px; }
+    .save-bar { margin: 32px -24px -100px; padding: 14px 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a>today</a>
+    <a>week</a>
+    <a>clients</a>
+    <a>billing</a>
+    <a class="act">settings</a>
+</nav>
+
+<div class="stage">
+
+<aside class="toc">
+    <div class="lbl">on this page</div>
+    <nav>
+        <a class="act"><span class="num">01</span>identity</a>
+        <a><span class="num">02</span>rates &amp; currency</a>
+        <a><span class="num">03</span>connections</a>
+        <a><span class="num">04</span>ai &amp; autonomy</a>
+        <a><span class="num">05</span>invoicing</a>
+        <a><span class="num">06</span>localisation</a>
+        <a><span class="num">07</span>data &amp; danger</a>
+    </nav>
+</aside>
+
+<main class="main">
+
+    <header class="hero">
+        <div class="eyebrow">settings · admin · v0.4.2</div>
+        <h1>settings<span class="punct">.</span></h1>
+        <p class="lede">
+            the rules ordify works by — your rates, your tone of voice, what it can do for you alone and what it must ask first. <span class="accent">change anything; ordify shows what shifts before you save.</span>
+        </p>
+    </header>
+
+    <!-- 01 IDENTITY -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">01</span>
+            <h2>identity<span class="punct">.</span></h2>
+            <span class="meta saved">✓ saved 2 min ago</span>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">trade name <span class="req">on every invoice</span></div>
+                <div class="desc">the name your clients see at the top of every PDF. independent contractors usually use their own legal name.</div>
+            </div>
+            <div>
+                <input class="input" type="text" value="Andriy Vasylenko · Legal Counsel">
+                <div class="field-meta">↳ inv·042 header preview · <span class="accent">2 lines · 31 char</span></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">tax id · spain</div>
+                <div class="desc">required on all spanish invoices · validated against agencia tributaria on save.</div>
+            </div>
+            <div>
+                <input class="input mono" type="text" value="ESX-7842910-K">
+                <div class="field-meta"><span class="ok">✓ valid · autónomo registered</span> · last checked 12 apr</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">jurisdictions <span class="req">2 active</span></div>
+                <div class="desc">where you practice — affects matter templates, default vat, and which jurisdictions appear on invoices.</div>
+            </div>
+            <div>
+                <input class="input" type="text" value="ES (primary) · DE">
+                <div class="field-meta">↳ matter templates loaded · es-civil · de-handelsrecht</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">contact email</div>
+                <div class="desc">where ordify sends digests and where clients reply. read-only — change on account page.</div>
+            </div>
+            <div>
+                <input class="input mono" type="text" value="andriy@vasylenko.legal" readonly style="border-color: var(--line); color: var(--muted);">
+                <div class="field-meta"><span class="ok">✓ verified · sender domain authenticated (spf · dkim)</span></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 02 RATES -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">02</span>
+            <h2>rates &amp; currency<span class="punct">.</span></h2>
+            <span class="meta">applied to new matters</span>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">default hourly rate</div>
+                <div class="desc">the rate ordify suggests for new <em>hourly</em> matters. you can override per-matter.</div>
+            </div>
+            <div>
+                <div class="slider-row">
+                    <div class="top">
+                        <span class="v">€150<span class="unit">/ hour</span></span>
+                        <span class="range">€80 — €280</span>
+                    </div>
+                    <div class="track"><span class="f" style="width:35%"></span><span class="knob" style="left:35%"></span></div>
+                    <div class="ticks"><span>€80</span><span>€150</span><span>€220</span><span>€280</span></div>
+                </div>
+                <div class="field-meta">↳ next new matter prefills <span class="accent">€150/h · 15-min increments</span></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">minimum increment</div>
+                <div class="desc">smallest billable chunk. timer rounds <em>up</em> to the next increment when you stop.</div>
+            </div>
+            <div>
+                <div class="radio-set">
+                    <label class="radio">
+                        <span class="dot"></span>
+                        <div class="body">
+                            <div class="ttl">6 minutes <span style="color: var(--muted); font-weight: 400; font-size: 13px;">· 0.1 h</span></div>
+                            <div class="sub">classic billable-hour granularity. <span class="mono">9 min → 12 min</span></div>
+                        </div>
+                    </label>
+                    <label class="radio on">
+                        <span class="dot"></span>
+                        <div class="body">
+                            <div class="ttl">15 minutes <span style="color: var(--accent); font-weight: 400; font-size: 13px;">· 0.25 h · current</span></div>
+                            <div class="sub">cleaner reads on invoices, <em>~3% rounding lift</em>. <span class="mono">22 min → 30 min</span></div>
+                        </div>
+                    </label>
+                    <label class="radio">
+                        <span class="dot"></span>
+                        <div class="body">
+                            <div class="ttl">30 minutes <span style="color: var(--muted); font-weight: 400; font-size: 13px;">· 0.5 h</span></div>
+                            <div class="sub">favoured for retainer-only practice. fewer line items, blunter pricing.</div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">currency &amp; vat</div>
+                <div class="desc">primary invoicing currency. vat applies to es-domestic invoices; eu reverse-charge handled per-client.</div>
+            </div>
+            <div>
+                <div class="select-wrap">
+                    <select class="select">
+                        <option>EUR · €  ·  21% VAT (ES standard)</option>
+                    </select>
+                </div>
+                <div class="field-meta">↳ <span class="accent">€</span> shows everywhere · usd appears as conversion when invoicing acme</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 03 CONNECTIONS -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">03</span>
+            <h2>connections<span class="punct">.</span></h2>
+            <span class="meta">4 of 5 connected</span>
+        </div>
+
+        <div class="row stack">
+            <div>
+                <div class="label">where ordify reads from</div>
+                <div class="desc">
+                    ordify works best when it sees your <em>real</em> communication — emails, calendar, calls. it never <span class="accent">writes</span> without asking, but reading is what powers auto-logged timelogs and intake from emails.
+                </div>
+            </div>
+            <div class="conn-list">
+
+                <div class="conn">
+                    <div class="glyph gmail">@</div>
+                    <div class="body">
+                        <div class="name">gmail · andriy@vasylenko.legal</div>
+                        <div class="meta">connected since 12 jan 2024 · <span class="ok">✓ healthy · last sync 2 min ago</span></div>
+                    </div>
+                    <span class="scope">read · 6 labels</span>
+                    <span class="action"><a class="dim danger">disconnect</a></span>
+                </div>
+
+                <div class="conn">
+                    <div class="glyph cal">∎</div>
+                    <div class="body">
+                        <div class="name">google calendar · primary + ‘work’</div>
+                        <div class="meta">connected · <span class="ok">✓ events surface in week view</span> · 2 calendars · 47 upcoming</div>
+                    </div>
+                    <span class="scope">read · write proposals</span>
+                    <span class="action"><a class="dim danger">disconnect</a></span>
+                </div>
+
+                <div class="conn">
+                    <div class="glyph zoom">z</div>
+                    <div class="body">
+                        <div class="name">zoom · transcripts &amp; recordings</div>
+                        <div class="meta">connected · <span class="accent">★ auto-logs 3-12 timelogs / wk from calls</span> · 9 calls last 7d</div>
+                    </div>
+                    <span class="scope">read transcripts</span>
+                    <span class="action"><a class="dim danger">disconnect</a></span>
+                </div>
+
+                <div class="conn">
+                    <div class="glyph drive">∇</div>
+                    <div class="body">
+                        <div class="name">google drive · 2 folders</div>
+                        <div class="meta">connected · /matters · /clients · <span class="ok">read-only</span></div>
+                    </div>
+                    <span class="scope">read · 2 folders</span>
+                    <span class="action"><a class="dim danger">disconnect</a></span>
+                </div>
+
+                <div class="conn">
+                    <div class="glyph bank">€</div>
+                    <div class="body">
+                        <div class="name">bank · sepa reconciliation <span style="color: var(--faint); font-weight: 500; font-size: 13px;">(banca march)</span></div>
+                        <div class="meta">not connected · <em style="color: var(--muted)">would auto-mark invoices ‘paid’ on incoming €</em></div>
+                    </div>
+                    <span class="scope dim">— optional</span>
+                    <span class="action"><a>connect</a></span>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 04 AI -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">04</span>
+            <h2>ai &amp; autonomy<span class="punct">.</span></h2>
+            <span class="meta">how much ordify decides alone</span>
+        </div>
+
+        <div class="row stack">
+            <div>
+                <div class="label">autonomy level</div>
+                <div class="desc">how far ordify goes before it stops to ask. you can change this any time — it affects only future actions, never undoes past ones.</div>
+            </div>
+            <div class="radio-set">
+                <label class="radio">
+                    <span class="dot"></span>
+                    <div class="body">
+                        <div class="ttl">cautious — ask before every decision</div>
+                        <div class="sub">timelogs, drafts, summaries all surface as <em>proposals</em>. nothing posts without one tap. good for week one.</div>
+                    </div>
+                </label>
+                <label class="radio on">
+                    <span class="dot"></span>
+                    <div class="body">
+                        <div class="ttl">balanced — auto-log, propose the rest <span style="color: var(--accent); font-weight: 400; font-size: 13px;">· current</span></div>
+                        <div class="sub">timer entries, call timelogs, intake from forwarded emails post automatically. invoices, client emails, scope changes always ask. <em>recommended.</em></div>
+                    </div>
+                </label>
+                <label class="radio">
+                    <span class="dot"></span>
+                    <div class="body">
+                        <div class="ttl">forward — draft &amp; send routine replies</div>
+                        <div class="sub">ordify can send <em>routine</em> replies (status updates, scheduling, “received”). invoices and substantive legal advice still ask.</div>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">tone of voice</div>
+                <div class="desc">how ordify writes when drafting on your behalf — emails, invoice notes, status updates.</div>
+            </div>
+            <div>
+                <div class="select-wrap">
+                    <select class="select">
+                        <option>plain · concise · second-person  ·  matched to your last 90d</option>
+                    </select>
+                </div>
+                <div class="field-meta">↳ trained on <span class="accent">187 of your sent emails</span> · refresh weekly</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">always-ask list</div>
+                <div class="desc">things ordify will <em>never</em> do without you, regardless of autonomy level.</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+                <label class="toggle on">
+                    <span class="track"><span class="knob"></span></span>
+                    <span style="flex:1; font-family: var(--font-text); font-size: 14px; color: var(--ink);">send any invoice</span>
+                    <span class="state on">always ask</span>
+                </label>
+                <label class="toggle on">
+                    <span class="track"><span class="knob"></span></span>
+                    <span style="flex:1; font-family: var(--font-text); font-size: 14px; color: var(--ink);">change a matter's scope or rate</span>
+                    <span class="state on">always ask</span>
+                </label>
+                <label class="toggle on">
+                    <span class="track"><span class="knob"></span></span>
+                    <span style="flex:1; font-family: var(--font-text); font-size: 14px; color: var(--ink);">draft outgoing legal advice</span>
+                    <span class="state on">always ask</span>
+                </label>
+                <label class="toggle">
+                    <span class="track"><span class="knob"></span></span>
+                    <span style="flex:1; font-family: var(--font-text); font-size: 14px; color: var(--ink);">decline meeting requests on your behalf</span>
+                    <span class="state off">on autonomy</span>
+                </label>
+            </div>
+        </div>
+    </section>
+
+    <!-- 05 INVOICING -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">05</span>
+            <h2>invoicing<span class="punct">.</span></h2>
+            <span class="meta">defaults · all overridable</span>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">numbering</div>
+                <div class="desc">invoice number format. <em>resets yearly</em>; current sequence at 042.</div>
+            </div>
+            <div>
+                <input class="input mono" type="text" value="INV·{NNN}  ·  next: INV·043">
+                <div class="field-meta">↳ <span class="accent">inv·043</span> next · 2026 sequence · resets jan 1</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">payment terms</div>
+                <div class="desc">default ‘due within’ on every new invoice. acme pays in 9d on average regardless of what you set.</div>
+            </div>
+            <div>
+                <div class="select-wrap">
+                    <select class="select">
+                        <option>net 14 · ‘due within 14 days of receipt’</option>
+                    </select>
+                </div>
+                <div class="field-meta">↳ avg actual payment time across 28 invoices: <span class="accent">11.4 days</span></div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">subscription scope warning</div>
+                <div class="desc">when retainer matters cross this scope %, ordify drafts an overage warning email + invoice line.</div>
+            </div>
+            <div>
+                <div class="slider-row">
+                    <div class="top">
+                        <span class="v">85<span class="unit">%</span></span>
+                        <span class="range">50 — 100</span>
+                    </div>
+                    <div class="track"><span class="f" style="width:70%"></span><span class="knob" style="left:70%"></span></div>
+                    <div class="ticks"><span>50%</span><span>70%</span><span>85%</span><span>100%</span></div>
+                </div>
+                <div class="field-meta">↳ acme is at 78% · would warn in 7%</div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">auto-send on draft approve</div>
+                <div class="desc">after you tap ‘approve draft’, ordify can email the pdf to billing contact in 30s — with a cancel countdown.</div>
+            </div>
+            <div>
+                <label class="toggle">
+                    <span class="track"><span class="knob"></span></span>
+                    <span class="state off">manual send · current</span>
+                </label>
+                <div class="field-meta">↳ <em style="color: var(--muted)">turn on after a few invoices feel comfortable.</em></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 06 LOCALE -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">06</span>
+            <h2>localisation<span class="punct">.</span></h2>
+            <span class="meta">interface only · invoices follow client</span>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">interface language</div>
+                <div class="desc">what you see in ordify. invoices &amp; emails sent to clients are localised to <em>their</em> address.</div>
+            </div>
+            <div>
+                <div class="select-wrap">
+                    <select class="select">
+                        <option>english (uk)  ·  en-gb</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">date · time · numbers</div>
+                <div class="desc">your reading preference. invoices use client-locale formatting regardless.</div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <input class="input mono" type="text" value="29 apr 2026">
+                    <div class="field-meta">date</div>
+                </div>
+                <div>
+                    <input class="input mono" type="text" value="14:32 · 24h">
+                    <div class="field-meta">time</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">first day of week</div>
+                <div class="desc">affects week view and invoicing cycles only.</div>
+            </div>
+            <div>
+                <div class="radio-set" style="flex-direction: row; display: flex; gap: 24px;">
+                    <label class="radio on" style="border-bottom: 0; padding: 0;">
+                        <span class="dot"></span>
+                        <div class="body"><div class="ttl">monday</div></div>
+                    </label>
+                    <label class="radio" style="border-bottom: 0; padding: 0;">
+                        <span class="dot"></span>
+                        <div class="body"><div class="ttl">sunday</div></div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 07 DANGER -->
+    <section class="sec">
+        <div class="sec-hdr">
+            <span class="ord">07</span>
+            <h2>data &amp; danger<span class="punct">.</span></h2>
+            <span class="meta">irreversible after confirm</span>
+        </div>
+
+        <div class="row">
+            <div>
+                <div class="label">export everything</div>
+                <div class="desc">json + csv + pdf bundle of every matter, timelog, invoice, and contact you have. arrives at your email.</div>
+            </div>
+            <div>
+                <a class="action" style="font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer;">request export ↓</a>
+                <div class="field-meta">↳ last export <span class="accent">14 jan 2026</span> · 38 mb · 4 months ago</div>
+            </div>
+        </div>
+
+        <div class="danger-zone">
+            <div class="head">⚠ danger zone</div>
+
+            <div class="row">
+                <div>
+                    <div class="label" style="color: var(--warn);">disconnect ai · keep data</div>
+                    <div class="desc">ordify stops auto-logging, drafting, and reading email. matters, timelogs, invoices remain intact and editable manually.</div>
+                </div>
+                <div>
+                    <a style="font-family: var(--font-mono); font-size: 11px; color: var(--warn); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--warn); cursor: pointer;">turn off ai</a>
+                </div>
+            </div>
+
+            <div class="row">
+                <div>
+                    <div class="label" style="color: var(--warn);">delete account · everything goes</div>
+                    <div class="desc">28 invoices, 187 timelogs, 4 clients, all conversation history. 30-day soft-delete; type <span class="mono" style="font-family: var(--font-mono);">DELETE-VASYLENKO</span> to confirm.</div>
+                </div>
+                <div>
+                    <a style="font-family: var(--font-mono); font-size: 11px; color: var(--warn); letter-spacing: 0.06em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--warn); cursor: pointer;">begin deletion →</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SAVE BAR -->
+    <div class="save-bar">
+        <span class="status"><span class="dot"></span>auto-saved · 14:34</span>
+        <span style="font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em;">2 unsaved changes · scope warning · default rate</span>
+        <span class="right">
+            <a class="discard">discard</a>
+            <a class="cta">save &amp; preview impact →</a>
+        </span>
+    </div>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>impact preview</div>
+        <h2 class="ttl">what changes if you <span class="accent">save</span></h2>
+    </header>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">unsaved · default hourly rate</span>
+            <p class="text">
+                you raised default from <strong>€140 → €150 / h</strong>. <em>existing matters keep their old rate.</em> next new matter starts at €150.
+            </p>
+            <p class="text">
+                <em>past clients won't notice; new clients see €150 from day one.</em>
+            </p>
+            <div class="actions-row">
+                <a class="dim">also bump m·019 to 150?</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">unsaved · scope warning</span>
+            <p class="text">
+                you lowered the threshold from <strong>90% → 85%</strong>. <span class="accent">acme retainer m·006 jumps from ‘ok’ to ‘warning’</span> immediately — it's at 78% and rising.
+            </p>
+            <p class="text">
+                <em>i'll start drafting an overage email when you cross 85% (≈ tuesday on current pace).</em>
+            </p>
+        </div>
+
+        <div class="turn">
+            <span class="when">about your defaults · low-priority</span>
+            <p class="text">
+                you've never connected the bank. across 28 invoices you marked <strong>‘paid’</strong> manually an average of <strong>3 days late</strong>. one connect saves you ~84 days a year of state-drift.
+            </p>
+            <div class="actions-row">
+                <a>connect bank</a>
+                <a class="dim">later · keep manual</a>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="ask · ‘what would 12% vat mean for inv·042?’">
+        <span class="hint"><kbd>⌘K</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>

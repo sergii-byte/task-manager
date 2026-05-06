@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · flow — the only screen you need</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<style>
+  :root { --rail: 380px; --hourW: 110px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--font-sans); }
+
+  /* TOP RIBBON — minimal: brand + your status + voice */
+  .ribbon {
+    height: 52px;
+    background: var(--ink);
+    color: var(--bg);
+    display: grid;
+    grid-template-columns: auto 1fr auto auto;
+    align-items: center;
+    gap: 18px;
+    padding: 0 20px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.06em;
+  }
+  .ribbon .brand { font-family: var(--font-sans); font-size: 18px; font-weight: 800; letter-spacing: -0.03em; text-transform: lowercase; }
+  .ribbon .brand .a { color: var(--accent); }
+  .ribbon .now { color: rgba(255,255,255,0.6); text-transform: uppercase; }
+  .ribbon .now b { color: var(--accent); font-weight: 700; }
+  .ribbon .timer-live {
+    display: inline-flex; gap: 8px; align-items: center;
+    padding: 6px 12px; background: var(--lime); color: var(--ink);
+    font-weight: 700;
+  }
+  .ribbon .timer-live .dot { width: 7px; height: 7px; background: var(--ink); border-radius: 50%; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+  .ribbon .voice { width: 32px; height: 32px; background: var(--accent); border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+  .ribbon .voice svg { color: var(--bg); }
+  .ribbon .voice:hover { background: var(--accent-700); }
+  .ribbon .me { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+  .ribbon .me .av { width: 28px; height: 28px; background: var(--accent); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 11px; letter-spacing: -0.02em; }
+
+  /* MAIN — timeline (left) + AI rail (right) */
+  .main { display: grid; grid-template-columns: 1fr var(--rail); height: calc(100vh - 52px); }
+
+  /* ============================================================
+     TIMELINE — horizontal ribbon, one row of THE DAY
+     ============================================================ */
+  .stage { position: relative; overflow: hidden; background: var(--bg); display: flex; flex-direction: column; min-width: 0; }
+
+  /* Day header */
+  .dayhdr {
+    padding: 18px 28px 14px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 18px;
+    align-items: end;
+    border-bottom: 1px solid var(--line);
+  }
+  .dayhdr h1 { margin: 0; font-family: var(--font-sans); font-size: 56px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.9; text-transform: lowercase; }
+  .dayhdr h1 .a { color: var(--accent); }
+  .dayhdr .sub { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
+  .dayhdr .sub b { color: var(--ink); }
+  .dayhdr .sub .over { color: var(--vermillion); font-weight: 700; }
+  .dayhdr .stats { display: flex; gap: 22px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .dayhdr .stats .s { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+  .dayhdr .stats .s .v { font-family: var(--font-sans); font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -0.03em; }
+  .dayhdr .stats .s .v.lime { color: #5a7400; }
+  .dayhdr .stats .s .v.over { color: var(--vermillion); }
+  .dayhdr .stats .s .v.bill { color: var(--accent); }
+  .dayhdr .stats .s .k { color: var(--fg-faint); }
+  .dayhdr .navbtns { display: inline-flex; margin-right: 14px; align-self: end; align-items: stretch; border: 1px solid var(--ink); }
+  .dayhdr .navbtns button { appearance: none; background: var(--bg); border: 0; padding: 6px 10px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; cursor: pointer; color: var(--ink); }
+  .dayhdr .navbtns button + button { border-left: 1px solid var(--ink); }
+  .dayhdr .navbtns button.act { background: var(--ink); color: var(--bg); }
+
+  /* Now-strip — horizontal scroll wrapper */
+  .lane-wrap {
+    position: relative;
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: linear-gradient(to bottom, var(--bg-1) 0%, var(--bg) 38%, var(--bg) 62%, var(--bg-1) 100%);
+  }
+  .lane {
+    position: relative;
+    height: 100%;
+    width: calc(var(--hourW) * 14);  /* 06 → 20 */
+    min-height: 100%;
+  }
+
+  /* Hour grid */
+  .hours {
+    position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+    background-image: linear-gradient(to right, var(--line-faint) 1px, transparent 1px);
+    background-size: var(--hourW) 100%;
+  }
+  .hour-labels {
+    position: absolute; left: 0; right: 0; top: 8px;
+    display: grid;
+    grid-template-columns: repeat(14, var(--hourW));
+    pointer-events: none;
+  }
+  .hour-labels .h {
+    font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint);
+    letter-spacing: 0.08em; padding-left: 6px;
+  }
+  .hour-labels .h b { color: var(--ink); font-weight: 700; }
+
+  /* NOW line */
+  .now-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    /* 13:42 → (13.7 - 6) * hourW = 7.7 * 110 = 847 */
+    left: 847px;
+    width: 2px;
+    background: var(--accent);
+    z-index: 4;
+    box-shadow: 0 0 0 1px var(--bg);
+  }
+  .now-line::before {
+    content: "NOW · 13:42"; position: absolute; top: 4px; left: 6px;
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+    background: var(--accent); color: var(--bg); padding: 2px 6px; letter-spacing: 0.06em; white-space: nowrap;
+  }
+
+  /* Past shading */
+  .past {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    width: 847px;
+    background: repeating-linear-gradient(
+      135deg,
+      rgba(0,0,0,0.015) 0 6px,
+      transparent 6px 12px
+    );
+    pointer-events: none;
+  }
+
+  /* SWIMLANES — 3 horizontal bands */
+  .lanes {
+    position: absolute; left: 0; right: 0;
+    display: grid;
+    grid-template-rows: 28px 1fr 1fr 1fr 28px;  /* hour-strip, ev, ev, time, footer */
+    top: 32px; bottom: 32px;
+  }
+
+  /* Lane labels at left (sticky) */
+  .lane-label {
+    position: absolute;
+    left: 8px;
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint);
+    font-weight: 700;
+    padding: 2px 6px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    z-index: 3;
+  }
+
+  /* Each card sits absolutely positioned by left/width */
+  .card {
+    position: absolute;
+    border: 1px solid var(--ink);
+    background: var(--bg);
+    padding: 8px 10px 8px 12px;
+    border-left: 4px solid var(--ink);
+    cursor: pointer;
+    transition: transform 120ms, box-shadow 120ms;
+    overflow: hidden;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px -8px rgba(0,0,0,0.18); z-index: 5; }
+  .card .when { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em; color: var(--fg-muted); text-transform: uppercase; font-weight: 700; }
+  .card .ttl { font-family: var(--font-text); font-size: 12.5px; font-weight: 600; color: var(--ink); margin-top: 2px; line-height: 1.25; letter-spacing: -0.005em; }
+  .card .ctx { font-family: var(--font-mono); font-size: 9px; color: var(--fg-faint); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 3px; display: flex; gap: 6px; align-items: center; }
+  .card .ctx .sw { width: 7px; height: 7px; }
+
+  /* Variants by client color via inline style. Status by class. */
+  .card.task { border-left-color: var(--ink); }
+  .card.task.p0 { border-left-color: var(--vermillion); background: #fff8f7; }
+  .card.task.done { background: #fafafa; opacity: 0.7; }
+  .card.task.done .ttl { text-decoration: line-through; color: var(--fg-muted); }
+  .card.meet { background: var(--cobalt-50); border-left-color: var(--cobalt); }
+  .card.meet .when { color: var(--cobalt); }
+  .card.timer { background: var(--lime); border-left-color: var(--ink); }
+  .card.timer .when, .card.timer .ttl { color: var(--ink); }
+  .card.timer.live {
+    background: var(--lime);
+    box-shadow: 0 0 0 2px var(--ink), 0 6px 16px -8px rgba(0,0,0,0.3);
+    animation: live 1.4s infinite;
+  }
+  @keyframes live {
+    0%,100% { box-shadow: 0 0 0 2px var(--ink), 0 6px 16px -8px rgba(0,0,0,0.3); }
+    50% { box-shadow: 0 0 0 2px var(--accent), 0 6px 16px -8px rgba(0,0,0,0.3); }
+  }
+  .card.deadline {
+    background: var(--vermillion); color: var(--bg); border-left-color: var(--ink);
+  }
+  .card.deadline .when, .card.deadline .ttl, .card.deadline .ctx { color: var(--bg); }
+  .card.invoice { background: var(--accent); color: var(--bg); border-left-color: var(--ink); }
+  .card.invoice .when, .card.invoice .ttl, .card.invoice .ctx { color: var(--bg); }
+  .card.email { background: var(--saffron-50); border-left-color: var(--saffron); }
+
+  /* AI ghost cards — dashed border, AI proposes */
+  .card.ghost {
+    background: rgba(106, 27, 154, 0.06);
+    border: 1.5px dashed var(--accent);
+    border-left: 4px dashed var(--accent);
+  }
+  .card.ghost::before {
+    content: "◆ AI"; position: absolute; top: 4px; right: 6px;
+    font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.1em;
+    color: var(--accent); font-weight: 700;
+  }
+  .card.ghost .ttl { color: var(--accent); font-style: italic; }
+  .card.ghost:hover {
+    background: var(--accent);
+  }
+  .card.ghost:hover .ttl, .card.ghost:hover .when, .card.ghost:hover .ctx { color: var(--bg); font-style: normal; }
+  .card.ghost:hover::before { color: var(--bg); }
+
+  /* OVERDUE banner — left edge, attention-grabbing */
+  .overdue-flag {
+    position: absolute;
+    left: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 200px;
+    background: var(--vermillion);
+    color: var(--bg);
+    padding: 12px 14px;
+    z-index: 6;
+    border-right: 4px solid var(--ink);
+    cursor: pointer;
+  }
+  .overdue-flag .num { font-family: var(--font-sans); font-size: 36px; font-weight: 800; line-height: 0.9; letter-spacing: -0.04em; }
+  .overdue-flag .lbl { font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
+  .overdue-flag .ttl { font-family: var(--font-text); font-size: 12px; font-weight: 600; line-height: 1.3; margin-top: 6px; }
+  .overdue-flag .arr { font-family: var(--font-mono); font-size: 10px; margin-top: 6px; opacity: 0.8; }
+
+  /* FOOTER strip — totals across lane */
+  .footer-strip {
+    height: 30px;
+    background: var(--ink);
+    color: var(--bg);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 24px;
+    align-items: center;
+    padding: 0 18px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .footer-strip .l b { color: var(--lime); font-weight: 700; }
+  .footer-strip .c { color: rgba(255,255,255,0.55); }
+  .footer-strip .r { display: flex; gap: 16px; }
+  .footer-strip .r b { color: var(--accent); font-weight: 700; font-size: 11px; }
+  .footer-strip .r .lime { color: var(--lime); font-weight: 700; }
+
+  /* OMNI input fixed bottom over timeline */
+  .omni {
+    position: absolute;
+    left: 50%; bottom: 70px;
+    transform: translateX(-50%);
+    width: min(620px, 80%);
+    background: var(--bg);
+    border: 2px solid var(--ink);
+    box-shadow: 0 24px 60px -16px rgba(0,0,0,0.28);
+    padding: 12px 14px;
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    z-index: 7;
+  }
+  .omni .g { width: 28px; height: 28px; background: var(--accent); color: var(--bg); border-radius: 50%; display: grid; place-items: center; font-family: var(--font-mono); font-weight: 700; font-size: 13px; }
+  .omni input { border: 0; outline: 0; font-family: var(--font-text); font-size: 16px; font-weight: 500; color: var(--ink); padding: 4px 0; background: transparent; }
+  .omni .hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; }
+
+  /* ============================================================
+     AI RAIL — chat with your associate
+     ============================================================ */
+  .rail {
+    display: flex; flex-direction: column;
+    border-left: 2px solid var(--ink);
+    background: var(--bg-1);
+    overflow: hidden;
+    min-width: 0;
+  }
+  .rail-hdr {
+    padding: 14px 18px 12px;
+    background: var(--ink);
+    color: var(--bg);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+  }
+  .rail-hdr .av {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 14px;
+  }
+  .rail-hdr .name { font-family: var(--font-sans); font-size: 16px; font-weight: 700; letter-spacing: -0.02em; text-transform: lowercase; }
+  .rail-hdr .name .accent { color: var(--accent); }
+  .rail-hdr .status { font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,0.55); letter-spacing: 0.1em; text-transform: uppercase; }
+  .rail-hdr .status .dot { display: inline-block; width: 7px; height: 7px; background: #4ade80; border-radius: 50%; margin-right: 4px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  .rail-hdr .config { font-family: var(--font-mono); font-size: 11px; color: var(--bg); cursor: pointer; opacity: 0.6; padding: 4px; }
+  .rail-hdr .config:hover { opacity: 1; }
+
+  /* Message stream */
+  .stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .msg { display: grid; grid-template-columns: 24px 1fr; gap: 10px; }
+  .msg.from-me { grid-template-columns: 1fr 24px; }
+  .msg.from-me .body { text-align: right; align-items: flex-end; }
+  .msg .av {
+    width: 24px; height: 24px;
+    background: var(--accent); color: var(--bg);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+  }
+  .msg.from-me .av { background: var(--ink); color: var(--bg); }
+  .msg .body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .msg .when { font-family: var(--font-mono); font-size: 9px; color: var(--fg-faint); letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; }
+  .msg .text {
+    font-family: var(--font-text); font-size: 13.5px; line-height: 1.45;
+    color: var(--ink); letter-spacing: -0.005em;
+    background: var(--bg); padding: 10px 12px; border: 1px solid var(--line);
+  }
+  .msg.from-me .text { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .msg .text strong { font-weight: 700; }
+  .msg .text .accent { color: var(--accent); font-weight: 700; }
+  .msg .text .num { font-family: var(--font-mono); font-weight: 700; }
+
+  /* Quick-reply attached cards / quick actions */
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  .actions button {
+    appearance: none;
+    background: var(--bg);
+    border: 1.5px solid var(--ink);
+    color: var(--ink);
+    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 7px 11px; cursor: pointer;
+  }
+  .actions button:hover { background: var(--ink); color: var(--bg); }
+  .actions button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+  .actions button.primary:hover { background: var(--accent-700); border-color: var(--accent-700); }
+  .actions button.dismiss { color: var(--fg-faint); border-color: var(--line-strong); }
+  .actions button.dismiss:hover { background: var(--bg-3); color: var(--ink); }
+
+  /* Inline preview cards inside messages */
+  .inline-card {
+    background: var(--bg);
+    border: 1px solid var(--ink);
+    border-left: 4px solid var(--accent);
+    padding: 10px 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+  .inline-card.timer { border-left-color: var(--ink); background: var(--lime); }
+  .inline-card.invoice { border-left-color: var(--accent); }
+  .inline-card.task { border-left-color: var(--ink); }
+  .inline-card .l .ttl { font-family: var(--font-text); font-size: 13px; font-weight: 600; color: var(--ink); letter-spacing: -0.005em; }
+  .inline-card .l .meta { font-family: var(--font-mono); font-size: 9px; color: var(--fg-muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 3px; }
+  .inline-card .r { font-family: var(--font-mono); font-size: 16px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .inline-card .r .ccy { font-size: 11px; color: var(--fg-muted); margin-right: 2px; }
+
+  /* Reasoning chip — shows AI's thinking inline */
+  .reasoning {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--fg-muted); letter-spacing: 0.04em;
+    padding: 4px 8px; background: rgba(106, 27, 154, 0.06);
+    border-left: 2px solid var(--accent);
+    line-height: 1.5;
+  }
+  .reasoning b { color: var(--accent); font-weight: 700; }
+
+  /* Compose box */
+  .compose {
+    border-top: 1px solid var(--ink);
+    background: var(--bg);
+    padding: 12px 14px 14px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+  .compose textarea {
+    border: 1px solid var(--line-strong);
+    padding: 10px 12px;
+    font-family: var(--font-text);
+    font-size: 13.5px;
+    color: var(--ink);
+    resize: none;
+    min-height: 56px;
+    width: 100%;
+    outline: 0;
+    letter-spacing: -0.005em;
+    background: var(--bg);
+  }
+  .compose textarea:focus { border-color: var(--accent); border-width: 2px; padding: 9px 11px; }
+  .compose .tools { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+  .compose .send {
+    appearance: none;
+    background: var(--accent); color: var(--bg);
+    border: 0; padding: 0 14px;
+    font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; height: 38px;
+    display: flex; align-items: center; gap: 6px; justify-content: center;
+  }
+  .compose .send:hover { background: var(--accent-700); }
+  .compose .mic {
+    appearance: none; background: var(--bg); border: 1px solid var(--ink);
+    width: 100%; height: 16px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+    letter-spacing: 0.06em; color: var(--ink);
+  }
+
+  /* Suggestion chips above compose */
+  .sugg-row {
+    padding: 8px 14px;
+    border-top: 1px solid var(--line);
+    background: var(--bg-1);
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    flex-wrap: wrap;
+  }
+  .sugg-chip {
+    appearance: none;
+    background: var(--bg);
+    border: 1px solid var(--line-strong);
+    padding: 5px 9px;
+    font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.04em; color: var(--fg-muted);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .sugg-chip:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .sugg-chip .accent { color: var(--accent); }
+  .sugg-chip:hover .accent { color: var(--accent-200); }
+
+  /* notes annotation */
+  .annot {
+    position: fixed; bottom: 8px; left: 8px; right: calc(var(--rail) + 8px);
+    background: var(--ink); color: var(--bg);
+    padding: 6px 12px;
+    font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em;
+    border-left: 3px solid var(--accent);
+    z-index: 1;
+    pointer-events: none;
+  }
+  .annot b { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="ribbon">
+    <span class="brand">ordif<span class="a">y</span>.me</span>
+    <span class="now">WED · 30 APR 2026 · WK 18 · MADRID <b>13:42</b></span>
+    <span class="timer-live">
+        <span class="dot"></span>
+        TIMER · ACME / SHAREHOLDER CONSENT · 0:47:21
+    </span>
+    <span class="voice" title="Hold space to dictate"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg></span>
+    <span class="me"><span class="av">SV</span><span style="color:rgba(255,255,255,0.7)">SERGIY</span></span>
+</div>
+
+<div class="main">
+
+<!-- ============================================================
+     STAGE — single horizontal day-line
+     ============================================================ -->
+<div class="stage">
+
+    <header class="dayhdr">
+        <div>
+            <h1>today, <span class="a">focused.</span></h1>
+            <span class="sub"><b>8 items</b> · <span class="over">1 overdue</span> · 3 meetings · 4:32h billable so far</span>
+        </div>
+        <div class="navbtns">
+            <button type="button">‹ TUE</button>
+            <button class="act" type="button">TODAY</button>
+            <button type="button">THU ›</button>
+        </div>
+        <div class="stats">
+            <div class="s"><span class="v bill">€680</span><span class="k">EARNED TODAY</span></div>
+            <div class="s"><span class="v lime">4:32</span><span class="k">BILLABLE</span></div>
+            <div class="s"><span class="v over">−20H</span><span class="k">OFAC OVERDUE</span></div>
+        </div>
+    </header>
+
+    <div class="lane-wrap">
+        <div class="lane">
+            <div class="hours"></div>
+
+            <!-- Hour ticks across the top -->
+            <div class="hour-labels">
+                <div class="h">06</div>
+                <div class="h">07</div>
+                <div class="h">08</div>
+                <div class="h">09</div>
+                <div class="h">10</div>
+                <div class="h">11</div>
+                <div class="h">12</div>
+                <div class="h">13<b> · LUNCH</b></div>
+                <div class="h">14</div>
+                <div class="h">15</div>
+                <div class="h">16</div>
+                <div class="h">17</div>
+                <div class="h">18</div>
+                <div class="h">19</div>
+            </div>
+
+            <!-- Past shading (06 → now) -->
+            <div class="past"></div>
+
+            <!-- Now line (13:42) -->
+            <div class="now-line"></div>
+
+            <!-- ===== EVENTS positioned on x by hour ===== -->
+            <!-- Lane 1: top events row (~64px..148px) -->
+
+            <!-- 09:00 — Email arrived (auto-captured) -->
+            <div class="card email" style="left: 330px; top: 64px; width: 170px;">
+                <div class="when">09:08 · INBOX</div>
+                <div class="ttl">"NDA pushback friday" — auto-captured</div>
+                <div class="ctx">◆ AI · → T-0152</div>
+            </div>
+
+            <!-- 10:30 — task DONE -->
+            <div class="card task done" style="left: 495px; top: 64px; width: 165px;">
+                <div class="when">10:30 → 11:00 · DONE</div>
+                <div class="ttl">Review NDA red-lines round 2</div>
+                <div class="ctx"><span class="sw" style="background:var(--accent)"></span>ACME · 1:42 BILLED</div>
+            </div>
+
+            <!-- 11:00 — Meeting (DONE) -->
+            <div class="card meet" style="left: 553px; top: 156px; width: 100px;">
+                <div class="when">11:00–11:36</div>
+                <div class="ttl">M. Ortega · series B kickoff</div>
+                <div class="ctx"><span class="sw" style="background:var(--accent)"></span>ACME · LOGGED</div>
+            </div>
+
+            <!-- 13:00 — LIVE TIMER (in-progress, lime) -->
+            <div class="card timer live" style="left: 770px; top: 64px; width: 170px;">
+                <div class="when">13:00 → NOW · 0:47:21</div>
+                <div class="ttl">⚡ Drafting shareholder consent</div>
+                <div class="ctx"><span class="sw" style="background:var(--accent)"></span>ACME · T-0146 · BILLABLE</div>
+            </div>
+
+            <!-- OVERDUE flag — anchored before NOW -->
+            <div class="overdue-flag" style="left: 540px;">
+                <div class="lbl">⚠ OVERDUE · 20H</div>
+                <div class="num">−20<small style="font-size:14px">h</small></div>
+                <div class="ttl">File OFAC compliance memo · SolanaPay</div>
+                <div class="arr">→ tap to reschedule</div>
+            </div>
+
+            <!-- 14:00 — Procedural deadline (vermillion) -->
+            <div class="card deadline" style="left: 880px; top: 64px; width: 130px;">
+                <div class="when">14:00 · HARD DEADLINE</div>
+                <div class="ttl">File shareholder consent</div>
+                <div class="ctx">P0 · ACME · IN 18 MIN</div>
+            </div>
+
+            <!-- 14:30 — task -->
+            <div class="card task" style="left: 935px; top: 156px; width: 150px;">
+                <div class="when">14:30 → 15:00</div>
+                <div class="ttl">Final review · consent doc</div>
+                <div class="ctx"><span class="sw" style="background:var(--accent)"></span>ACME</div>
+            </div>
+
+            <!-- 15:30 — invoice send (plum) -->
+            <div class="card invoice" style="left: 1045px; top: 64px; width: 165px;">
+                <div class="when">15:30 · QUEUED</div>
+                <div class="ttl">SEND inv·042 → Acme</div>
+                <div class="ctx">€4,719 · DRAFTED BY AI</div>
+            </div>
+
+            <!-- 16:00 — meeting -->
+            <div class="card meet" style="left: 1100px; top: 156px; width: 110px;">
+                <div class="when">16:00–16:30</div>
+                <div class="ttl">SolanaPay · OFAC sync</div>
+                <div class="ctx"><span class="sw" style="background:var(--saffron)"></span>SOLANAPAY</div>
+            </div>
+
+            <!-- 17:00 — task -->
+            <div class="card task" style="left: 1210px; top: 64px; width: 145px;">
+                <div class="when">17:00 → 18:00</div>
+                <div class="ttl">Pickup notarised PoA</div>
+                <div class="ctx"><span class="sw" style="background:var(--ink)"></span>VASYLENKO</div>
+            </div>
+
+            <!-- 18:00 — AI ghost suggestion -->
+            <div class="card ghost" style="left: 1320px; top: 64px; width: 160px;">
+                <div class="when">18:00 → 19:00 · SUGGESTED</div>
+                <div class="ttl">Block: respond to acme R&amp;W pushback (3.0h needed by fri)</div>
+                <div class="ctx">CLICK TO SCHEDULE</div>
+            </div>
+
+            <!-- 18:30 ghost on lane 2 -->
+            <div class="card ghost" style="left: 1320px; top: 156px; width: 130px;">
+                <div class="when">PROACTIVE</div>
+                <div class="ttl">Reply to D. Kim · invoice question</div>
+                <div class="ctx">DRAFT READY · 1 CLICK</div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Footer summary strip -->
+    <div class="footer-strip">
+        <span class="l">DAY · WED 30 APR · <b>4:32H BILLABLE</b> · 1:18H NON</span>
+        <span class="c">drag any card to reschedule · double-click empty to block · ⌘ K to capture</span>
+        <span class="r">
+            <span class="lime">€680 EARNED</span>
+            <span><b>€2,210</b> SCHEDULED</span>
+        </span>
+    </div>
+
+    <!-- Floating omni input (bottom, over timeline) -->
+    <div class="omni">
+        <span class="g">o</span>
+        <input type="text" placeholder="dictate, command, or just think out loud — i'll route it…" value="">
+        <span class="hint">⌘K · HOLD ␣ TO TALK</span>
+    </div>
+
+    <!-- annotation -->
+    <div class="annot">
+        ① <b>HORIZONTAL DAY-RIBBON</b> — every type of object (task, meeting, timer, deadline, invoice, email-capture) lives on ONE timeline. Past is hatched, NOW is plum, future is open. Live timer pulses lime+plum.
+        ② <b>AI GHOSTS</b> — dashed plum cards at the right edge are AI-suggested blocks · 1 tap accepts.
+        ③ <b>OMNI</b> floats — type, paste, or hold space to dictate; AI in rail decides where it goes.
+    </div>
+
+</div>
+
+<!-- ============================================================
+     AI RAIL — your associate, in chat form
+     ============================================================ -->
+<aside class="rail">
+    <header class="rail-hdr">
+        <span class="av">o</span>
+        <div>
+            <div class="name">ordif<span class="accent">y</span> · associate</div>
+            <div class="status"><span class="dot"></span>WORKING ALONGSIDE · CTX: ACME / SERIES B</div>
+        </div>
+        <span class="config">⋯</span>
+    </header>
+
+    <div class="stream">
+
+        <!-- AI MORNING BRIEF -->
+        <div class="msg">
+            <span class="av">o</span>
+            <div class="body">
+                <span class="when">08:30 · MORNING BRIEF</span>
+                <div class="text">
+                    Good morning. <strong>One thing matters most today</strong>: the <span class="accent">Acme shareholder consent at 14:00</span> — that's a procedural deadline, no slack. I cleared 13:00–14:00 for the draft and pre-loaded the template. <br><br>
+                    The <strong>OFAC memo</strong> for SolanaPay is <span class="accent">20h overdue</span>. Tania already emailed at 07:14 — she's chill but it's the third reminder. I drafted a 3-line "filing tonight after 16:00 sync" reply. Approve?
+                </div>
+                <div class="actions">
+                    <button class="primary" type="button">SEND DRAFT REPLY</button>
+                    <button type="button">SHOW DRAFT</button>
+                    <button class="dismiss" type="button">SKIP</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- USER VOICE CAPTURE -->
+        <div class="msg from-me">
+            <div class="body">
+                <span class="when">09:42 · 🎙 VOICE · 4 SEC</span>
+                <div class="text">"send the reply, and remind me 16:30 to actually start the OFAC thing"</div>
+            </div>
+            <span class="av">SV</span>
+        </div>
+
+        <!-- AI CONFIRM -->
+        <div class="msg">
+            <span class="av">o</span>
+            <div class="body">
+                <span class="when">09:42 · DONE</span>
+                <div class="text">
+                    Sent. Tania has the heads-up.<br>
+                    Created a hard reminder at <strong>16:30</strong> with the OFAC checklist pre-attached. Linked to T-0142.
+                </div>
+                <div class="reasoning"><b>HOW</b> · because you said "remind 16:30", I added a notification with the matter-attached checklist (saved you a click). The 17:00 PoA pickup is now tight — I left it as-is, but flag if you want to push.</div>
+            </div>
+        </div>
+
+        <!-- AI PROACTIVE — the live timer is rich -->
+        <div class="msg">
+            <span class="av">o</span>
+            <div class="body">
+                <span class="when">13:42 · WHILE YOU'RE WORKING</span>
+                <div class="text">
+                    You've been on the consent draft <strong>47 min</strong>. Acme's retainer-scope is at <span class="accent">9.4 / 12h · 78%</span> with 5 days left in April. <br>
+                    At this pace you'll hit 12.0 right around <strong>thursday EOD</strong> — anything past that is overage at €150/h.
+                </div>
+                <div class="inline-card timer">
+                    <div class="l">
+                        <div class="ttl">Acme retainer · April scope</div>
+                        <div class="meta">9.4 / 12h · 78% · projected 12.4h fri</div>
+                    </div>
+                    <div class="r">+0.4<span style="font-size:11px;color:var(--fg-muted)">h overage</span></div>
+                </div>
+                <div class="actions">
+                    <button class="primary" type="button">★ TAG OVERAGE TO INV·042</button>
+                    <button type="button">STOP BILLING TIMER</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI INVOICE READY -->
+        <div class="msg">
+            <span class="av">o</span>
+            <div class="body">
+                <span class="when">14:08 · WHILE YOU FINISHED</span>
+                <div class="text">
+                    Consent filed at 13:58. Nice — 2 minutes early. <br>
+                    I bundled this month for Acme. <strong>23 timelogs + 1 fixed milestone + retainer</strong>. Glanced at March, language matches yours.
+                </div>
+                <div class="inline-card invoice">
+                    <div class="l">
+                        <div class="ttl">inv·042 · acme · APR</div>
+                        <div class="meta">SUB + FIX (DELAWARE LLC) + OVERAGE 6.5H</div>
+                    </div>
+                    <div class="r"><span class="ccy">€</span>4,719</div>
+                </div>
+                <div class="reasoning"><b>WHY THIS BUNDLE</b> · 8 entries on series-B prep got grouped into one "prep · out-of-scope" line because they share the same matter and span the same 14 days — easier to read than 8 small lines. NDA review (1.4h, €120) kept separate because it's at a discount rate.</div>
+                <div class="actions">
+                    <button class="primary" type="button">REVIEW &amp; SEND</button>
+                    <button type="button">EDIT LINES</button>
+                    <button type="button">GROUP DIFFERENTLY</button>
+                    <button class="dismiss" type="button">NOT YET</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- USER FREEFORM -->
+        <div class="msg from-me">
+            <div class="body">
+                <span class="when">14:09 · TYPED</span>
+                <div class="text">edit lines — what was the discretionary discount on the NDA, and apply that to all NDA work this quarter</div>
+            </div>
+            <span class="av">SV</span>
+        </div>
+
+        <!-- AI MULTI-STEP RESPONSE -->
+        <div class="msg">
+            <span class="av">o</span>
+            <div class="body">
+                <span class="when">14:09 · THINKING</span>
+                <div class="text">
+                    Discount was <strong>20%</strong> off your standard €150/h → applied as €120/h on T-0143 (NDA round 1 · 1.4h · €168). <br><br>
+                    Q2 has <strong>3 NDA matters</strong> across 2 clients (Acme, SolanaPay, +1 closed): total <strong>5.8h at standard</strong>. If I apply 20% retroactively that's <strong>−€174</strong> across 2 unsent invoices.
+                </div>
+                <div class="actions">
+                    <button class="primary" type="button">APPLY TO ALL Q2 NDAS</button>
+                    <button type="button">JUST FUTURE</button>
+                    <button type="button">SHOW THE 3</button>
+                    <button class="dismiss" type="button">CANCEL</button>
+                </div>
+                <div class="reasoning"><b>RULE I'LL REMEMBER</b> · NDA work for any client = €120/h (discounted). I won't apply this without asking when a new NDA matter opens.</div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Quick suggestion chips -->
+    <div class="sugg-row">
+        <button class="sugg-chip" type="button">⚡ <span class="accent">stop timer</span> · log to t-0146</button>
+        <button class="sugg-chip" type="button">📞 log a call</button>
+        <button class="sugg-chip" type="button">draft email to <span class="accent">acme</span></button>
+        <button class="sugg-chip" type="button">show overdue</button>
+        <button class="sugg-chip" type="button">tomorrow brief</button>
+    </div>
+
+    <!-- Compose -->
+    <div class="compose">
+        <textarea placeholder="ask, dictate, or paste — &#10;e.g. 'block 2h tomorrow for the OFAC memo'"></textarea>
+        <div class="tools">
+            <button class="send" type="button">SEND ↵</button>
+            <button class="mic" type="button">🎙 HOLD</button>
+        </div>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · time tracker (hi-fi 08)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 56px; display: grid; min-height: 100vh; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+  body { overflow: auto; }
+  #main { height: auto; min-height: 100vh; overflow: visible; }
+
+  .meta-banner { background: var(--ink); color: var(--bg); padding: 6px 16px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; text-align: center; font-weight: 700; }
+  .meta-banner a { color: var(--accent); margin: 0 8px; text-decoration: none; }
+
+  /* Omni-bar — pulled from hifi-06 */
+  .omni-bar { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 2px solid var(--ink); background: var(--bg-1); box-shadow: 0 4px 12px -8px rgba(0,0,0,0.12); }
+  .omni-bar .glyph { width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent); color: var(--bg); font-family: var(--font-mono); font-weight: 700; font-size: 14px; border-radius: 50%; }
+  .omni-bar .kbd { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.06em; padding: 3px 7px; border: 1px solid var(--line-strong); flex-shrink: 0; font-weight: 600; background: var(--bg); }
+  .omni-bar input { flex: 1; appearance: none; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 17px; font-weight: 500; letter-spacing: -0.005em; color: var(--ink); padding: 6px 0; }
+  .omni-bar input::placeholder { color: var(--fg-muted); font-weight: 400; }
+  .omni-bar .right-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; flex-shrink: 0; text-transform: uppercase; }
+  .omni-bar .mic-btn { appearance: none; background: var(--bg); border: 1px solid var(--line-strong); color: var(--fg-muted); cursor: pointer; padding: 6px; flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; }
+
+  /* Secondary toolbar — pulled from hifi-06 */
+  .toolbar { padding: 12px 24px 10px; border-bottom: 1px solid var(--line); background: var(--bg); display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .toolbar .title-block { display: flex; align-items: baseline; gap: 12px; margin-right: auto; }
+  .toolbar .title-block h1 { font-family: var(--font-sans); font-size: 16px; font-weight: 700; letter-spacing: -0.02em; margin: 0; color: var(--ink); line-height: 1; text-transform: lowercase; }
+  .toolbar .title-block .meta { font-family: var(--font-mono); font-size: 11px; color: var(--fg-faint); letter-spacing: 0.04em; }
+  .filter-pills { display: inline-flex; gap: 14px; align-items: center; }
+  .filter-pills button { appearance: none; background: transparent; border: 0; padding: 4px 0; cursor: pointer; font-family: var(--font-text); font-size: 13px; font-weight: 500; color: var(--fg-muted); border-bottom: 2px solid transparent; }
+  .filter-pills button.active { color: var(--ink); border-bottom-color: var(--accent); }
+  .filter-pills .sep { color: var(--line-strong); font-size: 13px; }
+  .view-toggle { display: inline-flex; border: 1px solid var(--line-strong); }
+  .view-toggle button { appearance: none; background: var(--bg); border: 0; padding: 5px 10px; cursor: pointer; font-family: var(--font-mono); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-muted); }
+  .view-toggle button + button { border-left: 1px solid var(--line-strong); }
+  .view-toggle button.active { background: var(--ink); color: var(--bg); }
+  .icon-action { appearance: none; background: transparent; border: 0; padding: 4px 6px; cursor: pointer; color: var(--fg-muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em; }
+  .icon-action:hover { color: var(--ink); }
+
+  #ai-rail { background: var(--ink); }
+  #main { display: flex; flex-direction: column; }
+
+  /* ==============================================================
+     RUNNING TRACKER BLOCK — lime, the visual signature of this view
+     ============================================================== */
+  .runner {
+      background: var(--lime);
+      border-bottom: 2px solid var(--ink);
+      padding: 28px 32px 26px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 32px;
+  }
+  .runner .clock {
+      font-family: var(--font-mono);
+      font-weight: 500;
+      font-size: 84px;
+      letter-spacing: -0.02em;
+      line-height: 0.9;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+  }
+  .runner .clock .ms {
+      font-size: 32px;
+      color: rgba(10,10,10,0.55);
+      letter-spacing: 0;
+      font-weight: 400;
+  }
+  .runner .pulse-dot {
+      width: 14px; height: 14px;
+      background: var(--vermillion);
+      border-radius: 50%;
+      align-self: center;
+      animation: t-pulse 1.4s ease-in-out infinite;
+      flex-shrink: 0;
+      margin-right: 4px;
+  }
+  @keyframes t-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(0.85); } }
+  .runner .ctx {
+      display: flex; flex-direction: column; gap: 6px;
+      min-width: 0;
+  }
+  .runner .ctx .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--ink);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+  }
+  .runner .ctx .eyebrow .sep { color: rgba(10,10,10,0.4); }
+  .runner .ctx .eyebrow .billable {
+      padding: 2px 6px;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: var(--lime);
+  }
+  .runner .ctx .task {
+      font-family: var(--font-text);
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      line-height: 1.25;
+      max-width: 56ch;
+  }
+  .runner .ctx .breadcrumb {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: rgba(10,10,10,0.7);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+  }
+  .runner .controls {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      flex-shrink: 0;
+  }
+  .runner .controls button {
+      appearance: none;
+      border: 2px solid var(--ink);
+      background: transparent;
+      color: var(--ink);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 12px 18px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+  }
+  .runner .controls button.stop {
+      background: var(--ink);
+      color: var(--lime);
+  }
+  .runner .controls button:hover { background: var(--ink); color: var(--lime); }
+  .runner .controls button.stop:hover { background: var(--vermillion); border-color: var(--vermillion); color: var(--bg); }
+  .runner .controls .icon-sq { width: 12px; height: 12px; background: currentColor; }
+  .runner .controls .icon-pause { width: 12px; height: 14px; border-left: 4px solid currentColor; border-right: 4px solid currentColor; }
+
+  /* ==============================================================
+     CAPTURE STRIP — week summary, 4 columns
+     ============================================================== */
+  .capture-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+  }
+  .capture-strip .cell {
+      padding: 18px 24px;
+      border-right: 1px solid var(--line);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+  }
+  .capture-strip .cell:last-child { border-right: 0; }
+  .capture-strip .cell .k {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--fg-faint);
+      font-weight: 700;
+  }
+  .capture-strip .cell .v {
+      font-family: var(--font-mono);
+      font-size: 32px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      margin-top: 4px;
+  }
+  .capture-strip .cell .v small {
+      font-size: 14px;
+      color: var(--fg-muted);
+      margin-left: 4px;
+      letter-spacing: 0;
+  }
+  .capture-strip .cell .v.up   { color: var(--ink); }
+  .capture-strip .cell .v.up::before { content: "↑ "; color: var(--success); }
+  .capture-strip .cell .delta {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+  }
+  .capture-strip .cell .delta.pos { color: var(--success); }
+
+  /* ==============================================================
+     2-COLUMN BODY — log (left, 1.1fr) + week chart (right, 1fr)
+     ============================================================== */
+  .body-2col {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      border-bottom: 1px solid var(--line);
+  }
+  .body-2col > section {
+      border-right: 1px solid var(--line);
+      background: var(--bg);
+  }
+  .body-2col > section:last-child { border-right: 0; }
+  .section-head {
+      padding: 12px 24px;
+      background: var(--ink);
+      color: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+  }
+  .section-head .right { color: rgba(255,255,255,0.6); font-weight: 500; letter-spacing: 0.08em; }
+
+  /* ---- Today's log ---- */
+  .log-list { padding: 0; }
+  .log-row {
+      display: grid;
+      grid-template-columns: 130px 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 11px 24px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+  }
+  .log-row:hover { background: var(--bg-1); }
+  .log-row .span {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--fg-muted);
+      letter-spacing: 0.02em;
+      font-variant-numeric: tabular-nums;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+  }
+  .log-row .span .arrow { color: var(--fg-faint); }
+  .log-row .desc { min-width: 0; }
+  .log-row .desc .title {
+      font-family: var(--font-text);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink);
+      letter-spacing: -0.005em;
+      line-height: 1.3;
+  }
+  .log-row .desc .ctx {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--fg-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+  }
+  .log-row .desc .ctx .swatch-tiny {
+      display: inline-block;
+      width: 8px; height: 8px;
+      vertical-align: middle;
+      margin-right: 4px;
+  }
+  .log-row .right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+  }
+  .log-row .dur {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+  }
+  .log-row .billable {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 2px 5px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+  }
+  .log-row .billable.no {
+      color: var(--fg-faint);
+      border-color: var(--line-strong);
+  }
+  .log-row.is-running {
+      background: #f7ffd6;
+      border-left: 4px solid var(--lime);
+      padding-left: 20px;
+  }
+  .log-row.is-running .dur { color: var(--ink); }
+  .log-row.is-running .span .live-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: var(--vermillion);
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: t-pulse 1.4s ease-in-out infinite;
+  }
+
+  .log-day-head {
+      padding: 10px 24px;
+      background: var(--bg-1);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+  }
+  .log-day-head .total { color: var(--ink); }
+
+  /* ---- Week chart ---- */
+  .week-chart {
+      padding: 26px 28px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 320px;
+  }
+  .week-chart .axis {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      align-items: end;
+      height: 220px;
+      border-bottom: 2px solid var(--ink);
+      padding-bottom: 0;
+      position: relative;
+  }
+  .week-chart .axis::before,
+  .week-chart .axis::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0;
+      border-top: 1px dashed var(--line);
+      pointer-events: none;
+  }
+  .week-chart .axis::before { top: 33%; }
+  .week-chart .axis::after { top: 66%; }
+  .week-chart .col {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-end;
+      gap: 0;
+      position: relative;
+  }
+  .week-chart .col .bar {
+      background: var(--ink);
+      width: 100%;
+      transition: background 120ms;
+      position: relative;
+  }
+  .week-chart .col.today .bar { background: var(--vermillion); }
+  .week-chart .col.future .bar { background: var(--bg-3); }
+  .week-chart .col .non-bill {
+      background: var(--bg-3);
+      width: 100%;
+  }
+  .week-chart .col .bar-num {
+      position: absolute;
+      top: -22px;
+      left: 0; right: 0;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+      font-variant-numeric: tabular-nums;
+  }
+  .week-chart .col.today .bar-num { color: var(--vermillion); }
+  .week-chart .col.future .bar-num { color: var(--fg-faint); }
+  .week-chart .labels {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--fg-faint);
+      text-align: center;
+      font-weight: 600;
+  }
+  .week-chart .labels .lbl.today { color: var(--vermillion); }
+  .week-chart .labels .lbl .num {
+      display: block;
+      font-size: 14px;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+      margin-top: 2px;
+  }
+  .week-chart .labels .lbl.today .num { color: var(--vermillion); }
+  .week-chart .labels .lbl.future .num { color: var(--fg-faint); }
+  .week-chart .legend {
+      display: flex;
+      gap: 18px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--fg-muted);
+      align-items: center;
+      padding-top: 4px;
+      border-top: 1px solid var(--line);
+      margin-top: -10px;
+  }
+  .week-chart .legend .swatch {
+      display: inline-block;
+      width: 10px; height: 10px;
+      margin-right: 6px;
+      vertical-align: middle;
+  }
+  .week-chart .legend .swatch.bill { background: var(--ink); }
+  .week-chart .legend .swatch.today { background: var(--vermillion); }
+  .week-chart .legend .swatch.nonb { background: var(--bg-3); }
+
+  /* ==============================================================
+     TIMESHEET — matrix matter × day
+     ============================================================== */
+  .timesheet-head {
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--line);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+  }
+  .timesheet-head .title {
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-transform: lowercase;
+      color: var(--ink);
+      margin-right: auto;
+  }
+  .timesheet-head .week-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--ink);
+  }
+  .timesheet-head .week-nav button {
+      appearance: none;
+      background: var(--bg);
+      border: 1px solid var(--line-strong);
+      width: 26px; height: 26px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink);
+      display: grid; place-items: center;
+  }
+  .timesheet-head .week-nav button:hover { background: var(--ink); color: var(--bg); }
+
+  .timesheet {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-text);
+      table-layout: fixed;
+  }
+  .timesheet thead th {
+      background: var(--bg);
+      border-bottom: 1px solid var(--ink);
+      padding: 10px 10px;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--fg-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-variant-numeric: tabular-nums;
+  }
+  .timesheet thead th:first-child { text-align: left; padding-left: 24px; }
+  .timesheet thead th:last-child { padding-right: 24px; background: var(--bg-1); color: var(--ink); border-bottom-color: var(--ink); }
+  .timesheet thead th.today-col { color: var(--vermillion); }
+  .timesheet tbody td {
+      padding: 10px 10px;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--ink);
+      border-bottom: 1px solid var(--line);
+      font-variant-numeric: tabular-nums;
+  }
+  .timesheet tbody td:first-child { text-align: left; padding-left: 24px; font-family: var(--font-text); font-size: 13px; font-weight: 500; }
+  .timesheet tbody td:last-child { padding-right: 24px; background: var(--bg-1); font-weight: 700; }
+  .timesheet tbody td.zero { color: var(--fg-faint); }
+  .timesheet tbody td.today-col { background: #fff1ee; color: var(--vermillion); font-weight: 600; }
+  .timesheet tbody tr:hover { background: var(--bg-1); }
+  .timesheet tbody tr:hover td.today-col { background: #ffd9d0; }
+  .timesheet tbody td .swatch-tiny { display: inline-block; width: 8px; height: 8px; margin-right: 8px; vertical-align: middle; }
+  .timesheet tbody td .billing-tag {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 1px 5px;
+      border: 1px solid currentColor;
+      margin-left: 8px;
+      vertical-align: middle;
+  }
+  .timesheet tbody td .billing-tag.sub  { color: var(--accent); }
+  .timesheet tbody td .billing-tag.fix  { color: var(--cobalt); }
+  .timesheet tbody td .billing-tag.hrly { color: var(--ink); }
+  .timesheet tfoot td {
+      padding: 12px 10px;
+      text-align: right;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+      background: var(--ink);
+      color: var(--bg);
+      border-top: 2px solid var(--ink);
+      font-variant-numeric: tabular-nums;
+  }
+  .timesheet tfoot td:first-child { text-align: left; padding-left: 24px; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; }
+  .timesheet tfoot td:last-child { padding-right: 24px; background: var(--accent); }
+  .timesheet tfoot td.today-col { color: var(--saffron); }
+
+  /* Annotation block */
+  .annot { padding: 16px 24px; background: var(--bg-1); border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; line-height: 1.7; }
+  .annot strong { color: var(--ink); }
+  .annot .arrow { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body class="with-ai-rail" data-view="time">
+
+<div class="meta-banner">
+    HI-FI · 08 · TIME — running tracker + log + week chart + timesheet
+    <a href="hifi-06-integrated.html">tasks (06)</a>
+    <a href="index.html">all screens</a>
+</div>
+
+<div id="app">
+
+<!-- ============ SIDEBAR ============ -->
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">8</span></div>
+        <div class="proj"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span><span class="proj-count"></span></div>
+        <div class="proj active"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count" style="color:var(--lime)">●&nbsp;LIVE</span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj"><span class="proj-num">06</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Tech (IT)</span><span class="proj-count">4</span></div>
+        <div class="proj"><span class="proj-num">07</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Maersk-flag (B2B)</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">SolanaPay (Crypto)</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko (private)</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>ES</button></div>
+    </div>
+</aside>
+
+<!-- ============ MAIN ============ -->
+<main id="main">
+
+<!-- Omni-bar -->
+<div class="omni-bar">
+    <span class="glyph">o</span>
+    <span class="kbd">⌘K</span>
+    <input type="text" placeholder="tell ordify… try: ‘maria 12min EU stablecoin’ or ‘what did I bill on acme this week?’">
+    <button class="mic-btn" type="button" aria-label="Voice">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg>
+    </button>
+    <span class="right-hint">⌘K to expand</span>
+</div>
+
+<!-- Secondary toolbar -->
+<div class="toolbar">
+    <div class="title-block">
+        <h1>time.</h1>
+        <span class="meta">wk 18 · mon 27 apr → sun 3 may · €2,439 projected</span>
+    </div>
+    <div class="filter-pills">
+        <button type="button">All</button>
+        <span class="sep">·</span>
+        <button type="button" class="active">Today</button>
+        <span class="sep">·</span>
+        <button type="button">Week</button>
+        <span class="sep">·</span>
+        <button type="button">Billable</button>
+        <span class="sep">·</span>
+        <button type="button">Unbilled</button>
+    </div>
+    <div class="view-toggle" role="group">
+        <button class="active" type="button">Day</button>
+        <button type="button">Week</button>
+        <button type="button">Month</button>
+    </div>
+    <button class="icon-action" type="button">⬇ CSV</button>
+</div>
+
+<!-- RUNNING TRACKER (lime, the visual signature) -->
+<div class="runner">
+    <div class="clock"><span class="pulse-dot" aria-hidden="true"></span>00:47:12<span class="ms">.04</span></div>
+    <div class="ctx">
+        <div class="eyebrow">
+            <span>RUNNING SINCE 13:18</span>
+            <span class="sep">·</span>
+            <span>T-0146</span>
+            <span class="sep">·</span>
+            <span class="billable">BILLABLE · €85/H</span>
+        </div>
+        <div class="task">Drafting shareholder consent — track changes round 2</div>
+        <div class="breadcrumb">ACME TECH (IT) · SERIES B PREP · ONGOING RETAINER</div>
+    </div>
+    <div class="controls">
+        <button type="button"><span class="icon-pause" aria-hidden="true"></span>Pause</button>
+        <button type="button" class="stop"><span class="icon-sq" aria-hidden="true"></span>Stop &amp; log</button>
+    </div>
+</div>
+
+<!-- WEEK SUMMARY STRIP -->
+<div class="capture-strip">
+    <div class="cell">
+        <span class="k">Week billable</span>
+        <span class="v">28<small>:42</small></span>
+        <span class="delta">target 32:00 · 3:18 to go</span>
+    </div>
+    <div class="cell">
+        <span class="k">Effective rate</span>
+        <span class="v">€85<small>/h</small></span>
+        <span class="delta">2 matters @ €85 · 1 @ €120</span>
+    </div>
+    <div class="cell">
+        <span class="k">Projected wk total</span>
+        <span class="v">€2,439</span>
+        <span class="delta">+ €1,500 retainers · +€2,400 LLC</span>
+    </div>
+    <div class="cell">
+        <span class="k">vs. last week</span>
+        <span class="v" style="color:var(--success)">+12<small>%</small></span>
+        <span class="delta pos">+3:08 hrs · +€266</span>
+    </div>
+</div>
+
+<!-- 2-COL: today's log (left) · week chart (right) -->
+<div class="body-2col">
+
+  <section>
+    <div class="section-head">
+      <span>Today's log · wed 30 apr</span>
+      <span class="right">7 entries · 4:32 billable</span>
+    </div>
+
+    <div class="log-day-head">
+      <span>Morning</span><span class="total">2:15 billable</span>
+    </div>
+
+    <div class="log-row">
+      <div class="span">09:12<span class="arrow">→</span>09:34</div>
+      <div class="desc">
+        <div class="title">Inbox triage · Acme RFI from buyer counsel</div>
+        <div class="ctx"><span class="swatch-tiny" style="background:var(--accent)"></span>ACME · SERIES B PREP · CORP</div>
+      </div>
+      <div class="right"><span class="dur">0:22</span><span class="billable">BILL</span></div>
+    </div>
+
+    <div class="log-row">
+      <div class="span">09:45<span class="arrow">→</span>11:02</div>
+      <div class="desc">
+        <div class="title">OFAC compliance memo — review counter-party comments</div>
+        <div class="ctx"><span class="swatch-tiny" style="background:var(--saffron)"></span>SOLANAPAY · TOKEN OFFERING · CRYPTO</div>
+      </div>
+      <div class="right"><span class="dur">1:17</span><span class="billable">BILL</span></div>
+    </div>
+
+    <div class="log-row">
+      <div class="span">11:00<span class="arrow">→</span>11:36</div>
+      <div class="desc">
+        <div class="title">Maria call · BVI vs Cayman jurisdiction</div>
+        <div class="ctx" style="color:var(--cobalt)"><span class="swatch-tiny" style="background:var(--cobalt)"></span>MEETING · SOLANAPAY · AUTO-LOGGED</div>
+      </div>
+      <div class="right"><span class="dur">0:36</span><span class="billable">BILL</span></div>
+    </div>
+
+    <div class="log-day-head">
+      <span>Afternoon</span><span class="total">2:17 billable · 1 running</span>
+    </div>
+
+    <div class="log-row is-running">
+      <div class="span"><span class="live-dot"></span>13:18<span class="arrow">→</span>NOW</div>
+      <div class="desc">
+        <div class="title">Drafting shareholder consent — track changes round 2</div>
+        <div class="ctx"><span class="swatch-tiny" style="background:var(--accent)"></span>ACME · SERIES B PREP · CORP · LIVE</div>
+      </div>
+      <div class="right"><span class="dur">0:47</span><span class="billable">BILL</span></div>
+    </div>
+
+    <div class="log-row">
+      <div class="span">12:14<span class="arrow">→</span>12:48</div>
+      <div class="desc">
+        <div class="title">MiCA registration timeline — research note (orphan)</div>
+        <div class="ctx">— · NO MATTER · RESEARCH</div>
+      </div>
+      <div class="right"><span class="dur">0:34</span><span class="billable no">N/B</span></div>
+    </div>
+
+    <div class="log-row">
+      <div class="span">11:48<span class="arrow">→</span>12:00</div>
+      <div class="desc">
+        <div class="title">Quick call · Vasylenko notarised PoA logistics</div>
+        <div class="ctx"><span class="swatch-tiny" style="background:var(--ink)"></span>VASYLENKO · NO MATTER · PERSONAL</div>
+      </div>
+      <div class="right"><span class="dur">0:12</span><span class="billable no">N/B</span></div>
+    </div>
+
+    <div class="log-row">
+      <div class="span">10:08<span class="arrow">→</span>10:18</div>
+      <div class="desc">
+        <div class="title">Email · Maersk-flag flagging amended bill of lading</div>
+        <div class="ctx"><span class="swatch-tiny" style="background:var(--cobalt)"></span>MAERSK-FLAG · SHIPPING DOCS</div>
+      </div>
+      <div class="right"><span class="dur">0:10</span><span class="billable">BILL</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span>This week · billable hours</span>
+      <span class="right">28:42 / 32:00 target</span>
+    </div>
+    <div class="week-chart">
+      <div class="axis" aria-hidden="true">
+        <div class="col">
+          <div class="bar-num">5:18</div>
+          <div class="non-bill" style="height:14%"></div>
+          <div class="bar" style="height:54%"></div>
+        </div>
+        <div class="col">
+          <div class="bar-num">6:42</div>
+          <div class="non-bill" style="height:8%"></div>
+          <div class="bar" style="height:68%"></div>
+        </div>
+        <div class="col today">
+          <div class="bar-num">4:32</div>
+          <div class="non-bill" style="height:12%"></div>
+          <div class="bar" style="height:46%"></div>
+        </div>
+        <div class="col">
+          <div class="bar-num">7:24</div>
+          <div class="non-bill" style="height:10%"></div>
+          <div class="bar" style="height:74%"></div>
+        </div>
+        <div class="col">
+          <div class="bar-num">4:46</div>
+          <div class="non-bill" style="height:18%"></div>
+          <div class="bar" style="height:48%"></div>
+        </div>
+        <div class="col future">
+          <div class="bar-num">—</div>
+          <div class="bar" style="height:0"></div>
+        </div>
+        <div class="col future">
+          <div class="bar-num">—</div>
+          <div class="bar" style="height:0"></div>
+        </div>
+      </div>
+      <div class="labels">
+        <div class="lbl">Mon<span class="num">27</span></div>
+        <div class="lbl">Tue<span class="num">28</span></div>
+        <div class="lbl today">Wed<span class="num">30</span></div>
+        <div class="lbl">Thu<span class="num">01</span></div>
+        <div class="lbl">Fri<span class="num">02</span></div>
+        <div class="lbl future">Sat<span class="num">03</span></div>
+        <div class="lbl future">Sun<span class="num">04</span></div>
+      </div>
+      <div class="legend">
+        <span><span class="swatch bill"></span>billable</span>
+        <span><span class="swatch nonb"></span>non-bill</span>
+        <span><span class="swatch today"></span>today (in progress)</span>
+        <span style="margin-left:auto; color: var(--accent); font-weight: 700;">avg 5:44/day</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- TIMESHEET (matter × day) -->
+<div class="timesheet-head">
+    <div class="title">timesheet.</div>
+    <div class="week-nav">
+        <button type="button">‹</button>
+        <span>WK 18 · 27 APR → 03 MAY</span>
+        <button type="button">›</button>
+    </div>
+    <button class="icon-action" type="button" style="font-size:11px;font-weight:700;border:1px solid var(--ink);padding:5px 10px;color:var(--ink)">⬇ CSV</button>
+</div>
+
+<table class="timesheet">
+  <thead>
+    <tr>
+      <th>Matter</th>
+      <th>Mon 27</th>
+      <th>Tue 28</th>
+      <th class="today-col">Wed 30</th>
+      <th>Thu 01</th>
+      <th>Fri 02</th>
+      <th>Sat 03</th>
+      <th>Sun 04</th>
+      <th>Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><span class="swatch-tiny" style="background:var(--accent)"></span>Acme · Series B prep<span class="billing-tag sub">SUB</span></td>
+      <td>2:14</td>
+      <td>3:08</td>
+      <td class="today-col">1:39</td>
+      <td>2:48</td>
+      <td>1:30</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td>11:19</td>
+    </tr>
+    <tr>
+      <td><span class="swatch-tiny" style="background:var(--accent)"></span>Acme · Ongoing retainer<span class="billing-tag sub">SUB</span></td>
+      <td>0:42</td>
+      <td>1:18</td>
+      <td class="today-col zero">—</td>
+      <td>0:30</td>
+      <td>0:24</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td>2:54</td>
+    </tr>
+    <tr>
+      <td><span class="swatch-tiny" style="background:var(--saffron)"></span>SolanaPay · Token offering<span class="billing-tag fix">FIX</span></td>
+      <td>1:24</td>
+      <td>1:52</td>
+      <td class="today-col">2:23</td>
+      <td>2:00</td>
+      <td>1:48</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td>9:27</td>
+    </tr>
+    <tr>
+      <td><span class="swatch-tiny" style="background:var(--cobalt)"></span>Maersk-flag · Shipping docs<span class="billing-tag hrly">HRL</span></td>
+      <td>0:30</td>
+      <td>0:10</td>
+      <td class="today-col">0:10</td>
+      <td>1:36</td>
+      <td>0:48</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td>3:14</td>
+    </tr>
+    <tr>
+      <td><span class="swatch-tiny" style="background:var(--ink)"></span>Vasylenko · Trust restructure<span class="billing-tag hrly">HRL</span></td>
+      <td>0:28</td>
+      <td>0:14</td>
+      <td class="today-col zero">—</td>
+      <td>0:30</td>
+      <td>0:16</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td>1:28</td>
+    </tr>
+    <tr>
+      <td style="color:var(--fg-muted); font-style:italic">— (orphan / non-bill)</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td class="today-col">0:34</td>
+      <td>0:06</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td class="zero">—</td>
+      <td>0:40</td>
+    </tr>
+  </tbody>
+  <tfoot>
+    <tr>
+      <td>Total billable</td>
+      <td>5:18</td>
+      <td>6:42</td>
+      <td class="today-col">4:32</td>
+      <td>7:24</td>
+      <td>4:46</td>
+      <td>—</td>
+      <td>—</td>
+      <td>28:42 · €2,439</td>
+    </tr>
+  </tfoot>
+</table>
+
+<!-- Annotation -->
+<div class="annot">
+    <strong>3 ZONES OF THIS SCREEN:</strong><br>
+    <span class="arrow">①</span> <strong>OMNI-BAR</strong> + <strong>TOOLBAR</strong> — same shell as tasks; filter pills focus the log scope (Today / Week / Billable / Unbilled).<br>
+    <span class="arrow">②</span> <strong>RUNNING BLOCK</strong> (lime, only when timer active) — big mono clock + vermillion live dot + Pause / Stop&amp;Log. The view's signature.<br>
+    <span class="arrow">③</span> <strong>SUMMARY STRIP</strong> + <strong>LOG / WEEK CHART</strong> + <strong>TIMESHEET</strong> — capture-cells, day log with the running entry pinned, week-bars with today as vermillion, and the matter×day matrix below for invoice-prep.
+</div>
+
+</main>
+
+<!-- AI rail collapsed -->
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head"><div class="ai-glyph">o</div></div>
+        <div class="ai-collapsed-label">ASK ORDIFY</div>
+        <div class="ai-collapsed-arrow">‹</div>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>

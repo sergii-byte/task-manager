@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · matter — subscription (hi-fi 11)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/tokens.css?v=2">
+<link rel="stylesheet" href="css/styles.css?v=2">
+<style>
+  body.with-ai-rail #app { grid-template-columns: 240px 1fr 56px; display: grid; min-height: 100vh; }
+  @media (min-width: 1200px) { body.with-ai-rail #ai-rail { display: flex; } }
+  body { overflow: auto; }
+  #main { height: auto; min-height: 100vh; overflow: visible; }
+
+  .meta-banner { background: var(--ink); color: var(--bg); padding: 6px 16px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.18em; text-align: center; font-weight: 700; }
+  .meta-banner a { color: var(--accent); margin: 0 8px; text-decoration: none; }
+
+  .omni-bar { display: flex; align-items: center; gap: 14px; padding: 18px 24px; border-bottom: 2px solid var(--ink); background: var(--bg-1); box-shadow: 0 4px 12px -8px rgba(0,0,0,0.12); }
+  .omni-bar .glyph { width: 28px; height: 28px; flex-shrink: 0; display: grid; place-items: center; background: var(--accent); color: var(--bg); font-family: var(--font-mono); font-weight: 700; font-size: 14px; border-radius: 50%; }
+  .omni-bar .kbd { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.06em; padding: 3px 7px; border: 1px solid var(--line-strong); flex-shrink: 0; font-weight: 600; background: var(--bg); }
+  .omni-bar input { flex: 1; appearance: none; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 17px; font-weight: 500; color: var(--ink); padding: 6px 0; }
+  .omni-bar .right-hint { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.06em; flex-shrink: 0; text-transform: uppercase; }
+  .omni-bar .mic-btn { appearance: none; background: var(--bg); border: 1px solid var(--line-strong); color: var(--fg-muted); cursor: pointer; padding: 6px; flex-shrink: 0; width: 32px; height: 32px; display: grid; place-items: center; }
+
+  /* Hero (matter header) */
+  .matter-hero { padding: 28px 32px 24px; border-bottom: 2px solid var(--ink); background: var(--bg); }
+  .matter-hero .breadcrumb { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 12px; }
+  .matter-hero .breadcrumb a { color: var(--fg-muted); text-decoration: none; }
+  .matter-hero .breadcrumb a:hover { color: var(--ink); }
+  .matter-hero .breadcrumb .arrow { color: var(--fg-faint); margin: 0 6px; }
+  .matter-hero .top { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+  .matter-hero h1 { font-family: var(--font-sans); font-size: 56px; font-weight: 800; letter-spacing: -0.04em; text-transform: lowercase; line-height: 0.95; margin: 0; color: var(--ink); }
+  .matter-hero h1 .accent { color: var(--accent); }
+  .matter-hero .pills { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .matter-hero .pill { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; padding: 5px 9px; border: 1px solid currentColor; }
+  .matter-hero .pill.sub { color: var(--accent); background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .matter-hero .pill.status { color: var(--success); border-color: var(--success); }
+  .matter-hero .pill.juris { color: var(--ink); }
+  .matter-hero .actions { display: flex; gap: 8px; }
+  .matter-hero .actions button { appearance: none; border: 1px solid var(--ink); background: var(--bg); color: var(--ink); font-family: var(--font-mono); font-size: 11px; font-weight: 700; padding: 8px 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; }
+  .matter-hero .actions button:hover { background: var(--ink); color: var(--bg); }
+  .matter-hero .actions button.primary { background: var(--ink); color: var(--bg); }
+  .matter-hero .actions button.primary:hover { background: var(--accent); border-color: var(--accent); }
+
+  /* Scope gauge — the visual signature of subscription matters */
+  .scope-block { padding: 24px 32px; background: var(--bg-1); border-bottom: 1px solid var(--line); }
+  .scope-warn { background: #fff8e0; border: 1px solid var(--saffron); border-left: 4px solid var(--saffron); padding: 12px 16px; font-family: var(--font-text); font-size: 13px; color: var(--ink); margin-bottom: 16px; display: flex; gap: 12px; align-items: center; }
+  .scope-warn .icon { color: #8a6500; font-weight: 700; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; flex-shrink: 0; }
+  .scope-warn strong { color: #8a6500; font-weight: 700; }
+
+  .gauge-grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 32px; align-items: stretch; }
+  .gauge-main { display: flex; flex-direction: column; gap: 10px; }
+  .gauge-main .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint); font-weight: 700; }
+  .gauge-main .v { font-family: var(--font-sans); font-size: 56px; font-weight: 800; letter-spacing: -0.04em; line-height: 0.95; color: var(--ink); display: flex; align-items: baseline; gap: 8px; }
+  .gauge-main .v .total { font-size: 22px; color: var(--fg-muted); font-weight: 500; letter-spacing: -0.01em; }
+  .gauge-main .v .pct { font-family: var(--font-mono); font-size: 14px; color: #8a6500; letter-spacing: 0; padding: 3px 7px; border: 1px solid var(--saffron); font-weight: 700; margin-left: 4px; }
+  .gauge-bar { height: 14px; background: var(--bg-3); position: relative; border: 1px solid var(--ink); }
+  .gauge-bar .fill { height: 100%; background: var(--saffron); width: 78%; }
+  .gauge-bar .threshold { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
+  .gauge-bar .threshold.t80 { left: 80%; }
+  .gauge-bar .threshold.t100 { right: 0; background: var(--vermillion); }
+  .gauge-main .scale { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--fg-muted); margin-top: 2px; }
+  .gauge-main .scale .at-80 { color: var(--ink); font-weight: 700; }
+  .gauge-main .scale .at-100 { color: var(--vermillion); font-weight: 700; }
+
+  .stat { display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding-left: 24px; border-left: 1px solid var(--line); }
+  .stat:first-child { border-left: 0; padding-left: 0; }
+  .stat .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint); font-weight: 700; }
+  .stat .v { font-family: var(--font-sans); font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--ink); line-height: 1; }
+  .stat .v .small { font-size: 14px; color: var(--fg-muted); font-weight: 500; }
+  .stat .v.accent { color: var(--accent); }
+  .stat .v.warn { color: #8a6500; }
+  .stat .delta { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px; }
+
+  /* Period history timeline */
+  .history { padding: 20px 32px; border-bottom: 1px solid var(--line); }
+  .history .sec-head { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--fg-faint); font-weight: 700; margin-bottom: 14px; display: flex; justify-content: space-between; }
+  .history .sec-head .right { color: var(--fg-muted); }
+  .periods { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .period { border: 1px solid var(--line-strong); padding: 12px 12px 10px; background: var(--bg); display: flex; flex-direction: column; gap: 6px; cursor: pointer; }
+  .period:hover { background: var(--bg-1); }
+  .period .lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-muted); }
+  .period .pct { font-family: var(--font-mono); font-size: 18px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .period .bar { height: 4px; background: var(--bg-3); position: relative; }
+  .period .bar .f { height: 100%; background: var(--ink); }
+  .period.over .bar .f { background: var(--vermillion); }
+  .period.warn .bar .f { background: var(--saffron); }
+  .period.current { border: 2px solid var(--accent); }
+  .period.current .lbl { color: var(--accent); font-weight: 700; }
+  .period .hrs { font-family: var(--font-mono); font-size: 10px; color: var(--fg-faint); letter-spacing: 0.02em; }
+
+  /* Tasks section header */
+  .sec { padding: 14px 32px 12px; background: var(--ink); color: var(--bg); display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; }
+  .sec .right { color: rgba(255,255,255,0.65); font-weight: 500; letter-spacing: 0.08em; }
+  .sec .right .add { background: var(--accent); color: var(--bg); border: 0; padding: 5px 10px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; cursor: pointer; margin-left: 12px; }
+
+  /* Reuse data-table styles inline (subset from hifi-06) */
+  .data-table { width: 100%; border-collapse: collapse; font-family: var(--font-text); font-size: 13px; table-layout: fixed; }
+  .data-table thead th { background: var(--bg); border-bottom: 1px solid var(--ink); padding: 10px 12px; text-align: left; font-family: var(--font-text); font-size: 12px; font-weight: 600; color: var(--fg-muted); white-space: nowrap; letter-spacing: -0.005em; }
+  .data-table tbody tr { border-bottom: 1px solid var(--line); cursor: pointer; height: 38px; border-left: 4px solid transparent; }
+  .data-table tbody tr:hover { background: var(--bg-1); }
+  .data-table tbody tr.is-overdue { border-left-color: var(--vermillion); }
+  .data-table tbody tr.is-due-soon { border-left-color: var(--saffron); }
+  .data-table tbody tr.is-meeting { border-left-color: var(--cobalt); }
+  .data-table tbody tr.is-done .title-cell { text-decoration: line-through; color: var(--fg-faint); }
+  .data-table td { padding: 8px 12px; vertical-align: middle; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .data-table td.title-cell { color: var(--ink); font-weight: 500; font-size: 14px; }
+  .data-table td.mono-cell { font-family: var(--font-mono); font-size: 11px; color: var(--fg-faint); letter-spacing: 0.02em; }
+  .data-table td.deadline-cell { font-family: var(--font-mono); font-size: 12px; color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+  .data-table td.deadline-cell.overdue { color: var(--vermillion); font-weight: 700; }
+  .data-table td.deadline-cell.due-soon { color: #8a6500; font-weight: 700; }
+  .data-table td.num { font-family: var(--font-mono); text-align: right; color: var(--fg-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .data-table .check { width: 16px; height: 16px; border: 2px solid var(--ink); background: var(--bg); cursor: pointer; display: inline-block; vertical-align: middle; }
+  .data-table .check.done { background: var(--accent); border-color: var(--accent); position: relative; }
+  .data-table .check.done::after { content: "×"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--bg); font-size: 14px; font-weight: 700; }
+  .pri { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.04em; padding: 1px 5px; border: 1px solid var(--line-strong); color: var(--fg-muted); }
+  .pri.p0 { background: var(--vermillion); color: var(--bg); border-color: var(--vermillion); }
+  .pri.p1 { color: var(--ink); border-color: var(--ink); }
+
+  /* Activity feed */
+  .activity { padding: 18px 32px 24px; }
+  .activity .item { display: grid; grid-template-columns: 90px 16px 1fr auto; gap: 14px; align-items: baseline; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+  .activity .item:last-child { border-bottom: 0; }
+  .activity .item .when { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.02em; text-transform: uppercase; }
+  .activity .item .marker { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; align-self: center; }
+  .activity .item.is-time .marker { background: var(--accent); }
+  .activity .item.is-meet .marker { background: var(--cobalt); }
+  .activity .item.is-ai .marker { background: var(--saffron); }
+  .activity .item .what { font-family: var(--font-text); font-size: 13.5px; color: var(--ink); line-height: 1.4; }
+  .activity .item .what .ctx { font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-left: 6px; }
+  .activity .item .right { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+
+  #ai-rail { background: var(--ink); }
+  #main { display: flex; flex-direction: column; }
+
+  .annot { padding: 16px 24px; background: var(--bg-1); border-top: 1px solid var(--line); font-family: var(--font-mono); font-size: 10px; color: var(--fg-muted); letter-spacing: 0.04em; line-height: 1.7; }
+  .annot strong { color: var(--ink); }
+  .annot .arrow { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body class="with-ai-rail">
+
+<div class="meta-banner">
+    HI-FI · 11 · MATTER — SUBSCRIPTION (scope gauge)
+    <a href="hifi-11-matter-fix.html">fixed (11)</a>
+    <a href="hifi-11-matter-hourly.html">hourly (11)</a>
+    <a href="index.html">all screens</a>
+</div>
+
+<div id="app">
+
+<aside id="sidebar">
+    <div class="brand"><span>ordif<span class="accent">y</span></span><span class="domain">.me</span></div>
+    <div class="sidebar-section-label"><span>VIEWS</span></div>
+    <div id="nav-views">
+        <div class="proj"><span class="proj-num">01</span><span class="proj-icon">●</span><span class="proj-label">Today</span><span class="proj-count">8</span></div>
+        <div class="proj"><span class="proj-num">02</span><span class="proj-icon">●</span><span class="proj-label">Tasks</span><span class="proj-count">37</span></div>
+        <div class="proj"><span class="proj-num">03</span><span class="proj-icon">●</span><span class="proj-label">Calendar</span></div>
+        <div class="proj"><span class="proj-num">04</span><span class="proj-icon">●</span><span class="proj-label">Time</span><span class="proj-count">4:32</span></div>
+        <div class="proj"><span class="proj-num">05</span><span class="proj-icon">●</span><span class="proj-label">Invoices</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-section-label"><span>CLIENTS · 04</span><button class="add-btn">+</button></div>
+    <div>
+        <div class="proj active"><span class="proj-num">06</span><span class="swatch-dot" style="background:var(--accent)"></span><span class="proj-label">Acme Tech (IT)</span><span class="proj-count">4</span></div>
+        <div class="proj"><span class="proj-num">07</span><span class="swatch-dot" style="background:var(--cobalt)"></span><span class="proj-label">Maersk-flag (B2B)</span><span class="proj-count">3</span></div>
+        <div class="proj"><span class="proj-num">08</span><span class="swatch-dot" style="background:var(--saffron)"></span><span class="proj-label">SolanaPay (Crypto)</span><span class="proj-count">2</span></div>
+        <div class="proj"><span class="proj-num">09</span><span class="swatch-dot" style="background:var(--ink)"></span><span class="proj-label">Vasylenko (private)</span><span class="proj-count">3</span></div>
+    </div>
+    <div class="sidebar-footer">
+        <button class="icon-btn">⚙</button>
+        <div class="toggle-group"><button class="active">☀</button><button>☾</button></div>
+        <div class="toggle-group"><button class="active">EN</button><button>ES</button></div>
+    </div>
+</aside>
+
+<main id="main">
+
+<div class="omni-bar">
+    <span class="glyph">o</span>
+    <span class="kbd">⌘K</span>
+    <input type="text" placeholder="tell ordify… ‘add task: review acme renewal terms tomorrow’">
+    <button class="mic-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M19 10v1a7 7 0 01-14 0v-1M12 18.5v3.5M8 22h8"/></svg></button>
+    <span class="right-hint">⌘K to expand</span>
+</div>
+
+<!-- Hero -->
+<header class="matter-hero">
+    <div class="breadcrumb">
+        <a href="hifi-12-client.html">Acme Tech (IT)</a>
+        <span class="arrow">›</span>
+        <span style="color:var(--ink); font-weight:600">Ongoing retainer</span>
+    </div>
+    <div class="top">
+      <div>
+        <h1>ongoing <span class="accent">retainer.</span></h1>
+        <div class="pills" style="margin-top:14px">
+          <span class="pill sub">SUBSCRIPTION · €1,500 / MO</span>
+          <span class="pill status">● ACTIVE · M28</span>
+          <span class="pill juris">ES · MADRID</span>
+          <span style="font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); letter-spacing: 0.06em; text-transform: uppercase;">since jan 2024 · auto-renew · 30d notice</span>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button">CSV ⬇</button>
+        <button type="button">Edit terms</button>
+        <button type="button" class="primary">+ Task</button>
+      </div>
+    </div>
+</header>
+
+<!-- Scope gauge -->
+<section class="scope-block">
+    <div class="scope-warn">
+        <span class="icon">⚠ SCOPE 78%</span>
+        <span><strong>Heads up</strong> — Acme used 9.4h of 12h included this period (78% with 5 days left). At current pace, projected to land at <strong>11.8h</strong>. Overage starts at 12h @ €150/h.</span>
+    </div>
+    <div class="gauge-grid">
+        <div class="gauge-main">
+            <span class="k">SCOPE · APRIL 2026</span>
+            <span class="v">9.4<span class="total">/ 12.0 h</span><span class="pct">78%</span></span>
+            <div class="gauge-bar">
+                <div class="fill"></div>
+                <span class="threshold t80"></span>
+                <span class="threshold t100"></span>
+            </div>
+            <div class="scale"><span>0h</span><span>3h</span><span>6h</span><span class="at-80">9.6h · 80%</span><span class="at-100">12h · 100%</span></div>
+        </div>
+        <div class="stat">
+            <span class="k">PERIOD FEE</span>
+            <span class="v accent">€1,500</span>
+            <span class="delta">/month · invoiced 1st</span>
+        </div>
+        <div class="stat">
+            <span class="k">PROJECTED OVERAGE</span>
+            <span class="v warn">€0<span class="small"> · 0h</span></span>
+            <span class="delta">at pace: −0.2h slack</span>
+        </div>
+        <div class="stat">
+            <span class="k">EFFECTIVE RATE</span>
+            <span class="v">€159<span class="small">/h</span></span>
+            <span class="delta">vs €125/h target</span>
+        </div>
+    </div>
+</section>
+
+<!-- Period history -->
+<section class="history">
+    <div class="sec-head">
+        <span>SCOPE HISTORY · LAST 6 PERIODS</span>
+        <span class="right">avg 84% used · 2 overages</span>
+    </div>
+    <div class="periods">
+        <div class="period">
+            <span class="lbl">NOV 2025</span>
+            <span class="pct">71%</span>
+            <div class="bar"><div class="f" style="width:71%"></div></div>
+            <span class="hrs">8.5 / 12 h</span>
+        </div>
+        <div class="period warn">
+            <span class="lbl">DEC 2025</span>
+            <span class="pct">94%</span>
+            <div class="bar"><div class="f" style="width:94%"></div></div>
+            <span class="hrs">11.3 / 12 h</span>
+        </div>
+        <div class="period over">
+            <span class="lbl">JAN 2026</span>
+            <span class="pct">112%</span>
+            <div class="bar"><div class="f" style="width:100%"></div></div>
+            <span class="hrs">13.4 / 12 h · €210 ovr</span>
+        </div>
+        <div class="period">
+            <span class="lbl">FEB 2026</span>
+            <span class="pct">68%</span>
+            <div class="bar"><div class="f" style="width:68%"></div></div>
+            <span class="hrs">8.2 / 12 h</span>
+        </div>
+        <div class="period over">
+            <span class="lbl">MAR 2026</span>
+            <span class="pct">108%</span>
+            <div class="bar"><div class="f" style="width:100%"></div></div>
+            <span class="hrs">12.9 / 12 h · €135 ovr</span>
+        </div>
+        <div class="period current">
+            <span class="lbl">APR · CURRENT</span>
+            <span class="pct">78%</span>
+            <div class="bar warn"><div class="f" style="width:78%; background:var(--saffron)"></div></div>
+            <span class="hrs">9.4 / 12 h · 5d left</span>
+        </div>
+    </div>
+</section>
+
+<!-- Tasks -->
+<div class="sec">
+    <span>TASKS · OPEN 4 · DONE 11 · HIDDEN BELOW</span>
+    <span class="right">sorted: deadline ↑<button class="add">+ TASK</button></span>
+</div>
+
+<table class="data-table">
+    <thead>
+      <tr>
+        <th style="width:36px;text-align:center"><input type="checkbox" style="accent-color:var(--accent)"></th>
+        <th style="width:80px">ID</th>
+        <th style="width:140px">DEADLINE</th>
+        <th style="width:auto">Title</th>
+        <th style="width:80px">Pri</th>
+        <th style="width:60px">Hrs</th>
+        <th style="width:120px">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="is-due-soon">
+        <td style="text-align:center"><span class="check"></span></td>
+        <td class="mono-cell">T-0146</td>
+        <td class="deadline-cell due-soon">today 14:00 · 1h 28m</td>
+        <td class="title-cell">File shareholder consent · Acme Series B</td>
+        <td><span class="pri p0">P0</span></td>
+        <td class="num">2.1</td>
+        <td><span class="pri" style="color:var(--accent); border-color:var(--accent)">DOING</span></td>
+      </tr>
+      <tr>
+        <td style="text-align:center"><span class="check"></span></td>
+        <td class="mono-cell">T-0143</td>
+        <td class="deadline-cell">today 10:30</td>
+        <td class="title-cell">Review Acme NDA red-lines from counter-party</td>
+        <td><span class="pri p1">P1</span></td>
+        <td class="num">2.5</td>
+        <td><span class="pri">TODO</span></td>
+      </tr>
+      <tr>
+        <td style="text-align:center"><span class="check"></span></td>
+        <td class="mono-cell">T-0147</td>
+        <td class="deadline-cell">today 15:30</td>
+        <td class="title-cell">Send INV-2026-0042 · April retainer + Delaware LLC</td>
+        <td><span class="pri p1">P1</span></td>
+        <td class="num">—</td>
+        <td><span class="pri">TODO</span></td>
+      </tr>
+      <tr>
+        <td style="text-align:center"><span class="check"></span></td>
+        <td class="mono-cell">T-0152</td>
+        <td class="deadline-cell">02.05 · fri</td>
+        <td class="title-cell">Draft response · counter-party reps &amp; warranties pushback</td>
+        <td><span class="pri p1">P1</span></td>
+        <td class="num">3.0</td>
+        <td><span class="pri">TODO</span></td>
+      </tr>
+      <tr class="is-done">
+        <td style="text-align:center"><span class="check done"></span></td>
+        <td class="mono-cell">T-0138</td>
+        <td class="deadline-cell" style="text-decoration:line-through">29.04</td>
+        <td class="title-cell">Term-sheet markup · series B preferred terms</td>
+        <td><span class="pri" style="opacity:0.5">P1</span></td>
+        <td class="num">1.8</td>
+        <td><span class="pri" style="background:var(--ink); color:var(--bg); border-color:var(--ink)">DONE</span></td>
+      </tr>
+    </tbody>
+</table>
+
+<!-- Recent activity -->
+<div class="sec">
+    <span>RECENT ACTIVITY · APRIL</span>
+    <span class="right">23 timelogs · 2 meetings · €1,500 retainer</span>
+</div>
+<div class="activity">
+    <div class="item is-time">
+        <span class="when">TODAY 13:18</span>
+        <span class="marker"></span>
+        <span class="what">Drafting shareholder consent — track changes round 2 <span class="ctx">T-0146 · LIVE</span></span>
+        <span class="right">0:47 · BILL</span>
+    </div>
+    <div class="item is-meet">
+        <span class="when">TODAY 11:00</span>
+        <span class="marker"></span>
+        <span class="what">Auto-logged · series B kick-off call w/ Ortega <span class="ctx">36 MIN · MEETING</span></span>
+        <span class="right">0:36 · BILL</span>
+    </div>
+    <div class="item is-time">
+        <span class="when">TUE 15:42</span>
+        <span class="marker"></span>
+        <span class="what">NDA red-line review · counter-party round 1 <span class="ctx">T-0143</span></span>
+        <span class="right">1:24 · BILL</span>
+    </div>
+    <div class="item is-ai">
+        <span class="when">MON 09:08</span>
+        <span class="marker"></span>
+        <span class="what">◆ AI captured: "review acme NDA pushback friday" → T-0152 <span class="ctx">FROM EMAIL</span></span>
+        <span class="right">AUTO</span>
+    </div>
+    <div class="item is-time">
+        <span class="when">MON 14:30</span>
+        <span class="marker"></span>
+        <span class="what">Term-sheet preferred terms markup <span class="ctx">T-0138 · DONE</span></span>
+        <span class="right">1:48 · BILL</span>
+    </div>
+</div>
+
+<div class="annot">
+    <strong>SUBSCRIPTION VARIANT — keys:</strong><br>
+    <span class="arrow">①</span> <strong>SCOPE GAUGE</strong> (saffron-warning band + thick gauge bar with 80% / 100% threshold ticks) — used / included with projection.<br>
+    <span class="arrow">②</span> <strong>PERIOD HISTORY</strong> — last 6 periods as small cards, current outlined plum, overages vermillion.<br>
+    <span class="arrow">③</span> <strong>NO HOURS COLUMN</strong> as primary KPI — period-fee + scope-% are the lens. Tasks &amp; activity below feed the gauge.
+</div>
+
+</main>
+
+<aside id="ai-rail">
+    <div class="ai-panel">
+        <div class="ai-panel-head"><div class="ai-glyph">o</div></div>
+        <div class="ai-collapsed-label">ASK ORDIFY</div>
+        <div class="ai-collapsed-arrow">‹</div>
+    </div>
+</aside>
+
+</div>
+</body>
+</html>

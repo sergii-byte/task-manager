@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · invoice / minimal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0a0a;
+    --bg: #fafaf7;
+    --paper: #ffffff;
+    --line: #e8e6df;
+    --muted: #8a8780;
+    --faint: #c9c6bd;
+    --accent: #6a1b9a;
+    --warn: #c33c1d;
+    --font-sans: "Inter Tight", system-ui, sans-serif;
+    --font-text: "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; min-height: 100vh;
+    background: var(--bg); color: var(--ink);
+    font-family: var(--font-text);
+    -webkit-font-smoothing: antialiased;
+  }
+  body { overflow-x: hidden; }
+
+  .stage { display: grid; grid-template-columns: 1fr minmax(360px, 28%); min-height: 100vh; }
+
+  .brand { position: fixed; top: 32px; left: 96px; font-family: var(--font-sans); font-size: 13px; font-weight: 700; letter-spacing: -0.02em; color: var(--ink); text-transform: lowercase; z-index: 5; }
+  .brand .a { color: var(--accent); }
+  .brand .dot { color: var(--faint); margin-left: 2px; }
+  .mini-nav { position: fixed; top: 32px; right: calc(28% + 32px); display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; z-index: 5; }
+  .mini-nav a { color: var(--muted); text-decoration: none; cursor: pointer; }
+  .mini-nav a.act { color: var(--ink); font-weight: 700; }
+  .mini-nav a:hover { color: var(--ink); }
+
+  /* MAIN */
+  .main { padding: 80px 96px 80px; }
+
+  .crumbs { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 28px; }
+  .crumbs a { color: var(--muted); text-decoration: none; }
+  .crumbs a:hover { color: var(--ink); }
+  .crumbs .sep { color: var(--faint); margin: 0 8px; }
+  .crumbs .here { color: var(--ink); font-weight: 700; }
+
+  /* Status bar — single line */
+  .status-bar {
+    display: flex;
+    align-items: baseline;
+    gap: 24px;
+    padding: 12px 0 14px;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 56px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .status-bar .pill { color: var(--accent); font-weight: 700; }
+  .status-bar .pill .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 6px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+  .status-bar .sep { color: var(--faint); }
+  .status-bar .right { margin-left: auto; display: flex; gap: 24px; }
+  .status-bar .right a { color: var(--ink); text-decoration: none; border-bottom: 1.5px solid var(--ink); padding-bottom: 1px; cursor: pointer; }
+  .status-bar .right a:hover { color: var(--accent); border-color: var(--accent); }
+  .status-bar .right a.primary { color: var(--accent); border-color: var(--accent); }
+
+  /* Document — paper white, type-driven */
+  .doc {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 80px 96px;
+    max-width: 920px;
+    margin: 0 auto;
+  }
+
+  /* Document header */
+  .doc-hdr { display: grid; grid-template-columns: 1fr auto; gap: 64px; align-items: start; padding-bottom: 56px; border-bottom: 1px solid var(--ink); }
+  .doc-hdr .left .eyebrow { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; }
+  .doc-hdr h1 { margin: 14px 0 0; font-family: var(--font-sans); font-size: 88px; font-weight: 700; letter-spacing: -0.045em; line-height: 0.9; text-transform: lowercase; color: var(--ink); }
+  .doc-hdr h1 .num { color: var(--accent); }
+  .doc-hdr .right { font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; line-height: 1.9; text-align: right; }
+  .doc-hdr .right .k { color: var(--faint); text-transform: uppercase; letter-spacing: 0.14em; font-size: 10px; }
+  .doc-hdr .right .v { color: var(--ink); font-weight: 600; }
+
+  /* Bill blocks */
+  .bill-blocks { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; padding: 48px 0; border-bottom: 1px solid var(--line); }
+  .bill-blocks .blk .lbl { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 14px; }
+  .bill-blocks .blk .name { font-family: var(--font-sans); font-size: 22px; font-weight: 600; letter-spacing: -0.025em; color: var(--ink); text-transform: lowercase; line-height: 1.2; }
+  .bill-blocks .blk .lines { margin-top: 10px; font-family: var(--font-text); font-size: 14.5px; color: var(--muted); line-height: 1.65; letter-spacing: -0.005em; }
+  .bill-blocks .blk .lines .mono { font-family: var(--font-mono); font-size: 12px; color: var(--ink); letter-spacing: 0.02em; }
+
+  /* Lines — typographic table */
+  .lines-section { padding: 48px 0 0; }
+  .lines-hdr { display: grid; grid-template-columns: 80px 1fr 80px 100px 120px; gap: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--ink); font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; }
+  .lines-hdr .num { text-align: right; }
+
+  .line { display: grid; grid-template-columns: 80px 1fr 80px 100px 120px; gap: 24px; padding: 22px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .line .ord { font-family: var(--font-mono); font-size: 12px; color: var(--faint); letter-spacing: 0.04em; font-variant-numeric: tabular-nums; padding-top: 4px; }
+  .line .desc { font-family: var(--font-text); font-size: 16px; color: var(--ink); line-height: 1.45; letter-spacing: -0.005em; font-weight: 500; }
+  .line .desc .ctx { display: block; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-top: 6px; font-weight: 500; }
+  .line .desc .ctx .sep { color: var(--faint); margin: 0 6px; }
+  .line .qty, .line .rate, .line .amt { font-family: var(--font-mono); font-size: 14px; color: var(--ink); font-variant-numeric: tabular-nums; text-align: right; padding-top: 4px; font-weight: 500; }
+  .line .amt { font-weight: 700; }
+  .line .qty .dim, .line .rate .dim { color: var(--faint); }
+
+  /* Totals — also typographic */
+  .totals { margin-top: 32px; display: grid; grid-template-columns: 1fr 280px; gap: 32px; align-items: start; padding: 24px 0; }
+  .totals .left { font-family: var(--font-text); font-size: 13px; color: var(--muted); line-height: 1.55; letter-spacing: -0.005em; }
+  .totals .left strong { color: var(--ink); font-weight: 600; }
+  .totals .right { display: flex; flex-direction: column; gap: 12px; }
+  .totals .right .row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: baseline; padding: 6px 0; }
+  .totals .right .row.sub { border-bottom: 1px solid var(--line); }
+  .totals .right .row.grand { border-top: 1px solid var(--ink); padding-top: 18px; margin-top: 8px; }
+  .totals .right .row .k { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+  .totals .right .row .v { font-family: var(--font-mono); font-size: 16px; color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .totals .right .row.grand .k { color: var(--ink); font-weight: 700; font-family: var(--font-sans); font-size: 14px; letter-spacing: -0.005em; text-transform: none; }
+  .totals .right .row.grand .v { font-family: var(--font-sans); font-size: 40px; font-weight: 700; letter-spacing: -0.03em; color: var(--accent); line-height: 1; }
+  .totals .right .row.grand .v .ccy { font-family: var(--font-mono); font-size: 16px; color: var(--muted); margin-right: 6px; vertical-align: top; line-height: 2.5; font-weight: 500; }
+
+  /* Pay block */
+  .pay { margin-top: 56px; padding-top: 36px; border-top: 1px solid var(--ink); display: grid; grid-template-columns: 1fr 1fr; gap: 64px; }
+  .pay .blk .lbl { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 14px; }
+  .pay .blk .iban { font-family: var(--font-mono); font-size: 16px; color: var(--ink); letter-spacing: 0.06em; font-weight: 600; line-height: 1.5; }
+  .pay .blk .swift { font-family: var(--font-mono); font-size: 12px; color: var(--muted); letter-spacing: 0.04em; margin-top: 6px; }
+  .pay .blk .terms { font-family: var(--font-text); font-size: 14px; color: var(--ink); line-height: 1.6; letter-spacing: -0.005em; }
+  .pay .blk .terms strong { font-weight: 600; }
+  .pay .blk .terms .due { color: var(--accent); font-weight: 600; }
+
+  /* Foot */
+  .doc-foot { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+  .doc-foot .mid { color: var(--faint); font-style: italic; text-transform: none; letter-spacing: 0; font-family: var(--font-text); font-size: 12px; }
+
+  /* RAIL */
+  .rail { border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 100vh; position: sticky; top: 0; }
+  .rail-hdr { padding: 80px 32px 24px; border-bottom: 1px solid var(--line); }
+  .rail-hdr .lbl { font-family: var(--font-mono); font-size: 11px; color: var(--accent); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; margin-bottom: 10px; }
+  .rail-hdr .lbl .pulse { display: inline-block; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; margin-right: 8px; vertical-align: middle; animation: pulse 1.4s infinite; }
+  .rail-hdr .ttl { font-family: var(--font-sans); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; text-transform: lowercase; color: var(--ink); line-height: 1.2; }
+  .rail-hdr .ttl .accent { color: var(--accent); }
+
+  .stream { flex: 1; padding: 24px 32px 0; display: flex; flex-direction: column; gap: 32px; overflow-y: auto; }
+  .turn { display: flex; flex-direction: column; gap: 8px; }
+  .turn .when { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+  .turn .text { font-family: var(--font-text); font-size: 14.5px; color: var(--ink); line-height: 1.55; letter-spacing: -0.005em; margin: 0; }
+  .turn .text strong { font-weight: 600; }
+  .turn .text .accent { color: var(--accent); font-weight: 600; }
+  .turn .text em { font-style: normal; color: var(--muted); }
+  .turn.me { padding-left: 24px; border-left: 1px solid var(--ink); }
+  .turn.me .when { color: var(--ink); font-weight: 700; }
+  .turn.me .text { color: var(--muted); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 4px; }
+  .actions a { font-family: var(--font-mono); font-size: 11px; color: var(--ink); letter-spacing: 0.04em; text-transform: uppercase; text-decoration: none; font-weight: 600; padding: 4px 0; border-bottom: 1.5px solid var(--ink); cursor: pointer; }
+  .actions a:hover { color: var(--accent); border-color: var(--accent); }
+  .actions a.primary { color: var(--accent); border-color: var(--accent); }
+  .actions a.dim { color: var(--muted); border-color: var(--line); font-weight: 500; }
+
+  .compose { border-top: 1px solid var(--line); padding: 18px 32px 24px; display: flex; align-items: center; gap: 12px; }
+  .compose .glyph { width: 8px; height: 8px; background: var(--ink); border-radius: 50%; flex-shrink: 0; }
+  .compose input { flex: 1; border: 0; outline: 0; background: transparent; font-family: var(--font-text); font-size: 14.5px; color: var(--ink); padding: 8px 0; letter-spacing: -0.005em; }
+  .compose input::placeholder { color: var(--faint); font-style: italic; }
+  .compose .hint { font-family: var(--font-mono); font-size: 10px; color: var(--faint); letter-spacing: 0.06em; text-transform: uppercase; }
+  .compose .hint kbd { border: 1px solid var(--line); padding: 2px 5px; font: inherit; background: var(--bg); }
+
+  @media (max-width: 1100px) {
+    .stage { grid-template-columns: 1fr; }
+    .main { padding: 64px 24px; }
+    .doc { padding: 48px 32px; }
+    .rail { display: none; }
+    .mini-nav { right: 32px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="brand">ordif<span class="a">y</span><span class="dot">·</span></div>
+<nav class="mini-nav">
+    <a>today</a>
+    <a>week</a>
+    <a>matters</a>
+    <a class="act">billing</a>
+</nav>
+
+<div class="stage">
+
+<main class="main">
+
+    <div class="crumbs">
+        <a>billing</a>
+        <span class="sep">/</span>
+        <a>invoices</a>
+        <span class="sep">/</span>
+        <span class="here">inv·042</span>
+    </div>
+
+    <div class="status-bar">
+        <span class="pill"><span class="pulse"></span>draft · ready to send</span>
+        <span class="sep">/</span>
+        <span>drafted by ordify · 14:08 today</span>
+        <span class="sep">/</span>
+        <span>23 timelogs bundled</span>
+        <span class="right">
+            <a>preview</a>
+            <a>edit lines</a>
+            <a>download pdf</a>
+            <a class="primary">send to acme →</a>
+        </span>
+    </div>
+
+    <article class="doc">
+
+        <header class="doc-hdr">
+            <div class="left">
+                <div class="eyebrow">invoice · acme tech us llc · apr 2026</div>
+                <h1>inv<span class="num">·042</span></h1>
+            </div>
+            <div class="right">
+                <div><span class="k">issued</span><br><span class="v">06 may 2026</span></div>
+                <div style="margin-top:14px"><span class="k">due</span><br><span class="v">20 may 2026 · net 14</span></div>
+                <div style="margin-top:14px"><span class="k">period</span><br><span class="v">01 → 30 apr 2026</span></div>
+                <div style="margin-top:14px"><span class="k">currency</span><br><span class="v">EUR</span></div>
+            </div>
+        </header>
+
+        <section class="bill-blocks">
+            <div class="blk">
+                <div class="lbl">from</div>
+                <div class="name">sergiy vasylenko</div>
+                <div class="lines">
+                    international counsel<br>
+                    calle velázquez 27, 4º · madrid 28001<br>
+                    sergiy@ordify.me · +34 612 04 88 19<br>
+                    <span class="mono">NIE · ESX-3719842K</span>
+                </div>
+            </div>
+            <div class="blk">
+                <div class="lbl">to</div>
+                <div class="name">acme tech us llc</div>
+                <div class="lines">
+                    attn: david kim, cfo<br>
+                    251 little falls drive · wilmington de 19808<br>
+                    billing@acme.tech<br>
+                    <span class="mono">EIN · 87-1942033</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="lines-section">
+            <div class="lines-hdr">
+                <span>line</span>
+                <span>description</span>
+                <span class="num">qty</span>
+                <span class="num">rate</span>
+                <span class="num">amount</span>
+            </div>
+
+            <div class="line">
+                <span class="ord">01</span>
+                <div class="desc">
+                    monthly retainer — general counsel, april
+                    <span class="ctx">m-006<span class="sep">·</span>subscription<span class="sep">·</span>12h included</span>
+                </div>
+                <span class="qty">1<span class="dim"> mo</span></span>
+                <span class="rate">€1,500.00</span>
+                <span class="amt">€1,500.00</span>
+            </div>
+
+            <div class="line">
+                <span class="ord">02</span>
+                <div class="desc">
+                    out-of-scope · series b preparation
+                    <span class="ctx">8 entries grouped<span class="sep">·</span>14 → 28 apr<span class="sep">·</span>m-019</span>
+                </div>
+                <span class="qty">6.5<span class="dim"> h</span></span>
+                <span class="rate">€150.00<span class="dim"> /h</span></span>
+                <span class="amt">€975.00</span>
+            </div>
+
+            <div class="line">
+                <span class="ord">03</span>
+                <div class="desc">
+                    nda red-lines, rounds 1 &amp; 2
+                    <span class="ctx">t-0143<span class="sep">·</span>discounted rate · €120/h</span>
+                </div>
+                <span class="qty">1.4<span class="dim"> h</span></span>
+                <span class="rate">€120.00<span class="dim"> /h</span></span>
+                <span class="amt">€168.00</span>
+            </div>
+
+            <div class="line">
+                <span class="ord">04</span>
+                <div class="desc">
+                    fixed fee — delaware llc incorporation
+                    <span class="ctx">m-014<span class="sep">·</span>delivered 14 apr<span class="sep">·</span>2 days early</span>
+                </div>
+                <span class="qty">1<span class="dim"> ea</span></span>
+                <span class="rate">€2,400.00</span>
+                <span class="amt">€2,400.00</span>
+            </div>
+
+            <div class="line">
+                <span class="ord">05</span>
+                <div class="desc">
+                    notary &amp; filing disbursements
+                    <span class="ctx">passed-through<span class="sep">·</span>receipts attached</span>
+                </div>
+                <span class="qty">3<span class="dim"> ea</span></span>
+                <span class="rate">—</span>
+                <span class="amt">€156.00</span>
+            </div>
+        </section>
+
+        <section class="totals">
+            <div class="left">
+                <strong>note.</strong> series-b prep entries (8) bundled into one line because they share matter scope and span a continuous 14-day window. ordify retained per-entry detail in the timelog appendix; a per-entry version is available on request.
+                <br><br>
+                vat <strong>reverse-charge</strong> applies under article 196 of council directive 2006/112/EC (EU intra-community b2b service). irpf retention not applicable for non-spanish corporate clients.
+            </div>
+            <div class="right">
+                <div class="row">
+                    <span class="k">subtotal</span>
+                    <span class="v">€5,199.00</span>
+                </div>
+                <div class="row sub">
+                    <span class="k">vat · reverse-charge</span>
+                    <span class="v">€0.00</span>
+                </div>
+                <div class="row sub">
+                    <span class="k">disbursements</span>
+                    <span class="v">€156.00</span>
+                </div>
+                <div class="row grand">
+                    <span class="k">total due</span>
+                    <span class="v"><span class="ccy">€</span>5,355.00</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="pay">
+            <div class="blk">
+                <div class="lbl">remit to · sepa / iban</div>
+                <div class="iban">ES91 2100 0418 4502 0005 1332</div>
+                <div class="swift">caixabank · swift caixesbbxxx<br>holder: sergiy vasylenko · madrid</div>
+            </div>
+            <div class="blk">
+                <div class="lbl">terms</div>
+                <div class="terms">
+                    payment due <span class="due">20 may 2026 · net 14</span>.<br>
+                    no late fee for first 7 days; thereafter <strong>1.5% / month</strong> per art. 7 of law 3/2004 (es).<br>
+                    please reference <strong>inv·042</strong> in the wire memo.
+                </div>
+            </div>
+        </section>
+
+        <footer class="doc-foot">
+            <span><b>inv·042</b> · acme · 06 may 2026</span>
+            <span class="mid">drafted with ordify · always editable before send</span>
+            <span>page 1 / 1</span>
+        </footer>
+
+    </article>
+
+</main>
+
+<aside class="rail">
+
+    <header class="rail-hdr">
+        <div class="lbl"><span class="pulse"></span>working alongside</div>
+        <h2 class="ttl">inv<span class="accent">·042</span> · ready</h2>
+    </header>
+
+    <div class="stream">
+
+        <div class="turn">
+            <span class="when">14:08 · drafted</span>
+            <p class="text">
+                bundled april for acme: <strong>23 timelogs + 1 fixed milestone + retainer</strong>. language &amp; grouping match your march style (i checked inv·038).
+            </p>
+            <p class="text">
+                <em>grouped 8 series-b prep entries into one out-of-scope line. nda kept on its own line because it's at a discounted rate. disbursements (notary + filing × 3) on a passthrough line — receipts attached as appendix.</em>
+            </p>
+            <div class="actions">
+                <a class="primary">looks good · send</a>
+                <a>show appendix</a>
+                <a>group differently</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">things to confirm</span>
+            <p class="text">
+                <strong>1.</strong> reverse-charge vat applies (acme is delaware c-corp, not eu). i set €0 vat — confirm?<br>
+                <strong>2.</strong> march invoice was paid in 9 days. acme typically pays early — net 14 may be conservative. keep, or shorten to net 7?<br>
+                <strong>3.</strong> overage at end of cycle was <span class="accent">+0.4h</span>, but i excluded the 1.4h nda from overage count since it's at discount rate. ok?
+            </p>
+            <div class="actions">
+                <a class="primary">all yes</a>
+                <a>walk through</a>
+            </div>
+        </div>
+
+        <div class="turn">
+            <span class="when">history with this client</span>
+            <p class="text">
+                <em>acme has paid every invoice since jan 2024. avg 9 days · €42,300 lifetime. last issue: inv·028 had a typo in iban that david caught — he forgave the resend. iban verified clean here.</em>
+            </p>
+        </div>
+
+    </div>
+
+    <div class="compose">
+        <span class="glyph"></span>
+        <input type="text" placeholder="ask, or 'send it'…">
+        <span class="hint"><kbd>⌘K</kbd> · hold <kbd>␣</kbd></span>
+    </div>
+
+</aside>
+
+</div>
+
+</body>
+</html>
