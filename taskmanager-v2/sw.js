@@ -5,15 +5,15 @@
  */
 'use strict';
 
-const CACHE = 'ordify-v4';
+const CACHE = 'ordify-v5';
 const CORE = [
     './',
     './index.html',
-    './style.css?v=4',
-    './app.js?v=4',
-    './attach.js?v=4',
-    './google.js?v=4',
-    './omni.js?v=4',
+    './style.css?v=5',
+    './app.js?v=5',
+    './attach.js?v=5',
+    './google.js?v=5',
+    './omni.js?v=5',
     './manifest.webmanifest',
     './icon.svg'
 ];

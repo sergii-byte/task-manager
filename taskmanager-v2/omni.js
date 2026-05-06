@@ -601,7 +601,7 @@ const Recorder = {
         if (Recorder.supported()) {
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
             const rec = new SR();
-            rec.lang = state.profile.dictationLang || 'uk-UA';
+            rec.lang = Recorder.resolveLang();
             rec.continuous = true;
             rec.interimResults = true;
 
@@ -647,8 +647,29 @@ const Recorder = {
 
         Recorder._setListening(true);
         Omni.input.focus();
-        const lang = state.profile.dictationLang || 'uk-UA';
-        toast(`Listening (${lang})…`);
+        toast(`Listening (${Recorder.resolveLang()})…`);
+    },
+
+    /** Resolve the dictation lang setting to a real BCP-47 tag. */
+    resolveLang() {
+        const setting = state.profile.dictationLang || 'auto';
+        if (setting !== 'auto') return setting;
+        const supported = ['uk-UA','ru-RU','en-US','pl-PL'];
+        const nav = (navigator.language || 'uk-UA');
+        const navBase = nav.toLowerCase().split('-')[0];
+        // exact match first
+        const exact = supported.find(s => s.toLowerCase() === nav.toLowerCase());
+        if (exact) return exact;
+        // base-language match (e.g. "ru" -> "ru-RU")
+        const base = supported.find(s => s.toLowerCase().split('-')[0] === navBase);
+        if (base) return base;
+        // also peek at navigator.languages array for the next best supported
+        for (const l of (navigator.languages || [])) {
+            const lb = l.toLowerCase().split('-')[0];
+            const m = supported.find(s => s.toLowerCase().split('-')[0] === lb);
+            if (m) return m;
+        }
+        return 'uk-UA';
     },
 
     stop() {

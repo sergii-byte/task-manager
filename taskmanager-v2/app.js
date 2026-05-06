@@ -81,7 +81,7 @@ const defaultState = () => ({
         invoiceNumberPrefix: 'INV-', invoiceNumberCounter: 1,
         anthropicKey: '',
         anthropicModel: 'claude-3-5-haiku-latest',
-        dictationLang: 'uk-UA',
+        dictationLang: 'auto',
         snapshotIntervalHours: 4,
         googleClientId: ''
     },
@@ -1267,12 +1267,13 @@ function viewSettings() {
                 </div>
                 <div class="field"><label>Dictation language</label>
                     <select name="dictationLang">
+                        <option value="auto"  ${p.dictationLang==='auto' ?'selected':''}>Auto-detect (browser locale)</option>
                         <option value="uk-UA" ${p.dictationLang==='uk-UA'?'selected':''}>Ukrainian (uk-UA)</option>
                         <option value="ru-RU" ${p.dictationLang==='ru-RU'?'selected':''}>Russian (ru-RU)</option>
                         <option value="en-US" ${p.dictationLang==='en-US'?'selected':''}>English (en-US)</option>
                         <option value="pl-PL" ${p.dictationLang==='pl-PL'?'selected':''}>Polish (pl-PL)</option>
                     </select>
-                    <small class="hint">Voice input uses Chrome / Edge built-in recognition.</small>
+                    <small class="hint">Auto reads your browser locale (uk / ru / en / pl). Web Speech API can only listen to one language at a time — pick explicitly if auto guesses wrong.</small>
                 </div>
             </div>
 
