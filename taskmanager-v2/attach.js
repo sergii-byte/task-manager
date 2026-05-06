@@ -14,21 +14,36 @@ const Attach = {
     _db: null,
 
     async _open() {
-        if (Attach._db) return Attach._db;
-        return new Promise((resolve, reject) => {
-            const req = indexedDB.open(Attach.DB, 1);
-            req.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(Attach.STORE)) {
-                    const s = db.createObjectStore(Attach.STORE, { keyPath: 'id' });
-                    s.createIndex('matterId', 'matterId');
-                    s.createIndex('taskId', 'taskId');
-                    s.createIndex('clientId', 'clientId');
-                }
-            };
-            req.onsuccess = () => { Attach._db = req.result; resolve(req.result); };
+        if (Attach._db && Attach._db.objectStoreNames.contains(Attach.STORE)) {
+            return Attach._db;
+        }
+        const ensure = (db) => {
+            if (!db.objectStoreNames.contains(Attach.STORE)) {
+                const s = db.createObjectStore(Attach.STORE, { keyPath: 'id' });
+                s.createIndex('matterId', 'matterId');
+                s.createIndex('taskId', 'taskId');
+                s.createIndex('clientId', 'clientId');
+            }
+        };
+        const initial = await new Promise((resolve, reject) => {
+            const req = indexedDB.open(Attach.DB);
+            req.onupgradeneeded = (e) => ensure(e.target.result);
+            req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
+        if (initial.objectStoreNames.contains(Attach.STORE)) {
+            Attach._db = initial;
+            return initial;
+        }
+        const nextVersion = initial.version + 1;
+        initial.close();
+        Attach._db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open(Attach.DB, nextVersion);
+            req.onupgradeneeded = (e) => ensure(e.target.result);
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        return Attach._db;
     },
 
     async add({ blob, name, mime, kind = 'file', matterId = null, taskId = null, clientId = null }) {

@@ -198,18 +198,41 @@ const Snapshots = {
     _db: null,
 
     async _open() {
-        if (Snapshots._db) return Snapshots._db;
-        return new Promise((resolve, reject) => {
-            const req = indexedDB.open(Snapshots.DB, 1);
+        if (Snapshots._db && Snapshots._db.objectStoreNames.contains(Snapshots.STORE)) {
+            return Snapshots._db;
+        }
+        // Open without forcing a version so we can detect missing stores even
+        // when the DB was created at version 1 without our object store.
+        const initial = await new Promise((resolve, reject) => {
+            const req = indexedDB.open(Snapshots.DB);
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
                 if (!db.objectStoreNames.contains(Snapshots.STORE)) {
                     db.createObjectStore(Snapshots.STORE, { keyPath: 'id' });
                 }
             };
-            req.onsuccess = () => { Snapshots._db = req.result; resolve(req.result); };
+            req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
+        if (initial.objectStoreNames.contains(Snapshots.STORE)) {
+            Snapshots._db = initial;
+            return initial;
+        }
+        // Store missing — bump version to trigger an upgrade that creates it.
+        const nextVersion = initial.version + 1;
+        initial.close();
+        Snapshots._db = await new Promise((resolve, reject) => {
+            const req = indexedDB.open(Snapshots.DB, nextVersion);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(Snapshots.STORE)) {
+                    db.createObjectStore(Snapshots.STORE, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+        return Snapshots._db;
     },
 
     async create(label = 'manual') {
