@@ -101,20 +101,44 @@ const Store = {
     load() {
         try {
             const raw = localStorage.getItem(STORE_KEY);
-            if (!raw) { state = defaultState(); return; }
-            const parsed = JSON.parse(raw);
-            // shallow merge to retain new keys after upgrades
-            state = Object.assign(defaultState(), parsed);
-            // ensure arrays exist
-            ['clients','matters','tasks','logs','invoices','audits','attachments'].forEach(k => {
-                if (!Array.isArray(state[k])) state[k] = [];
-            });
-            if (!state.profile) state.profile = defaultState().profile;
-            // merge new profile fields without losing user values
-            state.profile = Object.assign(defaultState().profile, state.profile);
+            if (!raw) { state = defaultState(); }
+            else {
+                const parsed = JSON.parse(raw);
+                state = Object.assign(defaultState(), parsed);
+                ['clients','matters','tasks','logs','invoices','audits','attachments'].forEach(k => {
+                    if (!Array.isArray(state[k])) state[k] = [];
+                });
+                if (!state.profile) state.profile = defaultState().profile;
+                state.profile = Object.assign(defaultState().profile, state.profile);
+            }
+            // One-time migration: pull keys from the first project if user
+            // visited it on this same origin. Never overwrite existing values.
+            Store._migrateLegacyKeys();
         } catch (e) {
             console.error('Store.load failed', e);
             state = defaultState();
+        }
+    },
+
+    _migrateLegacyKeys() {
+        const map = [
+            ['taskflow_claude_key',     'anthropicKey'],
+            ['taskflow_gapi_client_id', 'googleClientId'],
+            ['taskflow_ai_model',       'anthropicModel']
+        ];
+        let migrated = 0;
+        for (const [legacyKey, profileField] of map) {
+            const v = localStorage.getItem(legacyKey);
+            if (v && !state.profile[profileField]) {
+                state.profile[profileField] = v;
+                migrated++;
+            }
+        }
+        if (migrated > 0) {
+            audit('migrateLegacy', null, `imported ${migrated} setting${migrated===1?'':'s'} from first project`);
+            Store.save();
+            // surface a one-line nudge after the UI has booted
+            setTimeout(() => toast(`Imported ${migrated} setting${migrated===1?'':'s'} from your first project`), 600);
         }
     },
     save() {
