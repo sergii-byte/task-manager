@@ -74,7 +74,7 @@ const debounce = (fn, ms) => {
 const STORE_KEY = 'ordify-v2-data';
 
 const defaultState = () => ({
-    v: 5,
+    v: 6,
     profile: {
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
@@ -88,12 +88,13 @@ const defaultState = () => ({
     },
     clients: [],
     matters: [],
-    tasks: [],
+    tasks: [],            // mirror of the /tasks collection (owned by the Tasks module)
     logs: [],
     invoices: [],
     audits: [],
     attachments: [],
-    timer: null   // { taskId, matterId, clientId, label, startedAt }
+    tasksMigrated: false, // set true once blob tasks moved into /tasks
+    timer: null           // { taskId, matterId, clientId, label, startedAt }
 });
 
 let state = defaultState();
@@ -162,15 +163,22 @@ const Store = {
                 if (!doc.exists) return;
                 const data = doc.data();
                 if (!data || typeof data.state !== 'string') return;
-                if (data.state === JSON.stringify(state)) return;  // no real change
+                if (data.state === Store._serialize()) return;  // no real change
                 try {
+                    const keepTasks = state.tasks;  // tasks are owned by the Tasks module
                     state = Store._normalize(Object.assign(defaultState(), JSON.parse(data.state)));
+                    state.tasks = Array.isArray(keepTasks) ? keepTasks : [];
                     Store._lastWritten = data.state;
                     render();
                 } catch (e) { console.error('snapshot parse failed', e); }
             },
             (err) => console.error('Firestore snapshot error', err)
         );
+    },
+
+    /* The blob never carries tasks — those live in the /tasks collection. */
+    _serialize() {
+        return JSON.stringify(Object.assign({}, state, { tasks: [] }));
     },
 
     _normalize(s) {
@@ -217,11 +225,11 @@ const Store = {
 
     save() {
         // localStorage mirror — offline safety net
-        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        try { localStorage.setItem(STORE_KEY, Store._serialize()); } catch (e) {}
         if (!Store.docRef) return;
         clearTimeout(Store._saveTimer);
         Store._saveTimer = setTimeout(() => {
-            const json = JSON.stringify(state);
+            const json = Store._serialize();
             if (json === Store._lastWritten) return;   // nothing changed
             Store._lastWritten = json;
             Store.docRef.set({ state: json, updatedAt: Date.now() })
@@ -251,6 +259,131 @@ const Store = {
             render();
             toast('All data cleared.');
         }
+    }
+};
+
+/* =========================================================================
+ * 2a. TASKS — granular Firestore collection (Phase 5, team support)
+ *
+ * Tasks live in their own /tasks collection (one document each) so that
+ * teammates can see the tasks assigned to them without gaining access to
+ * the hub's clients / matters / billing (which stay in the blob).
+ *
+ * Each task document carries ownerId (the hub) + assigneeEmail, plus
+ * denormalized clientName / matterName so an assignee can read context
+ * without the hub's blob.
+ * ========================================================================= */
+
+const Tasks = {
+    coll: null,
+    uid: null,
+    email: null,
+    _unsubOwn: null,
+    _unsubAssigned: null,
+    _own: [],
+    _assigned: [],
+
+    async init(user) {
+        if (typeof fbDb === 'undefined' || !fbDb || !user) {
+            // no backend — tasks stay in the blob (state.tasks from Store)
+            return;
+        }
+        Tasks.coll = fbDb.collection('tasks');
+        Tasks.uid = user.uid;
+        Tasks.email = (user.email || '').toLowerCase();
+
+        await Tasks._migrateIfNeeded();
+
+        Tasks._unsubOwn = Tasks.coll.where('ownerId', '==', Tasks.uid).onSnapshot(
+            (snap) => { Tasks._own = snap.docs.map(d => d.data()); Tasks._merge(); },
+            (err) => console.error('tasks(own) snapshot error', err)
+        );
+        if (Tasks.email) {
+            Tasks._unsubAssigned = Tasks.coll.where('assigneeEmail', '==', Tasks.email).onSnapshot(
+                (snap) => { Tasks._assigned = snap.docs.map(d => d.data()); Tasks._merge(); },
+                (err) => console.error('tasks(assigned) snapshot error', err)
+            );
+        }
+    },
+
+    /* merge own + assigned, dedupe by id, push into state.tasks */
+    _merge() {
+        const byId = {};
+        Tasks._own.forEach(t => { byId[t.id] = t; });
+        Tasks._assigned.forEach(t => { byId[t.id] = t; });
+        state.tasks = Object.values(byId);
+        render();
+    },
+
+    /* one-time move of blob tasks into the /tasks collection */
+    async _migrateIfNeeded() {
+        if (state.tasksMigrated) return;
+        const blobTasks = Array.isArray(state.tasks) ? state.tasks : [];
+        if (blobTasks.length) {
+            try {
+                const batch = fbDb.batch();
+                blobTasks.forEach(t => {
+                    const doc = Tasks._toDoc(t);
+                    batch.set(Tasks.coll.doc(doc.id), doc);
+                });
+                await batch.commit();
+            } catch (e) {
+                console.error('task migration failed', e);
+                return;   // try again next load
+            }
+        }
+        state.tasksMigrated = true;
+        state.tasks = [];
+        Store.save();
+    },
+
+    /* normalize an in-memory task into a Firestore document */
+    _toDoc(t) {
+        const m = t.matterId ? matterById(t.matterId) : null;
+        const c = (t.clientId && clientById(t.clientId)) || (m && clientById(m.clientId)) || null;
+        return {
+            id: t.id,
+            ownerId: t.ownerId || Tasks.uid,
+            ownerEmail: t.ownerEmail || Tasks.email,
+            assigneeEmail: (t.assigneeEmail || '').toLowerCase() || null,
+            title: t.title || '',
+            matterId: t.matterId || null,
+            clientId: t.clientId || (m ? m.clientId : null),
+            matterName: m ? m.title : (t.matterName || null),
+            clientName: c ? c.name : (t.clientName || null),
+            due: t.due || null,
+            priority: t.priority || 'normal',
+            notes: t.notes || '',
+            status: t.status || 'todo',
+            createdAt: t.createdAt || new Date().toISOString(),
+            completedAt: t.completedAt || null,
+            deletedAt: t.deletedAt || null
+        };
+    },
+
+    /* upsert one task (also covers soft-delete: a put with deletedAt set) */
+    put(t) {
+        if (!Tasks.coll) {
+            const i = state.tasks.findIndex(x => x.id === t.id);
+            if (i >= 0) state.tasks[i] = t; else state.tasks.push(t);
+            Store.save();
+            return;
+        }
+        const doc = Tasks._toDoc(t);
+        Tasks.coll.doc(doc.id).set(doc).catch((e) => {
+            console.error('task save failed', e);
+            toast('Task sync failed: ' + e.message, 'error');
+        });
+    },
+
+    /* permanently delete one task */
+    remove(id) {
+        if (!Tasks.coll) {
+            state.tasks = state.tasks.filter(x => x.id !== id);
+            Store.save();
+            return;
+        }
+        Tasks.coll.doc(id).delete().catch((e) => console.error('task delete failed', e));
     }
 };
 
@@ -827,8 +960,10 @@ function _todayTaskRow(t) {
             : t.due === todayISO() ? 'due today'
             : `due ${fmtDate(t.due)}`)
         : '';
-    const ctx = [cli && cli.name, mat && mat.title, due].filter(Boolean)
-        .map(x => esc(x)).join(' · ');
+    const cliName = (cli && cli.name) || t.clientName || '';
+    const matName = (mat && mat.title) || t.matterName || '';
+    const ctx = [cliName, matName, due, t.assigneeEmail ? '→ ' + t.assigneeEmail : '']
+        .filter(Boolean).map(x => esc(x)).join(' · ');
     return `
         <div class="t-task ${st==='done'?'done':''} ${st==='overdue'?'overdue':''}" data-task="${t.id}">
             <span class="t-check ${st==='done'?'done':''}" data-toggle="${t.id}"></span>
@@ -908,12 +1043,17 @@ function renderTaskList(tasks) {
             const cli = clientById(t.clientId);
             const mat = matterById(t.matterId);
             const st = taskStatus(t);
+            const meta = [
+                (cli && cli.name) || t.clientName || '',
+                (mat && mat.title) || t.matterName || '',
+                t.assigneeEmail ? '→ ' + t.assigneeEmail : ''
+            ].filter(Boolean).map(x => esc(x)).join(' · ');
             return `
                 <tr class="row" data-task="${t.id}">
                     <td style="width:32px"><span class="check ${st==='done'?'done':''}" data-toggle="${t.id}"></span></td>
                     <td>
                         <div class="task-title ${st==='done'?'is-done':''}">${esc(t.title)}</div>
-                        ${cli || mat ? `<div class="task-meta">${esc(cli?.name||'')}${mat?` · ${esc(mat.title)}`:''}</div>` : ''}
+                        ${meta ? `<div class="task-meta">${meta}</div>` : ''}
                     </td>
                     <td>${t.due ? `<span class="badge ${st==='overdue'?'overdue':''}">${fmtDate(t.due)}</span>` : ''}</td>
                     <td style="width:80px">
@@ -1612,7 +1752,7 @@ function openClientForm(id = null) {
             if (has && !confirm('This client has matters/tasks/time. Move them all to Trash?')) return;
             const ts = new Date().toISOString();
             state.matters.forEach(m => { if (m.clientId === c.id) m.deletedAt = ts; });
-            state.tasks.forEach(t => { if (t.clientId === c.id) t.deletedAt = ts; });
+            state.tasks.forEach(t => { if (t.clientId === c.id) { t.deletedAt = ts; Tasks.put(t); } });
             state.logs.forEach(l => { if (l.clientId === c.id) l.deletedAt = ts; });
             c.deletedAt = ts;
             audit('deleteClient', c.id, c.name);
@@ -1665,7 +1805,7 @@ function openMatterForm(id = null, defaultClientId = null) {
             const has = tasksForMatter(m.id).length || logsForMatter(m.id).length;
             if (has && !confirm('This matter has tasks/time. Move them all to Trash?')) return;
             const ts = new Date().toISOString();
-            state.tasks.forEach(t => { if (t.matterId === m.id) t.deletedAt = ts; });
+            state.tasks.forEach(t => { if (t.matterId === m.id) { t.deletedAt = ts; Tasks.put(t); } });
             state.logs.forEach(l => { if (l.matterId === m.id) l.deletedAt = ts; });
             m.deletedAt = ts;
             audit('deleteMatter', m.id, m.title);
@@ -1695,6 +1835,9 @@ function openTaskForm(id = null, defaultMatterId = null) {
                     { value: 'normal', label: 'Normal' },
                     { value: 'high', label: 'High' }
                 ]},
+            { name: 'assigneeEmail', label: 'Assignee email', type: 'email', value: t?.assigneeEmail || '',
+                placeholder: 'teammate@example.com',
+                hint: 'Leave blank to keep the task yours. The assignee sees it when they sign in.' },
             { name: 'notes', label: 'Notes', type: 'textarea', value: t?.notes || '', rows: 3, full: true }
         ],
         onSave: (data) => {
@@ -1706,17 +1849,19 @@ function openTaskForm(id = null, defaultMatterId = null) {
                 clientId: mat?.clientId || null,
                 due: data.due || null,
                 priority: data.priority,
+                assigneeEmail: (data.assigneeEmail || '').trim().toLowerCase() || null,
                 notes: data.notes
             };
             if (t) {
                 Object.assign(t, payload);
                 audit('updateTask', t.id, t.title);
+                Tasks.put(t);
             } else {
                 const nt = { id: uuid(), status: 'todo', createdAt: new Date().toISOString(), ...payload };
-                state.tasks.push(nt);
                 audit('createTask', nt.id, nt.title);
+                Tasks.put(nt);
             }
-            Store.save(); render();
+            render();
             toast(t ? 'Task updated' : 'Task added');
         },
         onDelete: t ? () => {
@@ -1724,8 +1869,9 @@ function openTaskForm(id = null, defaultMatterId = null) {
             // unlink logs from deleted task but keep them
             state.logs.forEach(l => { if (l.taskId === t.id) l.taskId = null; });
             audit('deleteTask', t.id, t.title);
+            Tasks.put(t);
             Store.save(); render();
-            toast('Moved to Trash');
+            toast('Task deleted');
         } : null
     });
 }
@@ -1899,7 +2045,7 @@ function bindGlobalActions() {
                 t.status = t.status === 'done' ? 'todo' : 'done';
                 t.completedAt = t.status === 'done' ? new Date().toISOString() : null;
                 audit(t.status === 'done' ? 'completeTask' : 'reopenTask', t.id, t.title);
-                Store.save(); render();
+                Tasks.put(t); render();
             }
             return;
         }
@@ -2151,7 +2297,8 @@ async function boot(user) {
     bindGlobalActions();
     if (!location.hash) location.hash = '#/today';
     const uid = (user && user.uid) ? user.uid : null;
-    await Store.init(uid);          // loads from Firestore, sets up realtime sync
+    await Store.init(uid);          // loads the blob from Firestore, realtime sync
+    await Tasks.init(user);         // tasks collection + one-time migration
     render();
 }
 

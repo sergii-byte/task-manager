@@ -392,7 +392,7 @@ The user types or dictates in English, Russian, or Ukrainian. Your job is to rea
 DATA MODEL:
 - Client: { name, email?, phone?, taxId?, address?, notes? }
 - Matter: { clientId or clientName, title, status: "open"|"on-hold"|"closed", rate?, description? }
-- Task:   { matterId or matterName, title, due? (ISO date YYYY-MM-DD), priority: "low"|"normal"|"high", notes? }
+- Task:   { matterId or matterName, title, due? (ISO date YYYY-MM-DD), priority: "low"|"normal"|"high", assigneeEmail? (only if the user explicitly delegates to a person), notes? }
 - TimeLog:{ matterId or matterName (optional — omit if unknown), date (ISO YYYY-MM-DD), minutes, notes? }
 - Invoice:{ matterId or matterName, dateIssued (ISO), dateDue?, notes? }
 
@@ -585,11 +585,12 @@ ${text}`;
             title: d.title || 'Untitled task',
             due: d.due || null,
             priority: d.priority || 'normal',
+            assigneeEmail: (d.assigneeEmail || '').toLowerCase() || null,
             notes: d.notes || '',
             status: 'todo',
             createdAt: new Date().toISOString()
         };
-        state.tasks.push(t);
+        Tasks.put(t);
         audit('createTask', t.id, t.title);
     },
 
@@ -597,6 +598,7 @@ ${text}`;
         const t = (d.taskId && taskById(d.taskId)) || state.tasks.find(x => !x.deletedAt && x.title?.toLowerCase() === (d.taskTitle||'').toLowerCase());
         if (!t) throw new Error('Task not found');
         Object.assign(t, d);
+        Tasks.put(t);
         audit('updateTask', t.id, t.title);
     },
 
@@ -605,6 +607,7 @@ ${text}`;
         if (!t) throw new Error('Task not found');
         t.status = 'done';
         t.completedAt = new Date().toISOString();
+        Tasks.put(t);
         audit('completeTask', t.id, t.title);
     },
 
