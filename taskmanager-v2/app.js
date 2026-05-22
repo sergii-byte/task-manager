@@ -1813,8 +1813,7 @@ function _inboxRow(e) {
                 <div class="inbox-subj">${esc(e.subject)}</div>
                 <div class="inbox-snip">${esc(e.snippet)}</div>
                 <div class="inbox-actions">
-                    <button class="btn sm primary" data-act="email-ai" data-id="${esc(e.id)}" title="Read the email and extract action items">✨ AI tasks</button>
-                    <button class="btn sm" data-act="email-task" data-id="${esc(e.id)}" title="Quick task from the subject line">→ Task</button>
+                    <button class="btn sm primary" data-act="email-ai" data-id="${esc(e.id)}" title="Read the email and turn it into a task">→ Task</button>
                     <button class="btn sm" data-act="email-open" data-id="${esc(e.id)}">Open in Gmail</button>
                     <button class="btn sm ghost" data-act="email-dismiss" data-id="${esc(e.id)}">Dismiss</button>
                 </div>
@@ -2368,26 +2367,6 @@ function bindGlobalActions() {
             }
             case 'google-signout': {
                 Google.signOut();
-                break;
-            }
-            case 'email-task': {
-                const em = inboxEmails.find(x => x.id === act.dataset.id);
-                if (!em) break;
-                const t = {
-                    id: uuid(), status: 'todo', createdAt: new Date().toISOString(),
-                    matterId: null, clientId: null, due: null, priority: 'normal',
-                    assigneeEmail: null,
-                    title: em.subject,
-                    notes: `From: ${em.from}\n\n${em.snippet}\n\nhttps://mail.google.com/mail/u/0/#inbox/${em.threadId}`
-                };
-                Tasks.put(t);
-                audit('createTask', t.id, t.title);
-                state.emailHandled = state.emailHandled || [];
-                state.emailHandled.push(em.id);
-                if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
-                Store.save();
-                populateInbox();
-                toast('Task created from email');
                 break;
             }
             case 'email-dismiss': {
