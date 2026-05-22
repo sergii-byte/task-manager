@@ -203,6 +203,12 @@ const Google = {
         return !!Google._accessToken && Date.now() < Google._expiresAt - 60000;
     },
 
+    /** Interactive sign-in — call this DIRECTLY from a click handler so the
+     *  OAuth popup fires inside the user-gesture window (no popup blocker). */
+    connect() {
+        return Google._ensureToken();
+    },
+
     /* =====================================================================
      * CALENDAR — list today's events
      * ===================================================================== */

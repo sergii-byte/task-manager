@@ -1002,8 +1002,13 @@ async function populateTodaySchedule() {
         host.innerHTML = `<button class="btn" id="t-cal-connect">Show today's calendar</button>`;
         const btn = document.getElementById('t-cal-connect');
         if (btn) btn.addEventListener('click', () => {
-            host.innerHTML = `<div class="t-sched-msg">Connecting…</div>`;
-            populateTodaySchedule();
+            // call Google.connect() directly in the click → popup is not blocked
+            Google.connect().then(() => {
+                host.innerHTML = `<div class="t-sched-msg">Loading calendar…</div>`;
+                populateTodaySchedule();
+            }).catch((e) => {
+                host.innerHTML = `<div class="t-sched-msg">Sign-in failed: ${esc(e.message || 'cancelled')}</div>`;
+            });
         });
         return;
     }
@@ -1769,8 +1774,13 @@ async function populateInbox() {
         host.innerHTML = `<button class="btn primary" id="inbox-connect">Connect Gmail inbox</button>`;
         const b = document.getElementById('inbox-connect');
         if (b) b.addEventListener('click', () => {
-            host.innerHTML = `<div class="t-sched-msg">Connecting…</div>`;
-            populateInbox();
+            // call Google.connect() directly in the click → popup is not blocked
+            Google.connect().then(() => {
+                host.innerHTML = `<div class="t-sched-msg">Loading inbox…</div>`;
+                populateInbox();
+            }).catch((e) => {
+                host.innerHTML = `<div class="t-sched-msg">Sign-in failed: ${esc(e.message || 'cancelled')}</div>`;
+            });
         });
         return;
     }
