@@ -74,12 +74,13 @@ const debounce = (fn, ms) => {
 const STORE_KEY = 'ordify-v2-data';
 
 const defaultState = () => ({
-    v: 6,
+    v: 7,
     profile: {
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
         invoiceNumberPrefix: 'INV-', invoiceNumberCounter: 1,
         iban: '', paymentTerms: '',
+        bankAccounts: [],   // [{ id, currency, iban, swift, bankName, holder }]
         anthropicKey: '',
         anthropicModel: 'claude-3-5-haiku-latest',
         dictationLang: 'auto',
@@ -186,6 +187,18 @@ const Store = {
             if (!Array.isArray(s[k])) s[k] = [];
         });
         s.profile = Object.assign(defaultState().profile, s.profile || {});
+        if (!Array.isArray(s.profile.bankAccounts)) s.profile.bankAccounts = [];
+        // migrate the legacy single IBAN into one bank account
+        if (s.profile.iban && !s.profile.bankAccounts.length) {
+            s.profile.bankAccounts.push({
+                id: uuid(),
+                currency: s.profile.currency || 'EUR',
+                iban: s.profile.iban,
+                swift: '', bankName: '',
+                holder: s.profile.name || ''
+            });
+            s.profile.iban = '';
+        }
         return s;
     },
 
@@ -1498,19 +1511,26 @@ function viewInvoice(id) {
                 </div>
             </section>
 
-            ${(p.iban || p.paymentTerms) ? `
+            ${(() => {
+                const accts = p.bankAccounts || [];
+                const acct = accts.find(a => a.currency === inv.currency) || accts[0] || null;
+                if (!acct && !p.paymentTerms) return '';
+                return `
             <section class="inv-doc-pay">
-                ${p.iban ? `
+                ${acct ? `
                 <div class="blk">
-                    <div class="lbl">remit to · iban</div>
-                    <div class="iban">${esc(p.iban)}</div>
+                    <div class="lbl">remit to · ${esc(acct.currency || '')}</div>
+                    <div class="iban">${esc(acct.iban || '')}</div>
+                    ${(acct.swift || acct.bankName) ? `<div class="terms" style="margin-top:6px">${esc([acct.bankName, acct.swift && ('SWIFT ' + acct.swift)].filter(Boolean).join(' · '))}</div>` : ''}
+                    ${acct.holder ? `<div class="terms">holder: ${esc(acct.holder)}</div>` : ''}
                 </div>` : ''}
                 ${p.paymentTerms ? `
                 <div class="blk">
                     <div class="lbl">terms</div>
                     <div class="terms">${esc(p.paymentTerms).replace(/\n/g,'<br>')}</div>
                 </div>` : ''}
-            </section>` : ''}
+            </section>`;
+            })()}
 
             <footer class="inv-doc-foot">
                 <span>${esc(inv.number)} · ${esc((c && c.name) || '')}</span>
@@ -1633,7 +1653,6 @@ function viewSettings() {
                 </div>
                 <div class="field"><label>Invoice number prefix</label><input name="invoiceNumberPrefix" value="${esc(p.invoiceNumberPrefix)}"></div>
                 <div class="field"><label>Next invoice number</label><input name="invoiceNumberCounter" type="number" min="1" step="1" value="${esc(p.invoiceNumberCounter)}"></div>
-                <div class="field full"><label>IBAN / bank account</label><input name="iban" value="${esc(p.iban||'')}" placeholder="ES91 2100 0418 4502 0005 1332"><small class="hint">Shown on the invoice document. Leave blank to omit.</small></div>
                 <div class="field full"><label>Payment terms</label><textarea name="paymentTerms" rows="2" placeholder="Payment due within 14 days. Reference the invoice number in the wire memo.">${esc(p.paymentTerms||'')}</textarea></div>
             </div>
 
@@ -1689,6 +1708,24 @@ function viewSettings() {
                 <button type="submit" class="btn primary">Save settings</button>
             </div>
         </form>
+
+        <h3 style="margin-top:48px">Bank accounts</h3>
+        <p class="muted" style="font-size:12px;margin:0 0 12px">Shown on invoices — ordify picks the account whose currency matches the invoice.</p>
+        ${(p.bankAccounts || []).length ? `
+            <ul class="snap-list">
+                ${p.bankAccounts.map(a => `
+                    <li class="snap-row">
+                        <span class="badge todo">${esc(a.currency || '—')}</span>
+                        <span class="stats" style="font-family:var(--font-mono)">${esc(a.iban || '(no IBAN)')}</span>
+                        <button class="btn sm" data-act="edit-bank" data-id="${esc(a.id)}">Edit</button>
+                        <button class="btn sm danger" data-act="remove-bank" data-id="${esc(a.id)}">Remove</button>
+                    </li>`).join('')}
+            </ul>` : '<div class="empty">No bank accounts yet.</div>'}
+        <div style="margin-top:10px"><button class="btn" data-act="add-bank">＋ Add account</button></div>
+
+        <h3 style="margin-top:48px">Quick setup</h3>
+        <p class="muted" style="font-size:12px;margin:0 0 10px">Upload an invoice you already use (.docx, PDF or image). ordify reads your name, address, tax ID and bank accounts, and fills in the profile above.</p>
+        <button class="btn" data-act="import-invoice">⬆ Import my details from an invoice</button>
 
         <h3 style="margin-top:48px">Data</h3>
         <div class="settings-data">
@@ -2024,6 +2061,36 @@ function openInvoiceForm(matterId = null, existingId = null) {
     });
 }
 
+function openBankAccountForm(id = null) {
+    if (!Array.isArray(state.profile.bankAccounts)) state.profile.bankAccounts = [];
+    const accts = state.profile.bankAccounts;
+    const a = id ? accts.find(x => x.id === id) : null;
+    Modal.open({
+        title: a ? 'Edit bank account' : 'Add bank account',
+        fields: [
+            { name: 'currency', label: 'Currency', type: 'select', required: true,
+                value: a?.currency || profileCurrency(),
+                options: ['EUR','USD','GBP','PLN','CHF','CZK','UAH'].map(c => ({ value: c, label: c })) },
+            { name: 'iban', label: 'IBAN / account number', value: a?.iban || '', required: true, full: true },
+            { name: 'swift', label: 'SWIFT / BIC', value: a?.swift || '' },
+            { name: 'bankName', label: 'Bank', value: a?.bankName || '' },
+            { name: 'holder', label: 'Account holder', value: a?.holder || '', full: true }
+        ],
+        onSave: (data) => {
+            if (!data.iban || !data.iban.trim()) { toast('IBAN is required', 'error'); return false; }
+            if (a) Object.assign(a, data);
+            else accts.push({ id: uuid(), ...data });
+            Store.save(); render();
+            toast(a ? 'Account updated' : 'Account added');
+        },
+        onDelete: a ? () => {
+            state.profile.bankAccounts = accts.filter(x => x.id !== a.id);
+            Store.save(); render();
+            toast('Account removed');
+        } : null
+    });
+}
+
 /* =========================================================================
  * 18. EVENT DELEGATION
  * ========================================================================= */
@@ -2182,6 +2249,18 @@ function bindGlobalActions() {
                 Google.signOut();
                 break;
             }
+            case 'add-bank': openBankAccountForm(); break;
+            case 'edit-bank': openBankAccountForm(act.dataset.id); break;
+            case 'remove-bank': {
+                if (!confirm('Remove this bank account?')) break;
+                state.profile.bankAccounts = (state.profile.bankAccounts || []).filter(x => x.id !== act.dataset.id);
+                Store.save(); render(); toast('Account removed');
+                break;
+            }
+            case 'import-invoice':
+                if (typeof DocImport !== 'undefined') DocImport.run();
+                else toast('Import module not loaded', 'error');
+                break;
             case 'export': doExport(); break;
             case 'import': doImport(); break;
             case 'reset': Store.reset(); break;
