@@ -1425,3 +1425,162 @@ dialog footer button.danger:hover { background: #fef2f2; border-color: var(--dan
     flex-shrink: 0;
 }
 #account-chip #acct-signout:hover { background: var(--bg-hover); color: var(--danger); }
+
+/* =========================================================================
+ * TODAY · editorial (min-today design direction)
+ * ========================================================================= */
+.today-v3 {
+    --t-ink: #0a0a0a;
+    --t-paper: #ffffff;
+    --t-line: #e8e6df;
+    --t-line-soft: #f0eee7;
+    --t-muted: #8a8780;
+    --t-faint: #c9c6bd;
+    --t-accent: #6a1b9a;
+    --t-warn: #c33c1d;
+    --t-sans: "Inter Tight", system-ui, sans-serif;
+    --t-text: "Inter", system-ui, sans-serif;
+    --t-mono: "JetBrains Mono", ui-monospace, monospace;
+    font-family: var(--t-text);
+    color: var(--t-ink);
+    max-width: 880px;
+}
+.today-v3 .t-daterow {
+    display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+    letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 24px;
+}
+.today-v3 .t-daterow .now { color: var(--t-ink); font-weight: 700; }
+.today-v3 .t-daterow .sep { color: var(--t-faint); }
+.today-v3 .t-daterow .clock { color: var(--t-accent); font-weight: 700; }
+.today-v3 .t-daterow .pulse {
+    display: inline-block; width: 6px; height: 6px; background: var(--t-accent);
+    border-radius: 50%; margin-right: 6px; vertical-align: middle;
+    animation: pulse 1.4s infinite;
+}
+
+.today-v3 .t-hero { padding-bottom: 32px; border-bottom: 1px solid var(--t-ink); }
+.today-v3 .t-greet {
+    font-family: var(--t-mono); font-size: 11px; color: var(--t-accent);
+    letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700;
+}
+.today-v3 .t-headline {
+    margin: 14px 0 0; font-family: var(--t-sans);
+    font-size: 54px; font-weight: 700; letter-spacing: -0.04em;
+    line-height: 1.02; text-transform: lowercase; color: var(--t-ink);
+}
+.today-v3 .t-headline .dot { color: var(--t-faint); }
+.today-v3 .t-stats { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 16px 48px; }
+.today-v3 .t-stat .k {
+    font-family: var(--t-mono); font-size: 10px; color: var(--t-faint);
+    letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700;
+}
+.today-v3 .t-stat .v {
+    font-family: var(--t-sans); font-size: 30px; font-weight: 600;
+    letter-spacing: -0.025em; color: var(--t-ink); margin-top: 5px;
+    line-height: 1; font-variant-numeric: tabular-nums;
+}
+.today-v3 .t-stat .v.accent { color: var(--t-accent); }
+.today-v3 .t-stat .v .small { font-family: var(--t-mono); font-size: 13px; color: var(--t-muted); margin-left: 2px; }
+.today-v3 .t-stat .sub {
+    font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+    letter-spacing: 0.03em; margin-top: 4px; max-width: 24ch;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.today-v3 .t-stat .sub.warn { color: var(--t-warn); font-weight: 700; }
+
+.today-v3 .t-sec { padding: 38px 0 8px; border-bottom: 1px solid var(--t-line); }
+.today-v3 .t-sec:last-child { border-bottom: 0; }
+.today-v3 .t-sechdr { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; }
+.today-v3 .t-sechdr h2 {
+    margin: 0; font-family: var(--t-sans); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--t-ink);
+}
+.today-v3 .t-sechdr .count { font-family: var(--t-mono); font-size: 11px; color: var(--t-faint); }
+.today-v3 .t-sechdr .right { margin-left: auto; }
+.today-v3 .t-sechdr .right a {
+    font-family: var(--t-mono); font-size: 11px; color: var(--t-ink);
+    text-decoration: none; border-bottom: 1.5px solid var(--t-ink);
+    text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;
+}
+.today-v3 .t-sechdr .right a:hover { color: var(--t-accent); border-color: var(--t-accent); }
+
+.today-v3 .t-sched-msg {
+    font-family: var(--t-text); font-size: 13px; color: var(--t-muted); padding: 12px 0;
+}
+.today-v3 .t-sched-msg a { color: var(--t-accent); }
+
+.today-v3 .t-slot {
+    display: grid; grid-template-columns: 88px 10px 1fr; gap: 18px;
+    padding: 12px 0; align-items: baseline; border-bottom: 1px solid var(--t-line-soft);
+}
+.today-v3 .t-slot-when {
+    font-family: var(--t-mono); font-size: 13px; color: var(--t-ink);
+    font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.today-v3 .t-slot-when .end { display: block; font-size: 11px; color: var(--t-muted); margin-top: 2px; }
+.today-v3 .t-slot-marker {
+    width: 8px; height: 8px; background: var(--t-ink); border-radius: 50%;
+    align-self: center; justify-self: center;
+}
+.today-v3 .t-slot.now .t-slot-marker {
+    background: var(--t-accent); width: 11px; height: 11px;
+    box-shadow: 0 0 0 4px rgba(106,27,154,0.15);
+}
+.today-v3 .t-slot.past .t-slot-marker { background: transparent; border: 1.5px solid var(--t-faint); }
+.today-v3 .t-slot-what {
+    font-family: var(--t-sans); font-size: 17px; font-weight: 500;
+    letter-spacing: -0.02em; color: var(--t-ink);
+}
+.today-v3 .t-slot.past .t-slot-what { color: var(--t-faint); }
+.today-v3 .t-slot.now .t-slot-what { font-weight: 600; }
+.today-v3 .t-slot-ctx {
+    font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+    letter-spacing: 0.03em; text-transform: uppercase; margin-top: 4px;
+}
+.today-v3 .t-nowline {
+    padding: 6px 0; border-top: 1px solid var(--t-accent);
+    border-bottom: 1px solid var(--t-accent); margin: 4px 0;
+}
+.today-v3 .t-nowline span {
+    font-family: var(--t-mono); font-size: 10px; color: var(--t-accent);
+    letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700;
+}
+
+.today-v3 .t-task {
+    display: grid; grid-template-columns: 20px 1fr auto; gap: 16px;
+    padding: 13px 0; align-items: baseline;
+    border-bottom: 1px solid var(--t-line-soft); cursor: pointer;
+}
+.today-v3 .t-task:hover { background: var(--t-paper); }
+.today-v3 .t-check {
+    width: 15px; height: 15px; border: 1.5px solid var(--t-ink);
+    border-radius: 50%; align-self: center; cursor: pointer; position: relative;
+}
+.today-v3 .t-check.done { background: var(--t-ink); }
+.today-v3 .t-check.done::after {
+    content: ""; position: absolute; left: 3px; top: 4.5px;
+    width: 5px; height: 2.5px; border-left: 1.5px solid var(--t-paper);
+    border-bottom: 1.5px solid var(--t-paper); transform: rotate(-45deg);
+}
+.today-v3 .t-task-title {
+    font-family: var(--t-text); font-size: 15.5px; font-weight: 500;
+    color: var(--t-ink); letter-spacing: -0.005em;
+}
+.today-v3 .t-task.done .t-task-title { color: var(--t-faint); text-decoration: line-through; }
+.today-v3 .t-task-ctx {
+    font-family: var(--t-mono); font-size: 11px; color: var(--t-muted);
+    letter-spacing: 0.03em; text-transform: uppercase; margin-top: 4px;
+}
+.today-v3 .t-task.overdue .t-task-ctx { color: var(--t-warn); }
+.today-v3 .t-task-go {
+    appearance: none; border: 1px solid var(--t-line); background: var(--t-paper);
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    color: var(--t-muted); align-self: center; font-size: 10px;
+}
+.today-v3 .t-task-go:hover { border-color: var(--t-accent); color: var(--t-accent); }
+
+@media (max-width: 720px) {
+    .today-v3 .t-headline { font-size: 36px; }
+    .today-v3 .t-slot { grid-template-columns: 66px 8px 1fr; gap: 12px; }
+}

@@ -704,79 +704,210 @@ function renderSidebar() {
  * 10. VIEW: TODAY
  * ========================================================================= */
 
+const NUM_WORDS = ['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve'];
+const numWord = (n) => NUM_WORDS[n] || String(n);
+
+function weekStartDate() {
+    const d = new Date();
+    const dow = (d.getDay() + 6) % 7;   // Monday = 0
+    d.setDate(d.getDate() - dow);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
 function viewToday() {
     const today = todayISO();
+    const now = new Date();
     const tasks = liveTasks();
-    const dueToday = tasks.filter(t => t.status !== 'done' && t.due === today);
-    const overdue  = tasks.filter(t => t.status !== 'done' && t.due && t.due < today);
-    const noDate   = tasks.filter(t => t.status !== 'done' && !t.due).slice(0, 5);
+    const openTasks = tasks.filter(t => t.status !== 'done');
+    const dueToday  = openTasks.filter(t => t.due === today);
+    const overdue   = openTasks.filter(t => t.due && t.due < today);
+    const doneToday = tasks.filter(t => t.status === 'done' && (t.completedAt || '').slice(0,10) === today);
 
-    const todayLogs = liveLogs().filter(l => l.startedAt.slice(0,10) === today);
-    const todayMins = todayLogs.reduce((s, l) => s + l.minutes, 0);
+    // time logged this week
+    const wkStart = weekStartDate();
+    const weekLogs = liveLogs().filter(l => new Date(l.startedAt) >= wkStart);
+    const weekMins = weekLogs.reduce((s, l) => s + l.minutes, 0);
+    const weekBillable = weekLogs.reduce((s, l) =>
+        s + (l.minutes / 60) * matterRate(matterById(l.matterId)), 0);
 
-    const recentInvoices = [...liveInvoices()].sort((a,b)=> (b.dateIssued||'').localeCompare(a.dateIssued||'')).slice(0, 3);
+    // nearest upcoming deadline
+    const upcoming = openTasks.filter(t => t.due && t.due >= today)
+        .sort((a, b) => a.due.localeCompare(b.due));
+    const nextDeadline = upcoming[0] || null;
+    const daysToDeadline = nextDeadline
+        ? Math.round((new Date(nextDeadline.due) - new Date(today)) / 86400000)
+        : null;
+
+    // headline + greeting
+    const matterCount = overdue.length + dueToday.length;
+    const headline = matterCount === 0
+        ? `a clear day ahead`
+        : `${numWord(matterCount)} thing${matterCount === 1 ? '' : 's'} to clear today`;
+    const hr = now.getHours();
+    const greet = hr < 12 ? 'good morning' : hr < 18 ? 'good afternoon' : 'good evening';
+    const firstName = (state.profile.name || '').trim().split(/\s+/)[0].toLowerCase() || 'there';
+
+    // timer stat
+    let timerVal = '—', timerSub = 'not running';
+    if (state.timer) {
+        const mins = Math.round((Date.now() - new Date(state.timer.startedAt).getTime()) / 60000);
+        timerVal = fmtMinutes(mins);
+        timerSub = state.timer.label || 'running';
+    }
+
+    // "open this week" — overdue first, then due today, then rest of the week
+    const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate() + 7);
+    const wkEndISO = wkEnd.toISOString().slice(0, 10);
+    const weekTasks = [
+        ...overdue,
+        ...dueToday,
+        ...openTasks.filter(t => t.due && t.due > today && t.due < wkEndISO),
+        ...openTasks.filter(t => !t.due).slice(0, 4)
+    ];
+    const seen = new Set();
+    const weekTasksUniq = weekTasks.filter(t => (seen.has(t.id) ? false : seen.add(t.id)));
 
     return `
-        <div class="view-head">
-            <h1>Today</h1>
-            <div class="meta">${new Date().toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'})}</div>
-            <div class="actions">
-                <button class="btn primary" data-act="new-task">＋ New task</button>
-            </div>
+    <div class="today-v3">
+        <div class="t-daterow">
+            <span class="now">${now.toLocaleDateString(undefined,{weekday:'long', day:'2-digit', month:'long', year:'numeric'}).toLowerCase()}</span>
+            <span class="sep">/</span>
+            <span class="clock"><span class="pulse"></span>${now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+            <span class="sep">/</span>
+            <span>${overdue.length} overdue · ${openTasks.length} open</span>
         </div>
 
-        <div class="cards">
-            <div class="card">
-                <div class="card-label">Time today</div>
-                <div class="card-value">${fmtMinutes(todayMins)}</div>
-                <div class="card-sub">${todayLogs.length} ${todayLogs.length===1?'entry':'entries'}</div>
+        <header class="t-hero">
+            <div class="t-greet">${esc(greet)}, ${esc(firstName)}</div>
+            <h1 class="t-headline">${esc(headline)}<span class="dot">.</span></h1>
+            <div class="t-stats">
+                <div class="t-stat">
+                    <div class="k">closed today</div>
+                    <div class="v">${doneToday.length}</div>
+                    <div class="sub">${openTasks.length} still open</div>
+                </div>
+                <div class="t-stat">
+                    <div class="k">timer</div>
+                    <div class="v ${state.timer?'accent':''}">${esc(timerVal)}</div>
+                    <div class="sub">${esc(timerSub)}</div>
+                </div>
+                <div class="t-stat">
+                    <div class="k">this week</div>
+                    <div class="v">${(weekMins/60).toFixed(1)}<span class="small">h</span></div>
+                    <div class="sub">${fmtMoney(weekBillable, profileCurrency())} billable</div>
+                </div>
+                <div class="t-stat">
+                    <div class="k">next deadline</div>
+                    <div class="v">${daysToDeadline != null ? daysToDeadline + 'd' : '—'}</div>
+                    <div class="sub ${daysToDeadline != null && daysToDeadline <= 2 ? 'warn' : ''}">${nextDeadline ? esc(nextDeadline.title) : 'nothing scheduled'}</div>
+                </div>
             </div>
-            <div class="card">
-                <div class="card-label">Active matters</div>
-                <div class="card-value">${liveMatters().filter(m=>m.status!=='closed').length}</div>
-                <div class="card-sub">across ${liveClients().length} ${liveClients().length===1?'client':'clients'}</div>
+        </header>
+
+        <section class="t-sec">
+            <div class="t-sechdr">
+                <h2>schedule</h2>
+                <span class="count">today</span>
+                <span class="right"><button class="btn sm" data-act="new-task">＋ task</button></span>
             </div>
-            <div class="card">
-                <div class="card-label">Open tasks</div>
-                <div class="card-value">${liveTasks().filter(t=>t.status!=='done').length}</div>
-                <div class="card-sub">${overdue.length} overdue</div>
+            <div id="t-schedule" class="t-schedule"><div class="t-sched-msg">Loading…</div></div>
+        </section>
+
+        <section class="t-sec">
+            <div class="t-sechdr">
+                <h2>open this week</h2>
+                <span class="count">${weekTasksUniq.length} task${weekTasksUniq.length===1?'':'s'}</span>
+                <span class="right"><a href="#/tasks">see all</a></span>
             </div>
-            <div class="card">
-                <div class="card-label">Unpaid invoices</div>
-                <div class="card-value">${liveInvoices().filter(i=>i.status!=='paid').length}</div>
-                <div class="card-sub">${liveInvoices().filter(i=>i.status==='draft').length} draft</div>
+            ${weekTasksUniq.length
+                ? `<div class="t-tasks">${weekTasksUniq.map(_todayTaskRow).join('')}</div>`
+                : `<div class="t-sched-msg">No open tasks this week — capture one with the bar above.</div>`}
+        </section>
+    </div>`;
+}
+
+function _todayTaskRow(t) {
+    const cli = clientById(t.clientId);
+    const mat = matterById(t.matterId);
+    const st = taskStatus(t);
+    const due = t.due
+        ? (st === 'overdue' ? `overdue · ${fmtDate(t.due)}`
+            : t.due === todayISO() ? 'due today'
+            : `due ${fmtDate(t.due)}`)
+        : '';
+    const ctx = [cli && cli.name, mat && mat.title, due].filter(Boolean)
+        .map(x => esc(x)).join(' · ');
+    return `
+        <div class="t-task ${st==='done'?'done':''} ${st==='overdue'?'overdue':''}" data-task="${t.id}">
+            <span class="t-check ${st==='done'?'done':''}" data-toggle="${t.id}"></span>
+            <div class="t-task-body">
+                <div class="t-task-title">${esc(t.title)}</div>
+                ${ctx ? `<div class="t-task-ctx">${ctx}</div>` : ''}
             </div>
-        </div>
+            ${mat ? `<button class="t-task-go" data-start="${t.id}" title="Start timer">▶</button>` : ''}
+        </div>`;
+}
 
-        ${overdue.length ? `
-            <h2 class="section-h">Overdue</h2>
-            ${renderTaskList(overdue)}
-        ` : ''}
+/* Today's calendar — fetched async after the view renders. */
+async function populateTodaySchedule() {
+    const host = document.getElementById('t-schedule');
+    if (!host) return;
+    if (!Google.configured()) {
+        host.innerHTML = `<div class="t-sched-msg">Connect Google Calendar in <a href="#/settings">Settings</a> to see today's schedule.</div>`;
+        return;
+    }
+    if (!Google.hasToken()) {
+        host.innerHTML = `<button class="btn" id="t-cal-connect">Show today's calendar</button>`;
+        const btn = document.getElementById('t-cal-connect');
+        if (btn) btn.addEventListener('click', () => {
+            host.innerHTML = `<div class="t-sched-msg">Connecting…</div>`;
+            populateTodaySchedule();
+        });
+        return;
+    }
+    host.innerHTML = `<div class="t-sched-msg">Loading calendar…</div>`;
+    try {
+        const events = await Google.listTodayEvents();
+        if (!events.length) {
+            host.innerHTML = `<div class="t-sched-msg">No events on the calendar today.</div>`;
+            return;
+        }
+        const nowMs = Date.now();
+        let html = '';
+        let nowLineInserted = false;
+        events.forEach(ev => {
+            const startMs = ev.start ? new Date(ev.start).getTime() : 0;
+            if (!nowLineInserted && !ev.allDay && startMs > nowMs) {
+                html += `<div class="t-nowline"><span>now · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>`;
+                nowLineInserted = true;
+            }
+            html += _scheduleSlot(ev, nowMs);
+        });
+        host.innerHTML = html;
+    } catch (e) {
+        console.error('calendar load failed', e);
+        host.innerHTML = `<div class="t-sched-msg">Calendar unavailable: ${esc(e.message || 'error')}</div>`;
+    }
+}
 
-        <h2 class="section-h">Due today</h2>
-        ${dueToday.length ? renderTaskList(dueToday) : '<div class="empty">Nothing due today.</div>'}
-
-        ${noDate.length ? `
-            <h2 class="section-h">No deadline</h2>
-            ${renderTaskList(noDate)}
-        ` : ''}
-
-        ${recentInvoices.length ? `
-            <h2 class="section-h">Recent invoices</h2>
-            <table class="t">
-                <thead><tr><th>Number</th><th>Client</th><th>Issued</th><th>Status</th><th class="num">Amount</th></tr></thead>
-                <tbody>${recentInvoices.map(inv => `
-                    <tr class="row" data-go="invoices/${inv.id}">
-                        <td>${esc(inv.number)}</td>
-                        <td>${esc(clientById(inv.clientId)?.name || '—')}</td>
-                        <td>${fmtDate(inv.dateIssued)}</td>
-                        <td><span class="badge ${inv.status}">${esc(inv.status)}</span></td>
-                        <td class="num">${fmtMoney(invoiceTotal(inv), inv.currency)}</td>
-                    </tr>`).join('')}
-                </tbody>
-            </table>
-        ` : ''}
-    `;
+function _scheduleSlot(ev, nowMs) {
+    const fmt = (iso) => new Date(iso).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const when = ev.allDay
+        ? 'all day'
+        : `${fmt(ev.start)}<span class="end">→ ${fmt(ev.end)}</span>`;
+    const isPast = !ev.allDay && new Date(ev.end).getTime() < nowMs;
+    const isNow  = !ev.allDay && new Date(ev.start).getTime() <= nowMs && new Date(ev.end).getTime() >= nowMs;
+    const ctx = [ev.location, ev.hangoutLink ? 'video call' : ''].filter(Boolean).map(x=>esc(x)).join(' · ');
+    return `
+        <div class="t-slot ${isPast?'past':''} ${isNow?'now':''}">
+            <div class="t-slot-when">${when}</div>
+            <div class="t-slot-marker"></div>
+            <div class="t-slot-body">
+                <div class="t-slot-what">${esc(ev.title)}</div>
+                ${ctx ? `<div class="t-slot-ctx">${ctx}</div>` : ''}
+            </div>
+        </div>`;
 }
 
 function renderTaskList(tasks) {
@@ -1966,6 +2097,7 @@ function render() {
     root.innerHTML = html;
     root.scrollTop = 0;
     if (view === 'settings') renderSnapshotsList();
+    if (view === 'today') populateTodaySchedule();
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);

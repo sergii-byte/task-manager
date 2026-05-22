@@ -163,6 +163,40 @@ const Google = {
         window.open('https://mail.google.com/mail/u/0/#drafts', '_blank');
     },
 
+    /** True if a valid (non-expired) access token is already in memory. */
+    hasToken() {
+        return !!Google._accessToken && Date.now() < Google._expiresAt - 60000;
+    },
+
+    /* =====================================================================
+     * CALENDAR — list today's events
+     * ===================================================================== */
+    async listTodayEvents() {
+        const start = new Date(); start.setHours(0, 0, 0, 0);
+        const end   = new Date(); end.setHours(23, 59, 59, 999);
+        const params = new URLSearchParams({
+            timeMin: start.toISOString(),
+            timeMax: end.toISOString(),
+            singleEvents: 'true',
+            orderBy: 'startTime',
+            maxResults: '25'
+        });
+        const data = await Google._api(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params.toString()
+        );
+        return (data.items || [])
+            .filter(e => e.status !== 'cancelled')
+            .map(e => ({
+                id: e.id,
+                title: e.summary || '(no title)',
+                start: (e.start && (e.start.dateTime || e.start.date)) || null,
+                end:   (e.end && (e.end.dateTime || e.end.date)) || null,
+                allDay: !(e.start && e.start.dateTime),
+                location: e.location || '',
+                hangoutLink: e.hangoutLink || ''
+            }));
+    },
+
     /* =====================================================================
      * CALENDAR — create event
      * ===================================================================== */
