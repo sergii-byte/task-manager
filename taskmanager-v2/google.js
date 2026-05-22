@@ -72,9 +72,17 @@ const Google = {
                     },
                     error_callback: (err) => reject(new Error(err.message || 'OAuth error'))
                 });
-                const prompt = force ? 'consent'
-                    : (Google._switchAccount ? 'select_account' : '');
+                // either an in-memory flag or a persisted one (signOut sets
+                // both, so the picker still shows after a page reload)
+                let switchAcct = Google._switchAccount;
+                if (!switchAcct) {
+                    try { switchAcct = localStorage.getItem('ordify-gswitch') === '1'; }
+                    catch (e) {}
+                }
                 Google._switchAccount = false;
+                try { localStorage.removeItem('ordify-gswitch'); } catch (e) {}
+                const prompt = force ? 'consent'
+                    : (switchAcct ? 'select_account' : '');
                 Google._tokenClient.requestAccessToken({ prompt: prompt });
             } catch (e) { reject(e); }
         });
@@ -87,8 +95,10 @@ const Google = {
         Google._accessToken = null;
         Google._expiresAt = 0;
         // next interactive connect must show the account picker so the user
-        // can pick a different mailbox / calendar
+        // can pick a different mailbox / calendar (persisted so the intent
+        // survives a page reload)
         Google._switchAccount = true;
+        try { localStorage.setItem('ordify-gswitch', '1'); } catch (e) {}
         try { localStorage.removeItem('ordify-gtoken'); } catch (e) {}
         toast('Disconnected — pick another account on next connect');
     },

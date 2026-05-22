@@ -1752,10 +1752,14 @@ function viewSettings() {
 let inboxEmails = [];
 
 function viewInbox() {
+    const connected = (typeof Google !== 'undefined') && Google.configured && Google.hasToken();
     return `
         <div class="view-head">
             <h1>Inbox</h1>
             <div class="meta">triage — turn what matters into a task, dismiss the rest</div>
+            <div class="actions">
+                ${connected ? `<button class="btn sm" data-act="email-switch" title="Disconnect and pick another Google account">Switch mailbox</button>` : ''}
+            </div>
         </div>
         <div id="inbox-host"><div class="t-sched-msg">Loading…</div></div>
     `;
@@ -2386,6 +2390,11 @@ function bindGlobalActions() {
                     break;
                 }
                 emailToTasksAI(em);
+                break;
+            }
+            case 'email-switch': {
+                Google.signOut();
+                render();   // re-renders the Inbox view → "Connect Gmail inbox" appears
                 break;
             }
             case 'email-open': {
