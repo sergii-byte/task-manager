@@ -1904,4 +1904,6 @@ function boot() {
     render();
 }
 
-document.addEventListener('DOMContentLoaded', boot);
+// Boot is gated by auth.js — it calls window.ordifyBoot() once the user is
+// signed in with Google. Until then the #auth-gate overlay covers the app.
+window.ordifyBoot = boot;

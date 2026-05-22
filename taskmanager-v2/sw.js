@@ -5,15 +5,17 @@
  */
 'use strict';
 
-const CACHE = 'ordify-v5';
+const CACHE = 'ordify-v6';
 const CORE = [
     './',
     './index.html',
-    './style.css?v=5',
-    './app.js?v=5',
-    './attach.js?v=5',
-    './google.js?v=5',
-    './omni.js?v=5',
+    './style.css?v=6',
+    './app.js?v=6',
+    './attach.js?v=6',
+    './google.js?v=6',
+    './omni.js?v=6',
+    './firebase-init.js?v=6',
+    './auth.js?v=6',
     './manifest.webmanifest',
     './icon.svg'
 ];
@@ -38,7 +40,23 @@ self.addEventListener('fetch', (event) => {
     if (req.method !== 'GET') return;
     const url = new URL(req.url);
 
-    // Never intercept Anthropic / Google / external API calls
+    // Firebase SDK from gstatic — cache-first, so the app shell still loads
+    // offline after the first visit.
+    if (url.hostname === 'www.gstatic.com' && url.pathname.includes('/firebasejs/')) {
+        event.respondWith((async () => {
+            const cache = await caches.open(CACHE);
+            const hit = await cache.match(req);
+            if (hit) return hit;
+            try {
+                const fresh = await fetch(req);
+                if (fresh.ok) cache.put(req, fresh.clone()).catch(() => {});
+                return fresh;
+            } catch (e) { return hit || Response.error(); }
+        })());
+        return;
+    }
+
+    // Never intercept Firebase / Anthropic / Google API calls
     if (url.origin !== location.origin) return;
 
     // Navigation: network-first, fall back to cached index.html

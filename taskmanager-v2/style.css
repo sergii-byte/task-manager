@@ -1267,3 +1267,121 @@ dialog footer button.danger:hover { background: #fef2f2; border-color: var(--dan
     border-radius: 4px;
 }
 #audio-player-bar .ap-close:hover { background: rgba(255,255,255,0.1); }
+
+/* === AUTH GATE === */
+#auth-gate {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+#auth-gate[hidden] { display: none; }
+.auth-card {
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 44px 32px 32px;
+    box-shadow: var(--shadow);
+}
+.auth-brand {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    line-height: 1;
+}
+.auth-sub {
+    font-size: 13px;
+    color: var(--fg-mute);
+    margin-top: 4px;
+}
+.auth-text {
+    font-size: 14px;
+    color: var(--fg);
+    line-height: 1.55;
+    margin: 26px 0 22px;
+}
+#auth-signin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 11px 16px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+}
+#auth-signin:hover { background: var(--bg-hover); border-color: var(--fg-faint); }
+#auth-signin:disabled { opacity: 0.55; cursor: not-allowed; }
+#auth-signin svg { flex-shrink: 0; }
+.auth-error {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--danger);
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    line-height: 1.4;
+}
+.auth-error[hidden] { display: none; }
+.auth-foot {
+    margin-top: 22px;
+    font-size: 11px;
+    color: var(--fg-faint);
+}
+
+/* === ACCOUNT CHIP (sidebar foot) === */
+#account-chip:empty { display: none; }
+#account-chip .acct {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px 8px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--line-soft);
+    margin-bottom: 4px;
+}
+#account-chip .acct img,
+#account-chip .acct .acct-ph {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--accent-soft);
+    object-fit: cover;
+}
+#account-chip .acct-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg-mute);
+}
+#account-chip #acct-signout {
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    color: var(--fg-mute);
+    font-size: 14px;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: var(--radius);
+    flex-shrink: 0;
+}
+#account-chip #acct-signout:hover { background: var(--bg-hover); color: var(--danger); }
