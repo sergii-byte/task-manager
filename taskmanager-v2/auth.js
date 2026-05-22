@@ -39,7 +39,7 @@ const Auth = {
                 if (!Auth.booted) {
                     Auth.booted = true;
                     if (typeof window.ordifyBoot === 'function') {
-                        window.ordifyBoot();
+                        window.ordifyBoot(user);
                     }
                 }
             } else {

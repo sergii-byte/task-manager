@@ -17,6 +17,7 @@ const firebaseConfig = {
 };
 
 let fbAuth = null;
+let fbDb = null;
 let fbReady = false;
 
 try {
@@ -24,11 +25,20 @@ try {
         throw new Error('Firebase SDK did not load');
     }
     firebase.initializeApp(firebaseConfig);
+
     fbAuth = firebase.auth();
     // Persist the session across reloads / browser restarts.
     fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch((e) => {
         console.warn('Auth persistence could not be set', e);
     });
+
+    fbDb = firebase.firestore();
+    // Offline cache: writes are durable locally and sync when back online;
+    // reads work offline. synchronizeTabs allows multiple open tabs.
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch((e) => {
+        console.warn('Firestore persistence could not be enabled', e);
+    });
+
     fbReady = true;
 } catch (e) {
     console.error('Firebase init failed', e);

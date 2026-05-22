@@ -74,7 +74,7 @@ const debounce = (fn, ms) => {
 const STORE_KEY = 'ordify-v2-data';
 
 const defaultState = () => ({
-    v: 4,
+    v: 5,
     profile: {
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
@@ -97,27 +97,100 @@ const defaultState = () => ({
 
 let state = defaultState();
 
+/* Firestore-backed store (Phase 1).
+ * The whole `state` object is stored as a JSON string in a single document
+ * /userdata/{uid}. A realtime listener keeps every signed-in device in sync.
+ * localStorage is kept as an offline mirror / fallback.
+ */
 const Store = {
-    load() {
+    docRef: null,
+    _unsub: null,
+    _saveTimer: null,
+    _lastWritten: null,   // JSON string of the last state we serialized
+
+    async init(uid) {
+        if (!uid || typeof fbDb === 'undefined' || !fbDb) {
+            console.warn('Firestore unavailable — using localStorage only');
+            Store._loadLocal();
+            return;
+        }
+        Store.docRef = fbDb.collection('userdata').doc(uid);
+
+        let snap = null;
+        try {
+            snap = await Store.docRef.get();
+        } catch (e) {
+            console.error('Firestore read failed — falling back to localStorage', e);
+            Store._loadLocal();
+            toast('Offline — working from local copy', 'error');
+            return;
+        }
+
+        if (snap && snap.exists && snap.data() && typeof snap.data().state === 'string') {
+            // Existing cloud data
+            try {
+                state = Store._normalize(Object.assign(defaultState(), JSON.parse(snap.data().state)));
+            } catch (e) {
+                console.error('cloud state parse failed', e);
+                state = defaultState();
+            }
+            Store._lastWritten = JSON.stringify(state);
+            Store._migrateLegacyKeys();
+        } else {
+            // No cloud doc yet — one-time import from localStorage, then seed it
+            const legacy = localStorage.getItem(STORE_KEY);
+            let initial = defaultState();
+            if (legacy) {
+                try { initial = Object.assign(defaultState(), JSON.parse(legacy)); }
+                catch (e) { console.warn('legacy data unreadable', e); }
+            }
+            state = Store._normalize(initial);
+            Store._migrateLegacyKeys();
+            const json = JSON.stringify(state);
+            Store._lastWritten = json;
+            try {
+                await Store.docRef.set({ state: json, updatedAt: Date.now() });
+            } catch (e) {
+                console.error('initial cloud seed failed', e);
+            }
+        }
+
+        // Realtime sync — changes from other devices land here
+        Store._unsub = Store.docRef.onSnapshot(
+            (doc) => {
+                if (!doc.exists) return;
+                const data = doc.data();
+                if (!data || typeof data.state !== 'string') return;
+                if (data.state === JSON.stringify(state)) return;  // no real change
+                try {
+                    state = Store._normalize(Object.assign(defaultState(), JSON.parse(data.state)));
+                    Store._lastWritten = data.state;
+                    render();
+                } catch (e) { console.error('snapshot parse failed', e); }
+            },
+            (err) => console.error('Firestore snapshot error', err)
+        );
+    },
+
+    _normalize(s) {
+        ['clients','matters','tasks','logs','invoices','audits','attachments'].forEach(k => {
+            if (!Array.isArray(s[k])) s[k] = [];
+        });
+        s.profile = Object.assign(defaultState().profile, s.profile || {});
+        return s;
+    },
+
+    _loadLocal() {
         try {
             const raw = localStorage.getItem(STORE_KEY);
-            if (!raw) { state = defaultState(); }
-            else {
-                const parsed = JSON.parse(raw);
-                state = Object.assign(defaultState(), parsed);
-                ['clients','matters','tasks','logs','invoices','audits','attachments'].forEach(k => {
-                    if (!Array.isArray(state[k])) state[k] = [];
-                });
-                if (!state.profile) state.profile = defaultState().profile;
-                state.profile = Object.assign(defaultState().profile, state.profile);
-            }
-            // One-time migration: pull keys from the first project if user
-            // visited it on this same origin. Never overwrite existing values.
-            Store._migrateLegacyKeys();
+            state = raw
+                ? Store._normalize(Object.assign(defaultState(), JSON.parse(raw)))
+                : defaultState();
         } catch (e) {
-            console.error('Store.load failed', e);
+            console.error('local load failed', e);
             state = defaultState();
         }
+        Store._migrateLegacyKeys();
     },
 
     _migrateLegacyKeys() {
@@ -137,27 +210,38 @@ const Store = {
         if (migrated > 0) {
             audit('migrateLegacy', null, `imported ${migrated} setting${migrated===1?'':'s'} from first project`);
             Store.save();
-            // surface a one-line nudge after the UI has booted
             setTimeout(() => toast(`Imported ${migrated} setting${migrated===1?'':'s'} from your first project`), 600);
         }
     },
+
     save() {
-        try {
-            localStorage.setItem(STORE_KEY, JSON.stringify(state));
-        } catch (e) {
-            console.error('Store.save failed', e);
-            toast('Save failed: ' + e.message, 'error');
-        }
+        // localStorage mirror — offline safety net
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        if (!Store.docRef) return;
+        clearTimeout(Store._saveTimer);
+        Store._saveTimer = setTimeout(() => {
+            const json = JSON.stringify(state);
+            if (json === Store._lastWritten) return;   // nothing changed
+            Store._lastWritten = json;
+            Store.docRef.set({ state: json, updatedAt: Date.now() })
+                .catch((e) => {
+                    console.error('cloud save failed', e);
+                    toast('Sync failed — saved locally', 'error');
+                });
+        }, 500);
     },
+
     export() {
         return JSON.stringify(state, null, 2);
     },
+
     import(json) {
         const parsed = JSON.parse(json);
         if (!parsed || typeof parsed !== 'object') throw new Error('Invalid data');
-        state = Object.assign(defaultState(), parsed);
+        state = Store._normalize(Object.assign(defaultState(), parsed));
         Store.save();
     },
+
     reset() {
         if (confirm('Wipe all data and start fresh? This cannot be undone.')) {
             state = defaultState();
@@ -1894,16 +1978,17 @@ function render() {
  * 21. BOOT
  * ========================================================================= */
 
-function boot() {
-    Store.load();
+async function boot(user) {
     Modal.init();
     Timer.init();
     bindGlobalActions();
-    Snapshots.startAutoLoop();
     if (!location.hash) location.hash = '#/today';
+    const uid = (user && user.uid) ? user.uid : null;
+    await Store.init(uid);          // loads from Firestore, sets up realtime sync
+    Snapshots.startAutoLoop();
     render();
 }
 
-// Boot is gated by auth.js — it calls window.ordifyBoot() once the user is
+// Boot is gated by auth.js — it calls window.ordifyBoot(user) once the user is
 // signed in with Google. Until then the #auth-gate overlay covers the app.
 window.ordifyBoot = boot;
