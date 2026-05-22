@@ -20,6 +20,7 @@
 const Google = {
     SCOPES: [
         'https://www.googleapis.com/auth/gmail.compose',
+        'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/calendar.events',
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive.file'
@@ -95,8 +96,9 @@ const Google = {
         });
         if (!res.ok) {
             const err = await res.text().catch(()=>'');
-            // 401 → token expired or revoked, retry once
-            if (res.status === 401) {
+            // 401 (expired/revoked) or 403 (a newly added scope not yet granted)
+            // → re-consent and retry once
+            if (res.status === 401 || res.status === 403) {
                 Google._accessToken = null;
                 const tok2 = await Google._ensureToken({ force: true });
                 const res2 = await fetch(url, {
@@ -161,6 +163,39 @@ const Google = {
     /** Open the Gmail web UI to view drafts for the signed-in user. */
     openDrafts() {
         window.open('https://mail.google.com/mail/u/0/#drafts', '_blank');
+    },
+
+    /* =====================================================================
+     * GMAIL — list inbox messages (for triage)
+     * ===================================================================== */
+    async listInbox(max = 25) {
+        const list = await Google._api(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:inbox&maxResults=' + max
+        );
+        const ids = (list.messages || []).map(m => m.id);
+        const msgs = await Promise.all(ids.map(id =>
+            Google._api('https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id +
+                '?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date')
+                .catch(() => null)
+        ));
+        return msgs.filter(Boolean).map(m => {
+            const h = {};
+            ((m.payload && m.payload.headers) || []).forEach(x => {
+                h[(x.name || '').toLowerCase()] = x.value;
+            });
+            return {
+                id: m.id,
+                threadId: m.threadId,
+                from: h.from || '',
+                subject: h.subject || '(no subject)',
+                date: m.internalDate ? new Date(Number(m.internalDate)) : null,
+                snippet: m.snippet || ''
+            };
+        });
+    },
+
+    openThread(threadId) {
+        window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId, '_blank');
     },
 
     /** True if a valid (non-expired) access token is already in memory. */

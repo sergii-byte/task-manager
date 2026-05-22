@@ -74,7 +74,7 @@ const debounce = (fn, ms) => {
 const STORE_KEY = 'ordify-v2-data';
 
 const defaultState = () => ({
-    v: 7,
+    v: 8,
     profile: {
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
@@ -94,6 +94,7 @@ const defaultState = () => ({
     invoices: [],
     audits: [],
     attachments: [],
+    emailHandled: [],     // Gmail message ids already turned into tasks / dismissed
     tasksMigrated: false, // set true once blob tasks moved into /tasks
     timer: null           // { taskId, matterId, clientId, label, startedAt }
 });
@@ -183,7 +184,7 @@ const Store = {
     },
 
     _normalize(s) {
-        ['clients','matters','tasks','logs','invoices','audits','attachments'].forEach(k => {
+        ['clients','matters','tasks','logs','invoices','audits','attachments','emailHandled'].forEach(k => {
             if (!Array.isArray(s[k])) s[k] = [];
         });
         s.profile = Object.assign(defaultState().profile, s.profile || {});
@@ -802,6 +803,7 @@ const Timer = {
 
 const NAV_ITEMS = [
     { id: 'today',    label: 'today',     icon: '○' },
+    { id: 'inbox',    label: 'inbox',     icon: '✉' },
     { id: 'clients',  label: 'clients',   icon: '◐' },
     { id: 'matters',  label: 'matters',   icon: '◇' },
     { id: 'tasks',    label: 'tasks',     icon: '☐' },
@@ -1737,6 +1739,79 @@ function viewSettings() {
     `;
 }
 
+/* =========================================================================
+ * VIEW: INBOX — Gmail triage
+ * ========================================================================= */
+
+let inboxEmails = [];
+
+function viewInbox() {
+    return `
+        <div class="view-head">
+            <h1>Inbox</h1>
+            <div class="meta">triage — turn what matters into a task, dismiss the rest</div>
+        </div>
+        <div id="inbox-host"><div class="t-sched-msg">Loading…</div></div>
+    `;
+}
+
+async function populateInbox() {
+    const host = document.getElementById('inbox-host');
+    if (!host) return;
+    if (!Google.configured()) {
+        host.innerHTML = `<div class="empty-state">
+            <h3>Connect Gmail</h3>
+            <p>Add your Google OAuth Client ID in <a href="#/settings">Settings</a> to triage email here.</p>
+        </div>`;
+        return;
+    }
+    if (!Google.hasToken()) {
+        host.innerHTML = `<button class="btn primary" id="inbox-connect">Connect Gmail inbox</button>`;
+        const b = document.getElementById('inbox-connect');
+        if (b) b.addEventListener('click', () => {
+            host.innerHTML = `<div class="t-sched-msg">Connecting…</div>`;
+            populateInbox();
+        });
+        return;
+    }
+    host.innerHTML = `<div class="t-sched-msg">Loading inbox…</div>`;
+    try {
+        const all = await Google.listInbox(30);
+        const handled = new Set(state.emailHandled || []);
+        inboxEmails = all.filter(e => !handled.has(e.id));
+        if (!inboxEmails.length) {
+            host.innerHTML = `<div class="empty-state">
+                <h3>Inbox clear</h3>
+                <p>Nothing left to triage — every email is a task or dismissed.</p>
+            </div>`;
+            return;
+        }
+        host.innerHTML = `<div class="inbox-list">${inboxEmails.map(_inboxRow).join('')}</div>`;
+    } catch (e) {
+        console.error('inbox load failed', e);
+        host.innerHTML = `<div class="t-sched-msg">Inbox unavailable: ${esc(e.message || 'error')}</div>`;
+    }
+}
+
+function _inboxRow(e) {
+    const fromName = (e.from || '').replace(/<[^>]*>/, '').split('"').join('').trim() || e.from || '—';
+    const when = e.date ? e.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+    return `
+        <div class="inbox-row">
+            <div class="inbox-from">${esc(fromName)}</div>
+            <div class="inbox-body">
+                <div class="inbox-subj">${esc(e.subject)}</div>
+                <div class="inbox-snip">${esc(e.snippet)}</div>
+                <div class="inbox-actions">
+                    <button class="btn sm primary" data-act="email-task" data-id="${esc(e.id)}">→ Task</button>
+                    <button class="btn sm" data-act="email-open" data-id="${esc(e.id)}">Open in Gmail</button>
+                    <button class="btn sm ghost" data-act="email-dismiss" data-id="${esc(e.id)}">Dismiss</button>
+                </div>
+            </div>
+            <div class="inbox-when">${esc(when)}</div>
+        </div>`;
+}
+
 async function renderSnapshotsList() {
     const host = $('#snap-list-host');
     if (!host) return;
@@ -2249,6 +2324,39 @@ function bindGlobalActions() {
                 Google.signOut();
                 break;
             }
+            case 'email-task': {
+                const em = inboxEmails.find(x => x.id === act.dataset.id);
+                if (!em) break;
+                const t = {
+                    id: uuid(), status: 'todo', createdAt: new Date().toISOString(),
+                    matterId: null, clientId: null, due: null, priority: 'normal',
+                    assigneeEmail: null,
+                    title: em.subject,
+                    notes: `From: ${em.from}\n\n${em.snippet}\n\nhttps://mail.google.com/mail/u/0/#inbox/${em.threadId}`
+                };
+                Tasks.put(t);
+                audit('createTask', t.id, t.title);
+                state.emailHandled = state.emailHandled || [];
+                state.emailHandled.push(em.id);
+                if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
+                Store.save();
+                populateInbox();
+                toast('Task created from email');
+                break;
+            }
+            case 'email-dismiss': {
+                state.emailHandled = state.emailHandled || [];
+                state.emailHandled.push(act.dataset.id);
+                if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
+                Store.save();
+                populateInbox();
+                break;
+            }
+            case 'email-open': {
+                const em = inboxEmails.find(x => x.id === act.dataset.id);
+                if (em) Google.openThread(em.threadId);
+                break;
+            }
             case 'add-bank': openBankAccountForm(); break;
             case 'edit-bank': openBankAccountForm(act.dataset.id); break;
             case 'remove-bank': {
@@ -2348,6 +2456,7 @@ function render() {
             case 'tasks':    html = viewTasks(); break;
             case 'time':     html = viewTime(); break;
             case 'invoices': html = id ? viewInvoice(id) : viewInvoices(); break;
+            case 'inbox':    html = viewInbox(); break;
             case 'settings': html = viewSettings(); break;
             default:         html = viewToday();
         }
@@ -2358,6 +2467,7 @@ function render() {
     root.innerHTML = html;
     root.scrollTop = 0;
     if (view === 'today') populateTodaySchedule();
+    if (view === 'inbox') populateInbox();
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);
