@@ -1813,13 +1813,49 @@ function _inboxRow(e) {
                 <div class="inbox-subj">${esc(e.subject)}</div>
                 <div class="inbox-snip">${esc(e.snippet)}</div>
                 <div class="inbox-actions">
-                    <button class="btn sm primary" data-act="email-task" data-id="${esc(e.id)}">→ Task</button>
+                    <button class="btn sm primary" data-act="email-ai" data-id="${esc(e.id)}" title="Read the email and extract action items">✨ AI tasks</button>
+                    <button class="btn sm" data-act="email-task" data-id="${esc(e.id)}" title="Quick task from the subject line">→ Task</button>
                     <button class="btn sm" data-act="email-open" data-id="${esc(e.id)}">Open in Gmail</button>
                     <button class="btn sm ghost" data-act="email-dismiss" data-id="${esc(e.id)}">Dismiss</button>
                 </div>
             </div>
             <div class="inbox-when">${esc(when)}</div>
         </div>`;
+}
+
+/* Read an email's body, let Claude extract action items, create the tasks. */
+async function emailToTasksAI(em) {
+    toast('Reading the email…');
+    try {
+        const body = await Google.getMessageText(em.id);
+        const extracted = await AI.extractEmailTasks(em.subject, body);
+        if (!extracted.length) {
+            toast('No action items found in that email');
+            return;
+        }
+        const link = `https://mail.google.com/mail/u/0/#inbox/${em.threadId}`;
+        extracted.forEach(td => {
+            const t = {
+                id: uuid(), status: 'todo', createdAt: new Date().toISOString(),
+                matterId: null, clientId: null, assigneeEmail: null,
+                title: td.title || em.subject,
+                due: td.due || null,
+                priority: td.priority || 'normal',
+                notes: (td.notes ? td.notes + '\n\n' : '') + `From email: ${em.subject}\n${link}`
+            };
+            Tasks.put(t);
+            audit('createTask', t.id, t.title);
+        });
+        state.emailHandled = state.emailHandled || [];
+        state.emailHandled.push(em.id);
+        if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
+        Store.save();
+        populateInbox();
+        toast(`Created ${extracted.length} task${extracted.length === 1 ? '' : 's'} from the email`);
+    } catch (e) {
+        console.error('email AI failed', e);
+        toast('AI failed: ' + (e.message || e), 'error');
+    }
 }
 
 async function renderSnapshotsList() {
@@ -2360,6 +2396,16 @@ function bindGlobalActions() {
                 if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
                 Store.save();
                 populateInbox();
+                break;
+            }
+            case 'email-ai': {
+                const em = inboxEmails.find(x => x.id === act.dataset.id);
+                if (!em) break;
+                if (!state.profile.anthropicKey) {
+                    toast('Add your Anthropic API key in Settings', 'error');
+                    break;
+                }
+                emailToTasksAI(em);
                 break;
             }
             case 'email-open': {

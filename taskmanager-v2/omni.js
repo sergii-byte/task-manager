@@ -459,6 +459,48 @@ ${text}`;
         return parsed;
     },
 
+    /* Read one email's body and extract the lawyer's action items. */
+    async extractEmailTasks(subject, body) {
+        const sys = `This email was received by a solo lawyer. Read it and extract the concrete action items the lawyer must do.
+
+Return ONLY raw JSON, no markdown fences:
+{ "tasks": [ { "title": "", "due": null, "priority": "normal", "notes": "" } ] }
+Rules:
+- "title": a short, actionable task in English (keep case numbers, names and references as-is). NOT the email subject verbatim — the actual thing to do.
+- "due": ISO date YYYY-MM-DD if a deadline is stated or clearly implied; otherwise null. Resolve relative dates against TODAY.
+- "priority": "high" if urgent or deadline-driven, otherwise "normal".
+- "notes": one short line of context.
+- If the email needs no action (newsletter, receipt, FYI, automated notice), return { "tasks": [] }.
+- At most 4 tasks. Output raw JSON only.`;
+        const userMsg = `TODAY: ${todayISO()}\n\nSUBJECT: ${subject}\n\nBODY:\n${body}`;
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'x-api-key': state.profile.anthropicKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: state.profile.anthropicModel || 'claude-3-5-haiku-latest',
+                max_tokens: 1024,
+                system: sys,
+                messages: [{ role: 'user', content: userMsg }]
+            })
+        });
+        if (!res.ok) {
+            const err = await res.text().catch(() => '');
+            throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+        }
+        const json = await res.json();
+        const content = (json.content && json.content[0] && json.content[0].text) || '';
+        const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        let parsed;
+        try { parsed = JSON.parse(cleaned); }
+        catch (e) { throw new Error('AI returned an unreadable response'); }
+        return Array.isArray(parsed.tasks) ? parsed.tasks : [];
+    },
+
     _buildContext() {
         const clients = state.clients.filter(c => !c.deletedAt).slice(0, 50)
             .map(c => `- client "${c.id}": ${c.name}`).join('\n');

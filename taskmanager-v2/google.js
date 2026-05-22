@@ -198,6 +198,39 @@ const Google = {
         window.open('https://mail.google.com/mail/u/0/#inbox/' + threadId, '_blank');
     },
 
+    /** Full plain-text body of one message (for AI analysis). */
+    async getMessageText(id) {
+        const msg = await Google._api(
+            'https://gmail.googleapis.com/gmail/v1/users/me/messages/' + id + '?format=full'
+        );
+        const decode = (data) => {
+            try {
+                const bin = atob(String(data).replace(/-/g, '+').replace(/_/g, '/'));
+                const bytes = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                return new TextDecoder('utf-8').decode(bytes);
+            } catch (e) { return ''; }
+        };
+        let plain = '', html = '';
+        const walk = (p) => {
+            if (!p) return;
+            if (p.mimeType === 'text/plain' && p.body && p.body.data && !plain) {
+                plain = decode(p.body.data);
+            } else if (p.mimeType === 'text/html' && p.body && p.body.data && !html) {
+                html = decode(p.body.data);
+            }
+            (p.parts || []).forEach(walk);
+        };
+        walk(msg.payload);
+        let text = plain;
+        if (!text && html) {
+            text = html.replace(/<[^>]+>/g, ' ')
+                       .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+                       .replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+        }
+        return (text || msg.snippet || '').replace(/\s+\n/g, '\n').slice(0, 8000);
+    },
+
     /** True if a valid (non-expired) access token is already in memory. */
     hasToken() {
         return !!Google._accessToken && Date.now() < Google._expiresAt - 60000;
