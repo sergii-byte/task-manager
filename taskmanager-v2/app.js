@@ -1708,8 +1708,9 @@ function viewSettings() {
                 </div>
             </div>
             <div class="settings-data">
-                <button type="button" class="btn" data-act="google-signout">Sign out of Google</button>
+                <button type="button" class="btn" data-act="google-signout">Disconnect Google account</button>
             </div>
+            <p class="muted" style="font-size:12px;margin-top:6px">Use this to switch to a different Gmail / Calendar — next time you connect, Google will let you pick another account.</p>
 
             <div class="actions" style="margin-top:24px">
                 <button type="submit" class="btn primary">Save settings</button>

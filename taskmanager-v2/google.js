@@ -72,7 +72,10 @@ const Google = {
                     },
                     error_callback: (err) => reject(new Error(err.message || 'OAuth error'))
                 });
-                Google._tokenClient.requestAccessToken({ prompt: force ? 'consent' : '' });
+                const prompt = force ? 'consent'
+                    : (Google._switchAccount ? 'select_account' : '');
+                Google._switchAccount = false;
+                Google._tokenClient.requestAccessToken({ prompt: prompt });
             } catch (e) { reject(e); }
         });
     },
@@ -83,8 +86,11 @@ const Google = {
         }
         Google._accessToken = null;
         Google._expiresAt = 0;
+        // next interactive connect must show the account picker so the user
+        // can pick a different mailbox / calendar
+        Google._switchAccount = true;
         try { localStorage.removeItem('ordify-gtoken'); } catch (e) {}
-        toast('Signed out of Google');
+        toast('Disconnected — pick another account on next connect');
     },
 
     /* Persist / restore the access token so the connection survives reloads
