@@ -83,6 +83,8 @@ const defaultState = () => ({
         bankAccounts: [],   // [{ id, currency, iban, swift, bankName, holder }]
         anthropicKey: '',
         anthropicModel: 'claude-3-5-haiku-latest',
+        geminiKey: '',
+        geminiModel: 'gemini-2.0-flash',
         dictationLang: 'auto',
         snapshotIntervalHours: 4,
         googleClientId: ''
@@ -1690,6 +1692,18 @@ function viewSettings() {
                         <option value="pl-PL" ${p.dictationLang==='pl-PL'?'selected':''}>Polish (pl-PL)</option>
                     </select>
                     <small class="hint">Auto reads your browser locale (uk / ru / en / pl). Web Speech API can only listen to one language at a time — pick explicitly if auto guesses wrong.</small>
+                </div>
+                <div class="field full">
+                    <label>Gemini API key (audio / video)</label>
+                    <input name="geminiKey" type="password" placeholder="AIza..." value="${esc(p.geminiKey||'')}" autocomplete="off">
+                    <small class="hint">Get one free at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a>. Required only to attach audio or video files via 📎 — Claude handles documents and images.</small>
+                </div>
+                <div class="field"><label>Gemini model</label>
+                    <select name="geminiModel">
+                        ${['gemini-2.0-flash','gemini-2.5-flash','gemini-1.5-flash','gemini-1.5-pro'].map(m =>
+                            `<option ${p.geminiModel===m?'selected':''}>${m}</option>`).join('')}
+                    </select>
+                    <small class="hint">Flash = fast/cheap, Pro = more careful with long video.</small>
                 </div>
             </div>
 

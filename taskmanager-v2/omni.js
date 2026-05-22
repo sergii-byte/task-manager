@@ -144,7 +144,7 @@ const Omni = {
         }
         const inp = document.createElement('input');
         inp.type = 'file';
-        inp.accept = '.docx,application/pdf,image/*,text/plain';
+        inp.accept = '.docx,application/pdf,image/*,text/plain,audio/*,video/*';
         inp.onchange = async () => {
             const f = inp.files && inp.files[0];
             if (!f) return;
@@ -520,10 +520,11 @@ ${text}`;
         } else if (file.type === 'text/plain' || name.endsWith('.txt')) {
             const text = await file.text();
             content = intro + '\n\n' + text.slice(0, 14000);
-        } else if ((file.type || '').startsWith('audio/')) {
-            throw new Error('Audio files need transcription (Whisper). Use 🎤 for live dictation, or ask to wire OpenAI for audio uploads.');
+        } else if ((file.type || '').startsWith('audio/') || (file.type || '').startsWith('video/')) {
+            // Claude can't read audio/video — route to Gemini, which can.
+            return await Gemini.parseAV(file);
         } else {
-            throw new Error('Unsupported file. Use .docx, PDF, image or .txt.');
+            throw new Error('Unsupported file. Use .docx, PDF, image, .txt, audio or video.');
         }
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -793,6 +794,73 @@ Rules:
         state.profile.invoiceNumberCounter += 1;
         unbilled.forEach(l => l.invoiceId = inv.id);
         audit('createInvoice', inv.id, `${number} (${m.title})`);
+    }
+};
+
+/* =========================================================================
+ * 2c. GEMINI — handles audio and video (Claude can't read those)
+ *
+ * Same { actions, transcript?, clarify? } JSON shape as AI.parseInput,
+ * so the omni proposal panel renders the result identically.
+ * ========================================================================= */
+
+const Gemini = {
+    async parseAV(file) {
+        if (!state.profile.geminiKey) {
+            throw new Error('Add your Gemini API key in Settings to upload audio or video.');
+        }
+        const sizeMB = file.size / (1024 * 1024);
+        if (sizeMB > 18) {
+            throw new Error(`File is ${sizeMB.toFixed(1)} MB — Gemini inline limit is ~20 MB. Trim it down or split it.`);
+        }
+        const b64 = await DocImport._b64(file);
+        const model = state.profile.geminiModel || 'gemini-2.0-flash';
+        const kind = (file.type || '').startsWith('video/') ? 'video' : 'audio';
+        const sys = AI.SYSTEM_PROMPT;
+        const userText = `TODAY: ${todayISO()}
+
+CONTEXT:
+${AI._buildContext()}
+
+USER INPUT — listen to / watch the attached ${kind} (file: ${file.name}) and extract the user's intended actions per the system rules above. Respond with the same JSON shape: { "actions": [...], "transcript"?: "...", "clarify"?: "..." }.`;
+        const payload = {
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: sys + '\n\n---\n\n' + userText },
+                    { inline_data: { mime_type: file.type, data: b64 } }
+                ]
+            }],
+            generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.2,
+                maxOutputTokens: 1500
+            }
+        };
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+            {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'x-goog-api-key': state.profile.geminiKey
+                },
+                body: JSON.stringify(payload)
+            }
+        );
+        if (!res.ok) {
+            const err = await res.text().catch(() => '');
+            throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 200)}`);
+        }
+        const json = await res.json();
+        const txt = (json.candidates && json.candidates[0]
+                     && json.candidates[0].content
+                     && json.candidates[0].content.parts
+                     && json.candidates[0].content.parts[0]
+                     && json.candidates[0].content.parts[0].text) || '';
+        const cleaned = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        try { return JSON.parse(cleaned); }
+        catch (e) { throw new Error('Gemini returned a non-JSON response'); }
     }
 };
 
