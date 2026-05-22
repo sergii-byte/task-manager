@@ -79,6 +79,7 @@ const defaultState = () => ({
         name: '', email: '', address: '', taxId: '',
         currency: 'EUR', rate: 150,
         invoiceNumberPrefix: 'INV-', invoiceNumberCounter: 1,
+        iban: '', paymentTerms: '',
         anthropicKey: '',
         anthropicModel: 'claude-3-5-haiku-latest',
         dictationLang: 'auto',
@@ -1282,8 +1283,11 @@ function viewInvoice(id) {
     const c = clientById(inv.clientId);
     const p = state.profile;
 
+    const total = invoiceTotal(inv);
+    const items = inv.items || [];
+
     return `
-        <div class="breadcrumb"><a href="#/invoices">Invoices</a> ›</div>
+        <div class="breadcrumb no-print"><a href="#/invoices">Invoices</a> ›</div>
         <div class="view-head no-print">
             <h1>${esc(inv.number)}</h1>
             <div class="meta"><span class="badge ${inv.status}">${esc(inv.status)}</span></div>
@@ -1296,54 +1300,93 @@ function viewInvoice(id) {
             </div>
         </div>
 
-        <article class="invoice-doc">
-            <header class="inv-head">
-                <div class="inv-from">
-                    <div class="inv-brand">${esc(p.name || 'Your name')}</div>
-                    ${p.address ? `<div>${esc(p.address).replace(/\n/g,'<br>')}</div>` : ''}
-                    ${p.email ? `<div>${esc(p.email)}</div>` : ''}
-                    ${p.taxId ? `<div>Tax ID: ${esc(p.taxId)}</div>` : ''}
+        <article class="inv-doc">
+
+            <header class="inv-doc-hdr">
+                <div class="left">
+                    <div class="eyebrow">invoice · ${esc((c && c.name) || 'client')}</div>
+                    <h1>${esc(String(inv.number).toLowerCase())}</h1>
                 </div>
-                <div class="inv-title">
-                    <h2>Invoice</h2>
-                    <div class="inv-num">${esc(inv.number)}</div>
-                    <div><span class="lbl">Issued</span> ${fmtDate(inv.dateIssued)}</div>
-                    <div><span class="lbl">Due</span> ${fmtDate(inv.dateDue)}</div>
+                <div class="right">
+                    <div><span class="k">issued</span><span class="v">${fmtDate(inv.dateIssued)}</span></div>
+                    <div><span class="k">due</span><span class="v">${inv.dateDue ? fmtDate(inv.dateDue) : '—'}</span></div>
+                    <div><span class="k">currency</span><span class="v">${esc(inv.currency || 'EUR')}</span></div>
+                    <div><span class="k">status</span><span class="v">${esc(inv.status)}</span></div>
                 </div>
             </header>
 
-            <section class="inv-bill">
-                <div class="lbl">Bill to</div>
-                <div class="inv-bill-to">
-                    <strong>${esc(c?.name || '—')}</strong>
-                    ${c?.address ? `<br>${esc(c.address).replace(/\n/g,'<br>')}` : ''}
-                    ${c?.email ? `<br>${esc(c.email)}` : ''}
-                    ${c?.taxId ? `<br>Tax ID: ${esc(c.taxId)}` : ''}
+            <section class="inv-doc-bill">
+                <div class="blk">
+                    <div class="lbl">from</div>
+                    <div class="name">${esc(p.name || 'Your name')}</div>
+                    <div class="lines">
+                        ${p.address ? esc(p.address).replace(/\n/g,'<br>') + '<br>' : ''}
+                        ${p.email ? esc(p.email) + '<br>' : ''}
+                        ${p.taxId ? `<span class="mono">tax id · ${esc(p.taxId)}</span>` : ''}
+                    </div>
+                </div>
+                <div class="blk">
+                    <div class="lbl">bill to</div>
+                    <div class="name">${esc((c && c.name) || '—')}</div>
+                    <div class="lines">
+                        ${c && c.address ? esc(c.address).replace(/\n/g,'<br>') + '<br>' : ''}
+                        ${c && c.email ? esc(c.email) + '<br>' : ''}
+                        ${c && c.taxId ? `<span class="mono">tax id · ${esc(c.taxId)}</span>` : ''}
+                    </div>
                 </div>
             </section>
 
-            <table class="inv-items">
-                <thead><tr>
-                    <th>Description</th>
-                    <th class="num">Hours</th>
-                    <th class="num">Rate</th>
-                    <th class="num">Amount</th>
-                </tr></thead>
-                <tbody>
-                    ${(inv.items||[]).map(i => `<tr>
-                        <td>${esc(i.description)}</td>
-                        <td class="num">${(Number(i.hours)||0).toFixed(2)}</td>
-                        <td class="num">${fmtMoney(i.rate, inv.currency)}</td>
-                        <td class="num">${fmtMoney(i.amount, inv.currency)}</td>
-                    </tr>`).join('')}
-                </tbody>
-                <tfoot><tr>
-                    <td colspan="3" class="num"><strong>Total</strong></td>
-                    <td class="num"><strong>${fmtMoney(invoiceTotal(inv), inv.currency)}</strong></td>
-                </tr></tfoot>
-            </table>
+            <section class="inv-doc-lines">
+                <div class="lines-hdr">
+                    <span>line</span><span>description</span>
+                    <span class="num">hours</span><span class="num">rate</span><span class="num">amount</span>
+                </div>
+                ${items.map((it, idx) => `
+                    <div class="line">
+                        <span class="ord">${String(idx+1).padStart(2,'0')}</span>
+                        <div class="desc">
+                            ${esc(it.description)}
+                            ${it.entries ? `<span class="ctx">${it.entries} ${it.entries===1?'entry':'entries'} bundled</span>` : ''}
+                        </div>
+                        <span class="qty">${(Number(it.hours)||0).toFixed(2)}<span class="dim"> h</span></span>
+                        <span class="rate">${fmtMoney(it.rate, inv.currency)}<span class="dim"> /h</span></span>
+                        <span class="amt">${fmtMoney(it.amount, inv.currency)}</span>
+                    </div>
+                `).join('')}
+            </section>
 
-            ${inv.notes ? `<div class="inv-notes"><div class="lbl">Notes</div>${esc(inv.notes).replace(/\n/g,'<br>')}</div>` : ''}
+            <section class="inv-doc-totals">
+                <div class="left">
+                    ${inv.notes ? esc(inv.notes).replace(/\n/g,'<br>') : ''}
+                </div>
+                <div class="right">
+                    <div class="row sub"><span class="k">subtotal</span><span class="v">${fmtMoney(total, inv.currency)}</span></div>
+                    <div class="row grand">
+                        <span class="k">total due</span>
+                        <span class="v">${fmtMoney(total, inv.currency)}</span>
+                    </div>
+                </div>
+            </section>
+
+            ${(p.iban || p.paymentTerms) ? `
+            <section class="inv-doc-pay">
+                ${p.iban ? `
+                <div class="blk">
+                    <div class="lbl">remit to · iban</div>
+                    <div class="iban">${esc(p.iban)}</div>
+                </div>` : ''}
+                ${p.paymentTerms ? `
+                <div class="blk">
+                    <div class="lbl">terms</div>
+                    <div class="terms">${esc(p.paymentTerms).replace(/\n/g,'<br>')}</div>
+                </div>` : ''}
+            </section>` : ''}
+
+            <footer class="inv-doc-foot">
+                <span>${esc(inv.number)} · ${esc((c && c.name) || '')}</span>
+                <span class="mid">drafted with ordify · editable before send</span>
+            </footer>
+
         </article>
     `;
 }
@@ -1460,6 +1503,8 @@ function viewSettings() {
                 </div>
                 <div class="field"><label>Invoice number prefix</label><input name="invoiceNumberPrefix" value="${esc(p.invoiceNumberPrefix)}"></div>
                 <div class="field"><label>Next invoice number</label><input name="invoiceNumberCounter" type="number" min="1" step="1" value="${esc(p.invoiceNumberCounter)}"></div>
+                <div class="field full"><label>IBAN / bank account</label><input name="iban" value="${esc(p.iban||'')}" placeholder="ES91 2100 0418 4502 0005 1332"><small class="hint">Shown on the invoice document. Leave blank to omit.</small></div>
+                <div class="field full"><label>Payment terms</label><textarea name="paymentTerms" rows="2" placeholder="Payment due within 14 days. Reference the invoice number in the wire memo.">${esc(p.paymentTerms||'')}</textarea></div>
             </div>
 
             <h3>AI &amp; voice input</h3>
@@ -1787,32 +1832,48 @@ function openInvoiceForm(matterId = null, existingId = null) {
         return;
     }
 
-    // new invoice — pick matter, generate from unbilled logs
-    if (!state.matters.length) { toast('Add a matter first', 'error'); return; }
+    // new invoice — pick a client, bundle ALL their unbilled time (across matters)
+    const clientUnbilled = (cid) => state.logs.filter(l =>
+        l.clientId === cid && !l.invoiceId && !l.deletedAt);
+    const clientsWithUnbilled = liveClients().filter(c => clientUnbilled(c.id).length);
+    if (!clientsWithUnbilled.length) {
+        toast('No unbilled time to invoice yet', 'error');
+        return;
+    }
+    const preClient = matterId ? (matterById(matterId)?.clientId || '') : '';
     Modal.open({
         title: 'New invoice',
         fields: [
-            { name: 'matterId', label: 'Matter', type: 'select', required: true,
-                value: matterId || '',
-                options: state.matters.map(m => ({
-                    value: m.id, label: `${clientById(m.clientId)?.name||'—'} · ${m.title}`
-                })) },
+            { name: 'clientId', label: 'Client', type: 'select', required: true,
+                value: preClient || clientsWithUnbilled[0].id,
+                options: clientsWithUnbilled.map(c => {
+                    const mins = clientUnbilled(c.id).reduce((s,l)=>s+l.minutes,0);
+                    return { value: c.id, label: `${c.name} · ${fmtMinutes(mins)} unbilled` };
+                }),
+                hint: 'All unbilled time across the client’s matters is bundled, one line per matter.' },
             { name: 'dateIssued', label: 'Issued', type: 'date', required: true, value: todayISO() },
             { name: 'dateDue', label: 'Due', type: 'date', value: '' },
             { name: 'notes', label: 'Notes', type: 'textarea', value: '', rows: 3, full: true }
         ],
         onSave: (data) => {
-            const m = matterById(data.matterId);
-            if (!m) { toast('Pick a matter', 'error'); return false; }
-            const unbilledLogs = logsForMatter(m.id).filter(l => !l.invoiceId);
-            if (!unbilledLogs.length) { toast('No unbilled time on this matter', 'error'); return false; }
-            const rate = matterRate(m);
-            const items = unbilledLogs.map(l => {
-                const hours = +(l.minutes / 60).toFixed(2);
+            const c = clientById(data.clientId);
+            if (!c) { toast('Pick a client', 'error'); return false; }
+            const unbilled = clientUnbilled(c.id);
+            if (!unbilled.length) { toast('No unbilled time for this client', 'error'); return false; }
+            // one line item per matter
+            const byMatter = {};
+            unbilled.forEach(l => { (byMatter[l.matterId] = byMatter[l.matterId] || []).push(l); });
+            const items = Object.keys(byMatter).map(mid => {
+                const logs = byMatter[mid];
+                const m = matterById(mid);
+                const mins = logs.reduce((s,l)=>s+l.minutes,0);
+                const hours = +(mins / 60).toFixed(2);
+                const rate = matterRate(m);
                 return {
-                    description: `${fmtDate(l.startedAt)}${l.notes?' — '+l.notes:''}`,
-                    hours,
-                    rate,
+                    description: m ? m.title : 'General work',
+                    matterId: mid,
+                    entries: logs.length,
+                    hours, rate,
                     amount: +(hours * rate).toFixed(2)
                 };
             });
@@ -1820,8 +1881,8 @@ function openInvoiceForm(matterId = null, existingId = null) {
             const inv = {
                 id: uuid(),
                 number,
-                clientId: m.clientId,
-                matterId: m.id,
+                clientId: c.id,
+                matterId: null,
                 dateIssued: data.dateIssued,
                 dateDue: data.dateDue || null,
                 currency: profileCurrency(),
@@ -1831,8 +1892,8 @@ function openInvoiceForm(matterId = null, existingId = null) {
             };
             state.invoices.push(inv);
             state.profile.invoiceNumberCounter += 1;
-            unbilledLogs.forEach(l => l.invoiceId = inv.id);
-            audit('createInvoice', inv.id, `${number} (${m.title})`);
+            unbilled.forEach(l => l.invoiceId = inv.id);
+            audit('createInvoice', inv.id, `${number} (${c.name})`);
             Store.save();
             navigate('invoices/' + inv.id);
             toast(`Invoice ${number} created`);
