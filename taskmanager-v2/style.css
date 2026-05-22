@@ -60,12 +60,16 @@ body {
     height: 100vh;
 }
 .brand {
+    display: block;
     font-weight: 700;
     font-size: 18px;
     letter-spacing: -0.02em;
     color: var(--accent);
     padding: 4px 20px 16px;
+    text-decoration: none;
+    cursor: pointer;
 }
+.brand:hover { color: var(--ink); }
 #nav {
     display: flex;
     flex-direction: column;
@@ -163,7 +167,7 @@ body {
     min-width: 0;
 }
 #omni-input::placeholder { color: var(--fg-faint); }
-#omni-mic, #omni-ai {
+#omni-mic, #omni-ai, #omni-attach {
     appearance: none;
     border: 0;
     background: transparent;
@@ -177,7 +181,7 @@ body {
     display: grid;
     place-items: center;
 }
-#omni-mic:hover, #omni-ai:hover { background: var(--bg-hover); color: var(--accent); }
+#omni-mic:hover, #omni-ai:hover, #omni-attach:hover { background: var(--bg-hover); color: var(--accent); }
 #omni-mic:disabled { opacity: 0.4; cursor: not-allowed; }
 #omni-mic.on {
     background: var(--danger);

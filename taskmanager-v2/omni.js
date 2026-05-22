@@ -15,17 +15,19 @@ const Omni = {
     input: null,
     micBtn: null,
     aiBtn: null,
+    attachBtn: null,
     panel: null,
     busy: false,
     proposals: [],   // [{ op, data, summary, accepted }]
     listening: false,
 
     init() {
-        Omni.el     = $('#omni');
-        Omni.input  = $('#omni-input');
-        Omni.micBtn = $('#omni-mic');
-        Omni.aiBtn  = $('#omni-ai');
-        Omni.panel  = $('#omni-panel');
+        Omni.el        = $('#omni');
+        Omni.input     = $('#omni-input');
+        Omni.micBtn    = $('#omni-mic');
+        Omni.aiBtn     = $('#omni-ai');
+        Omni.attachBtn = $('#omni-attach');
+        Omni.panel     = $('#omni-panel');
 
         Omni.input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -45,6 +47,7 @@ const Omni = {
         });
         Omni.aiBtn.addEventListener('click', () => Omni.runAI());
         Omni.micBtn.addEventListener('click', () => Recorder.toggle());
+        if (Omni.attachBtn) Omni.attachBtn.addEventListener('click', () => Omni.attach());
 
         // global ⌘K / Ctrl+K
         document.addEventListener('keydown', (e) => {
@@ -131,6 +134,36 @@ const Omni = {
         $$('.omni-row', Omni.panel).forEach(li => {
             li.addEventListener('click', () => { navigate(li.dataset.go); Omni.clear(); });
         });
+    },
+
+    /* ---- attach a file (document / image) → AI extracts actions ---- */
+    attach() {
+        if (!state.profile.anthropicKey) {
+            Omni._renderError('Add your Anthropic API key in Settings to use file attachments. <a href="#/settings">Open settings →</a>');
+            return;
+        }
+        const inp = document.createElement('input');
+        inp.type = 'file';
+        inp.accept = '.docx,application/pdf,image/*,text/plain';
+        inp.onchange = async () => {
+            const f = inp.files && inp.files[0];
+            if (!f) return;
+            if (Omni.busy) return;
+            Omni.busy = true;
+            Omni.input.value = '📎 ' + f.name;
+            Omni._renderLoading();
+            try {
+                const result = await AI.parseFile(f);
+                Omni.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
+                Omni._renderProposals(result);
+            } catch (e) {
+                console.error('attach parse failed', e);
+                Omni._renderError('AI request failed: ' + esc(e.message || 'error'));
+            } finally {
+                Omni.busy = false;
+            }
+        };
+        inp.click();
     },
 
     /* ---- AI parse ---- */
@@ -457,6 +490,65 @@ ${text}`;
             throw new Error('AI returned non-JSON response: ' + content.slice(0, 200));
         }
         return parsed;
+    },
+
+    /* Send a file (docx / PDF / image / txt) to Claude and return the same
+     * { actions, transcript?, clarify? } shape as parseInput. */
+    async parseFile(file) {
+        const today = todayISO();
+        const ctx = AI._buildContext();
+        const name = (file.name || '').toLowerCase();
+        const intro = `TODAY: ${today}\n\nCONTEXT:\n${ctx}\n\nUSER INPUT (from file ${file.name}):`;
+        let content;
+        if (name.endsWith('.docx')) {
+            if (typeof DocImport === 'undefined') throw new Error('docx reader not loaded');
+            const text = await DocImport._docxText(file);
+            if (!text.trim()) throw new Error('No readable text in the .docx');
+            content = intro + '\n\n' + text.slice(0, 14000);
+        } else if (file.type === 'application/pdf' || name.endsWith('.pdf')) {
+            const b64 = await DocImport._b64(file);
+            content = [
+                { type: 'text', text: intro + ' read the attached PDF.' },
+                { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }
+            ];
+        } else if ((file.type || '').startsWith('image/')) {
+            const b64 = await DocImport._b64(file);
+            content = [
+                { type: 'text', text: intro + ' read the attached image.' },
+                { type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } }
+            ];
+        } else if (file.type === 'text/plain' || name.endsWith('.txt')) {
+            const text = await file.text();
+            content = intro + '\n\n' + text.slice(0, 14000);
+        } else if ((file.type || '').startsWith('audio/')) {
+            throw new Error('Audio files need transcription (Whisper). Use 🎤 for live dictation, or ask to wire OpenAI for audio uploads.');
+        } else {
+            throw new Error('Unsupported file. Use .docx, PDF, image or .txt.');
+        }
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'content-type': 'application/json',
+                'x-api-key': state.profile.anthropicKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: state.profile.anthropicModel || 'claude-3-5-haiku-latest',
+                max_tokens: 1500,
+                system: AI.SYSTEM_PROMPT,
+                messages: [{ role: 'user', content }]
+            })
+        });
+        if (!res.ok) {
+            const err = await res.text().catch(() => '');
+            throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+        }
+        const json = await res.json();
+        const txt = (json.content && json.content[0] && json.content[0].text) || '';
+        const cleaned = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        try { return JSON.parse(cleaned); }
+        catch (e) { throw new Error('AI returned a non-JSON response'); }
     },
 
     /* Read one email's body and extract the lawyer's action items. */
