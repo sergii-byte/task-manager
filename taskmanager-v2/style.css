@@ -1,33 +1,34 @@
-/* ordify · clean rebuild
-   Minimal practice manager. System fonts, light theme, plum accent.
+/* ordify · minimal/editorial direction
+   Warm paper palette, Inter / Inter Tight / JetBrains Mono, plum accent.
 */
 
 :root {
-    --bg:        #ffffff;
-    --bg-soft:   #f7f7f8;
-    --bg-hover:  #f1f1f3;
-    --ink:       #18181b;
-    --fg:        #2c2c30;
-    --fg-mute:   #71717a;
-    --fg-faint:  #a1a1aa;
-    --line:      #e5e5e7;
-    --line-soft: #ececef;
+    --bg:        #fafaf7;
+    --bg-soft:   #f4f2ec;
+    --bg-hover:  #efece4;
+    --ink:       #0a0a0a;
+    --fg:        #2c2c2a;
+    --fg-mute:   #8a8780;
+    --fg-faint:  #b8b5ab;
+    --line:      #e8e6df;
+    --line-soft: #f0eee7;
     --accent:    #6a1b9a;
-    --accent-soft: #f4eafa;
-    --danger:    #dc2626;
-    --warn:      #d97706;
-    --ok:        #16a34a;
+    --accent-soft: #f1e9f6;
+    --danger:    #c33c1d;
+    --warn:      #c98a00;
+    --ok:        #5a7400;
 
     --radius: 6px;
     --radius-lg: 10px;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-    --shadow:    0 4px 12px rgba(0,0,0,0.06);
-    --shadow-lg: 0 12px 32px rgba(0,0,0,0.10);
+    --shadow-sm: 0 1px 2px rgba(40,38,30,0.04);
+    --shadow:    0 4px 12px rgba(40,38,30,0.07);
+    --shadow-lg: 0 12px 32px rgba(40,38,30,0.12);
 
     --sidebar-w: 220px;
     --topbar-h: 56px;
-    --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --font: "Inter", ui-sans-serif, -apple-system, system-ui, sans-serif;
+    --font-display: "Inter Tight", "Inter", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -1736,3 +1737,23 @@ dialog footer button.danger:hover { background: #fef2f2; border-color: var(--dan
 @media print {
     .inv-doc { border: 0; padding: 0; max-width: 100%; }
 }
+
+/* =========================================================================
+ * Phase 6 · editorial polish (unify the minimal direction across the app)
+ * ========================================================================= */
+.brand {
+    font-family: var(--font-display);
+    font-size: 19px;
+    letter-spacing: -0.03em;
+}
+#nav .nav-item { text-transform: lowercase; letter-spacing: -0.005em; }
+.view-head h1 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+}
+.section-h { font-family: var(--font-display); }
+.card-value, .stat .v { font-family: var(--font-display); }
+dialog header h2 { font-family: var(--font-display); letter-spacing: -0.02em; }
+.empty-state h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+/* mono labels read better slightly tighter on the warm palette */
+table.t th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; }

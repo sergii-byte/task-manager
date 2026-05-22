@@ -267,9 +267,9 @@ function audit(action, entityId = null, detail = '') {
         entityId,
         detail
     });
-    // keep last 1000 entries
-    if (state.audits.length > 1000) {
-        state.audits = state.audits.slice(-1000);
+    // keep a short internal tail only (History view was removed in the cleanup)
+    if (state.audits.length > 50) {
+        state.audits = state.audits.slice(-50);
     }
 }
 
@@ -655,14 +655,12 @@ const Timer = {
  * ========================================================================= */
 
 const NAV_ITEMS = [
-    { id: 'today',    label: 'Today',     icon: '○' },
-    { id: 'clients',  label: 'Clients',   icon: '◐' },
-    { id: 'matters',  label: 'Matters',   icon: '◇' },
-    { id: 'tasks',    label: 'Tasks',     icon: '☐' },
-    { id: 'time',     label: 'Time',      icon: '◴' },
-    { id: 'invoices', label: 'Invoices',  icon: '$' },
-    { id: 'history',  label: 'History',   icon: '◷' },
-    { id: 'trash',    label: 'Trash',     icon: '⌫' }
+    { id: 'today',    label: 'today',     icon: '○' },
+    { id: 'clients',  label: 'clients',   icon: '◐' },
+    { id: 'matters',  label: 'matters',   icon: '◇' },
+    { id: 'tasks',    label: 'tasks',     icon: '☐' },
+    { id: 'time',     label: 'time',      icon: '◴' },
+    { id: 'invoices', label: 'invoices',  icon: '$' }
 ];
 
 function renderSidebar() {
@@ -677,14 +675,6 @@ function renderSidebar() {
         else if (it.id === 'matters') count = `<span class="count">${liveMatters().filter(m=>m.status!=='closed').length || ''}</span>`;
         else if (it.id === 'tasks') count = `<span class="count">${liveTasks().filter(t=>t.status!=='done').length || ''}</span>`;
         else if (it.id === 'invoices') count = `<span class="count">${liveInvoices().filter(i=>i.status!=='paid').length || ''}</span>`;
-        else if (it.id === 'trash') {
-            const n = state.clients.filter(x=>x.deletedAt).length
-                    + state.matters.filter(x=>x.deletedAt).length
-                    + state.tasks.filter(x=>x.deletedAt).length
-                    + state.logs.filter(x=>x.deletedAt).length
-                    + state.invoices.filter(x=>x.deletedAt).length;
-            if (n) count = `<span class="count">${n}</span>`;
-        }
 
         return `<button class="nav-item ${cur===it.id?'active':''}" data-nav="${it.id}">
             <span class="ic">${it.icon}</span><span>${it.label}</span>${count}
@@ -1552,16 +1542,7 @@ function viewSettings() {
                 </div>
             </div>
             <div class="settings-data">
-                <button type="button" class="btn" data-act="sheets-export">📊 Export time logs to Sheets</button>
                 <button type="button" class="btn" data-act="google-signout">Sign out of Google</button>
-            </div>
-
-            <h3>Backups</h3>
-            <div class="grid2">
-                <div class="field"><label>Auto-snapshot every (hours)</label>
-                    <input name="snapshotIntervalHours" type="number" min="1" max="168" step="1" value="${esc(p.snapshotIntervalHours)}">
-                    <small class="hint">Snapshots are stored in IndexedDB on this device.</small>
-                </div>
             </div>
 
             <div class="actions" style="margin-top:24px">
@@ -1569,17 +1550,13 @@ function viewSettings() {
             </div>
         </form>
 
-        <h3 style="margin-top:48px">Snapshots</h3>
-        <div style="margin-bottom:12px"><button class="btn" data-act="snapshot-now">＋ Take snapshot now</button></div>
-        <div id="snap-list-host"><em class="muted" style="font-size:12px">Loading…</em></div>
-
         <h3 style="margin-top:48px">Data</h3>
         <div class="settings-data">
             <button class="btn" data-act="export">Export JSON</button>
             <button class="btn" data-act="import">Import JSON</button>
             <button class="btn danger" data-act="reset">Reset all data</button>
         </div>
-        <p class="muted" style="margin-top:8px;font-size:12px">All data lives in your browser's localStorage. Export regularly for backup. Snapshots are stored in IndexedDB and survive a "Reset all data".</p>
+        <p class="muted" style="margin-top:8px;font-size:12px">Your data lives in Google Firestore and syncs across every device you sign in on. Export a JSON backup whenever you want a local copy.</p>
     `;
 }
 
@@ -2146,8 +2123,6 @@ function render() {
             case 'tasks':    html = viewTasks(); break;
             case 'time':     html = viewTime(); break;
             case 'invoices': html = id ? viewInvoice(id) : viewInvoices(); break;
-            case 'history':  html = viewHistory(); break;
-            case 'trash':    html = viewTrash(); break;
             case 'settings': html = viewSettings(); break;
             default:         html = viewToday();
         }
@@ -2157,7 +2132,6 @@ function render() {
     }
     root.innerHTML = html;
     root.scrollTop = 0;
-    if (view === 'settings') renderSnapshotsList();
     if (view === 'today') populateTodaySchedule();
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
@@ -2178,7 +2152,6 @@ async function boot(user) {
     if (!location.hash) location.hash = '#/today';
     const uid = (user && user.uid) ? user.uid : null;
     await Store.init(uid);          // loads from Firestore, sets up realtime sync
-    Snapshots.startAutoLoop();
     render();
 }
 
