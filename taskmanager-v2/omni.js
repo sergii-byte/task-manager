@@ -194,6 +194,7 @@ const Omni = {
                         <div class="op-tag op-${esc(p.op)}">${esc(Omni._opLabel(p.op))}</div>
                         <div class="op-summary">${esc(p.summary || Omni._defaultSummary(p))}</div>
                         ${p.reason ? `<div class="op-reason">${esc(p.reason)}</div>` : ''}
+                        ${Omni._gapPickerHtml(p, i)}
                         <div class="op-actions">
                             <button class="btn sm primary" data-omni="accept" data-i="${i}">Accept</button>
                             <button class="btn sm ghost" data-omni="skip" data-i="${i}">Skip</button>
@@ -207,23 +208,49 @@ const Omni = {
         Omni.panel.querySelectorAll('[data-omni]').forEach(b => {
             b.addEventListener('click', () => Omni._handleProposalAction(b.dataset.omni, b.dataset.i));
         });
+        // matter picker → repopulate the dependent task picker
+        Omni.panel.querySelectorAll('select[data-gap="matter"]').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const taskSel = Omni.panel.querySelector(`select[data-gap="task"][data-i="${sel.dataset.i}"]`);
+                if (!taskSel) return;
+                if (!sel.value || sel.value === '__new__') {
+                    taskSel.innerHTML = '<option value="">— no specific task —</option>';
+                    taskSel.disabled = true;
+                } else {
+                    taskSel.innerHTML = Omni._taskOptionsHtml(sel.value);
+                    taskSel.disabled = false;
+                }
+            });
+        });
     },
 
     _handleProposalAction(action, idx) {
         if (action === 'discard') { Omni.clear(); return; }
         if (action === 'accept-all') {
-            Omni.proposals.forEach((p,i) => Omni._applyProposal(i));
-            toast(`Applied ${Omni.proposals.length} action${Omni.proposals.length===1?'':'s'}`);
-            Omni.clear();
+            let ok = 0;
+            Omni.proposals.forEach((p, i) => { if (Omni._applyProposal(i)) ok++; });
             render();
+            if (ok) toast(`Applied ${ok} action${ok === 1 ? '' : 's'}`);
+            if (ok === Omni.proposals.length) {
+                Omni.clear();
+            } else {
+                // some failed — reflect state, keep panel open for retry
+                Omni.proposals.forEach((p, i) => {
+                    if (p.accepted) {
+                        const li = Omni.panel.querySelector(`.proposal[data-i="${i}"]`);
+                        if (li) li.classList.add('done');
+                    }
+                });
+            }
             return;
         }
         if (action === 'accept') {
-            Omni._applyProposal(Number(idx));
-            // mark visually
-            const li = Omni.panel.querySelector(`.proposal[data-i="${idx}"]`);
-            if (li) li.classList.add('done');
-            render();
+            const ok = Omni._applyProposal(Number(idx));
+            if (ok) {
+                const li = Omni.panel.querySelector(`.proposal[data-i="${idx}"]`);
+                if (li) li.classList.add('done');
+                render();
+            }
             return;
         }
         if (action === 'skip') {
@@ -234,13 +261,37 @@ const Omni = {
 
     _applyProposal(i) {
         const p = Omni.proposals[i];
-        if (!p || p.accepted) return;
+        if (!p || p.accepted) return false;
+
+        // Resolve any inline gap pickers (matter / task) before applying.
+        if (Omni._gapsFor(p).includes('matter')) {
+            const li = Omni.panel.querySelector(`.proposal[data-i="${i}"]`);
+            const mSel = li && li.querySelector('select[data-gap="matter"]');
+            const tSel = li && li.querySelector('select[data-gap="task"]');
+            if (!mSel || !mSel.value) {
+                toast('Pick a matter first', 'error');
+                return false;
+            }
+            if (mSel.value === '__new__') {
+                const title = (prompt('New matter name:', 'General') || '').trim();
+                if (!title) return false;
+                p.data.matterName = title;
+                delete p.data.matterId;
+            } else {
+                p.data.matterId = mSel.value;
+                delete p.data.matterName;
+            }
+            p.data.taskId = (tSel && tSel.value) ? tSel.value : null;
+        }
+
         try {
             AI.applyAction(p);
             p.accepted = true;
+            return true;
         } catch (e) {
             console.error('apply failed', e);
             toast('Failed: ' + e.message, 'error');
+            return false;
         }
     },
 
@@ -264,11 +315,68 @@ const Omni = {
             case 'createClient':  return d.name || '—';
             case 'createMatter':  return `${d.title || '—'} for ${d.clientName || d.clientId || '?'}`;
             case 'createTask':    return `${d.title || '—'}${d.due?` · due ${d.due}`:''}`;
-            case 'logTime':       return `${d.minutes || 0} min on ${d.matterName || d.matterId || '?'}`;
+            case 'logTime':       return `${d.minutes || 0} min${d.clientName?' · '+d.clientName:''}`;
             case 'createInvoice': return `Invoice for ${d.matterName || d.matterId || '?'}`;
             case 'completeTask':  return `Done: ${d.taskTitle || d.taskId || '?'}`;
             default:              return JSON.stringify(d).slice(0, 120);
         }
+    },
+
+    /* Which required fields a proposal still needs the user to pick. */
+    _gapsFor(p) {
+        const gaps = [];
+        if (p.op === 'logTime' && !p.accepted) {
+            const d = p.data || {};
+            const hasMatter =
+                (d.matterId && matterById(d.matterId)) ||
+                (d.matterName && state.matters.find(m =>
+                    !m.deletedAt && m.title && m.title.toLowerCase() === d.matterName.toLowerCase()));
+            if (!hasMatter) gaps.push('matter');
+        }
+        return gaps;
+    },
+
+    _taskOptionsHtml(matterId) {
+        let opts = '<option value="">— no specific task —</option>';
+        if (matterId && matterId !== '__new__') {
+            const tasks = state.tasks.filter(t =>
+                !t.deletedAt && t.matterId === matterId && t.status !== 'done');
+            opts += tasks.map(t => `<option value="${esc(t.id)}">${esc(t.title)}</option>`).join('');
+        }
+        return opts;
+    },
+
+    /* Inline matter + task pickers shown inside a proposal that has a gap. */
+    _gapPickerHtml(p, i) {
+        if (!Omni._gapsFor(p).includes('matter')) return '';
+        const d = p.data || {};
+        let client = d.clientId ? clientById(d.clientId) : null;
+        if (!client && d.clientName) {
+            client = state.clients.find(c =>
+                !c.deletedAt && c.name && c.name.toLowerCase() === d.clientName.toLowerCase());
+        }
+        const matters = client
+            ? state.matters.filter(m => !m.deletedAt && m.clientId === client.id)
+            : [];
+        const matterOpts = matters.map((m, idx) =>
+            `<option value="${esc(m.id)}" ${idx === 0 ? 'selected' : ''}>${esc(m.title)}</option>`).join('');
+        const newSelected = matters.length ? '' : 'selected';
+        const firstId = matters.length ? matters[0].id : '';
+        return `
+            <div class="op-gap">
+                <label>Matter
+                    <select data-gap="matter" data-i="${i}">
+                        ${matterOpts}
+                        <option value="__new__" ${newSelected}>＋ New matter…</option>
+                    </select>
+                </label>
+                <label>Task
+                    <select data-gap="task" data-i="${i}" ${matters.length ? '' : 'disabled'}>
+                        ${Omni._taskOptionsHtml(firstId)}
+                    </select>
+                </label>
+                ${!client ? `<div class="op-gap-note">New client “${esc(d.clientName || '?')}” will be created.</div>` : ''}
+            </div>`;
     }
 };
 
@@ -285,7 +393,7 @@ DATA MODEL:
 - Client: { name, email?, phone?, taxId?, address?, notes? }
 - Matter: { clientId or clientName, title, status: "open"|"on-hold"|"closed", rate?, description? }
 - Task:   { matterId or matterName, title, due? (ISO date YYYY-MM-DD), priority: "low"|"normal"|"high", notes? }
-- TimeLog:{ matterId or matterName, date (ISO YYYY-MM-DD), minutes, notes? }
+- TimeLog:{ matterId or matterName (optional — omit if unknown), date (ISO YYYY-MM-DD), minutes, notes? }
 - Invoice:{ matterId or matterName, dateIssued (ISO), dateDue?, notes? }
 
 ALLOWED ACTIONS (op values):
@@ -301,7 +409,8 @@ OUTPUT RULES:
 - ALL data field values MUST be in English, even if the user spoke Russian/Ukrainian. Translate proper nouns conservatively (keep names like "Іван Шевченко" → "Ivan Shevchenko").
 - Each action MUST include a "summary" field — one short English sentence describing what will happen.
 - If the user references a client/matter that exists in CONTEXT below, use its id (e.g. "matterId": "id-abc"). Otherwise use a name field (clientName, matterName) and order actions so creates come first.
-- If user input is ambiguous (e.g. "log time on the contract" but multiple matters match), return { "clarify": "question" } instead of guessing.
+- Use { "clarify": "question" } ONLY when you genuinely cannot tell what the user wants. Do NOT use clarify just because a matter or task is unknown.
+- For "logTime": ALWAYS return the logTime action with whatever you know (clientName or clientId, minutes, date, notes). If the matter is unknown, simply omit matterId/matterName — the app will ask the user to pick the matter and task. Never block a time log on a missing matter.
 - Dates must be ISO YYYY-MM-DD. Resolve relative dates ("tomorrow", "next Friday", "завтра") against TODAY.
 - For dictated free-form text, also include a "transcript" field with the cleaned-up source text.
 - Do NOT invent emails, phone numbers, or tax IDs — only include them if explicit in input.
@@ -396,11 +505,30 @@ ${text}`;
         return null;
     },
 
-    _resolveMatter(d) {
-        if (d.matterId) return matterById(d.matterId);
+    _resolveMatter(d, opts) {
+        opts = opts || {};
+        if (d.matterId && d.matterId !== '__new__') {
+            const m = matterById(d.matterId);
+            if (m) return m;
+        }
         if (d.matterName) {
             const found = state.matters.find(m => !m.deletedAt && m.title?.toLowerCase() === d.matterName.toLowerCase());
             if (found) return found;
+            if (opts.create) {
+                const c = AI._resolveClient(d);
+                const m = {
+                    id: uuid(),
+                    clientId: c ? c.id : null,
+                    title: d.matterName,
+                    status: 'open',
+                    rate: null,
+                    description: '',
+                    openedAt: new Date().toISOString()
+                };
+                state.matters.push(m);
+                audit('createMatter', m.id, m.title + (c ? ` (${c.name})` : ''));
+                return m;
+            }
         }
         return null;
     },
@@ -449,7 +577,7 @@ ${text}`;
     },
 
     _applyCreateTask(d) {
-        const m = AI._resolveMatter(d);
+        const m = AI._resolveMatter(d, { create: true });
         const t = {
             id: uuid(),
             matterId: m?.id || null,
@@ -481,15 +609,15 @@ ${text}`;
     },
 
     _applyLogTime(d) {
-        const m = AI._resolveMatter(d);
-        if (!m) throw new Error('Matter not found for time log');
+        const m = AI._resolveMatter(d, { create: true });
+        if (!m) throw new Error('Pick a matter for this time log');
         const date = d.date || todayISO();
         const startedAt = new Date(date + 'T09:00:00').toISOString();
         const minutes = Number(d.minutes) || 0;
         if (minutes < 1) throw new Error('Minutes must be ≥ 1');
         const log = {
             id: uuid(),
-            taskId: null,
+            taskId: d.taskId || null,
             matterId: m.id,
             clientId: m.clientId,
             startedAt,

@@ -332,6 +332,46 @@ body {
     gap: 4px;
     align-self: start;
 }
+.proposal .op-gap {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--line);
+}
+.proposal .op-gap label {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--fg-mute);
+}
+.proposal .op-gap select {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 6px 8px;
+    font: inherit;
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--fg);
+    min-width: 150px;
+    text-transform: none;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+.proposal .op-gap select:focus { outline: 0; border-color: var(--accent); }
+.proposal .op-gap select:disabled { opacity: 0.5; }
+.proposal .op-gap-note {
+    width: 100%;
+    font-size: 11px;
+    color: var(--accent);
+}
+
 .omni-transcript {
     padding: 10px 16px;
     border-top: 1px solid var(--line-soft);
