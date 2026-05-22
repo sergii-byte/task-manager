@@ -67,6 +67,7 @@ const Google = {
                         if (resp.error) return reject(new Error(resp.error_description || resp.error));
                         Google._accessToken = resp.access_token;
                         Google._expiresAt = Date.now() + (Number(resp.expires_in) || 3600) * 1000;
+                        Google._persistToken();
                         resolve(resp.access_token);
                     },
                     error_callback: (err) => reject(new Error(err.message || 'OAuth error'))
@@ -82,7 +83,33 @@ const Google = {
         }
         Google._accessToken = null;
         Google._expiresAt = 0;
+        try { localStorage.removeItem('ordify-gtoken'); } catch (e) {}
         toast('Signed out of Google');
+    },
+
+    /* Persist / restore the access token so the connection survives reloads
+     * (Google access tokens last ~1h — within that window, no reconnect). */
+    _persistToken() {
+        try {
+            localStorage.setItem('ordify-gtoken', JSON.stringify({
+                token: Google._accessToken,
+                expiresAt: Google._expiresAt
+            }));
+        } catch (e) {}
+    },
+
+    _restoreToken() {
+        try {
+            const raw = localStorage.getItem('ordify-gtoken');
+            if (!raw) return;
+            const o = JSON.parse(raw);
+            if (o && o.token && o.expiresAt && Date.now() < o.expiresAt - 60000) {
+                Google._accessToken = o.token;
+                Google._expiresAt = o.expiresAt;
+            } else {
+                localStorage.removeItem('ordify-gtoken');
+            }
+        } catch (e) {}
     },
 
     async _api(url, opts = {}) {
@@ -412,3 +439,7 @@ const Google = {
         return Google._b64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 };
+
+// Restore a previously saved access token so the Google connection
+// survives page reloads within its ~1h lifetime.
+Google._restoreToken();
