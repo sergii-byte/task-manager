@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#6a1b9a">
+<title>ordify · status</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<style>
+:root {
+    --bg:        #fafaf7;
+    --ink:       #0a0a0a;
+    --fg-mute:   #8a8780;
+    --fg-faint:  #b5b2aa;
+    --line:      #e8e6df;
+    --accent:    #6a1b9a;
+    --accent-soft: #f3e8fb;
+    --ok:        #15803d;
+    --warn:      #c98a00;
+    --danger:    #b91c1c;
+    --radius: 6px;
+    --radius-lg: 10px;
+    --font: 'Inter', system-ui, sans-serif;
+    --font-tight: 'Inter Tight', var(--font);
+    --font-mono: 'JetBrains Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 28px 20px 60px; }
+
+.top {
+    display: flex; align-items: baseline; gap: 12px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px; margin-bottom: 28px;
+}
+.brand { font-family: var(--font-tight); font-weight: 800; font-size: 20px; color: var(--accent); letter-spacing: -0.02em; }
+.top .kind { color: var(--fg-mute); font-size: 13px; }
+.top .lang { margin-left: auto; display: flex; gap: 2px; }
+.top .lang button {
+    border: 1px solid var(--line); background: transparent; color: var(--fg-mute);
+    font: 600 11px var(--font-mono); padding: 3px 8px; border-radius: var(--radius); cursor: pointer;
+}
+.top .lang button.on { color: #fff; background: var(--accent); border-color: var(--accent); }
+
+h1 { font-family: var(--font-tight); font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.sub { color: var(--fg-mute); margin-top: 6px; font-size: 13px; }
+.sub .upd { font-family: var(--font-mono); font-size: 11px; }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 5px; vertical-align: 1px; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 26px 0 8px; }
+.card { border: 1px solid var(--line); border-radius: var(--radius-lg); background: #fff; padding: 14px 16px; }
+.card .lbl { font-size: 11px; text-transform: lowercase; letter-spacing: 0.04em; color: var(--fg-mute); }
+.card .val { font-family: var(--font-tight); font-size: 26px; font-weight: 700; margin-top: 2px; }
+.card.attn { border-color: #fde68a; background: #fffbeb; }
+.card.attn .val { color: var(--warn); }
+
+h2.section-h {
+    font-family: var(--font-tight); font-size: 15px; font-weight: 700; text-transform: lowercase;
+    letter-spacing: 0.01em; margin: 34px 0 4px;
+}
+.section-sub { color: var(--fg-mute); font-size: 12.5px; margin-bottom: 12px; }
+
+.stuck-card {
+    border: 1px solid #fde68a; border-left: 3px solid var(--warn);
+    background: #fffbeb; border-radius: var(--radius-lg);
+    padding: 12px 16px; margin-bottom: 10px;
+}
+.stuck-card .t { font-weight: 600; }
+.stuck-card .why { margin-top: 4px; font-size: 13px; }
+.stuck-card .why b { color: var(--warn); font-weight: 700; }
+.stuck-card .meta { margin-top: 4px; color: var(--fg-mute); font-size: 12px; }
+
+table.t { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+table.t { display: block; overflow-x: auto; }
+table.t thead th {
+    text-align: left; font-size: 11px; font-weight: 600; text-transform: lowercase;
+    letter-spacing: 0.05em; color: var(--fg-mute); padding: 9px 14px; border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+table.t td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.t tr:last-child td { border-bottom: none; }
+.task-title { font-weight: 600; }
+.task-title.is-done { color: var(--fg-mute); text-decoration: line-through; text-decoration-color: var(--fg-faint); }
+.task-meta { color: var(--fg-mute); font-size: 12px; margin-top: 2px; }
+td.num { text-align: right; font-family: var(--font-mono); font-size: 12px; white-space: nowrap; color: var(--fg-mute); }
+td.date { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+td.date.overdue { color: var(--danger); font-weight: 700; }
+
+.badge {
+    display: inline-block; font: 600 11px/1 var(--font-mono);
+    padding: 3px 7px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--fg-mute); background: #fff; white-space: nowrap;
+}
+.badge.high    { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
+.badge.normal  { color: var(--accent); border-color: #ddd6fe; background: var(--accent-soft); }
+.badge.low     { color: var(--fg-mute); }
+.badge.open    { color: var(--accent); border-color: #ddd6fe; background: var(--accent-soft); }
+.badge.on-hold { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
+.badge.closed  { color: var(--fg-mute); }
+.badge.done    { color: var(--ok); border-color: #bbf7d0; background: #f0fdf4; }
+.badge.overdue { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
+.badge.stuck   { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
+
+.empty { color: var(--fg-mute); font-size: 13px; padding: 14px 2px; }
+.state { text-align: center; padding: 90px 20px; color: var(--fg-mute); }
+.state h2 { font-family: var(--font-tight); font-size: 22px; color: var(--ink); margin-bottom: 8px; }
+
+.foot {
+    margin-top: 44px; padding-top: 14px; border-top: 1px solid var(--line);
+    display: flex; gap: 12px; flex-wrap: wrap;
+    color: var(--fg-faint); font-size: 11.5px;
+}
+.foot .brand-sm { font-family: var(--font-tight); font-weight: 800; color: var(--accent); }
+@media (max-width: 560px) {
+    h1 { font-size: 25px; }
+    .wrap { padding: 18px 14px 40px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+    <div class="state" id="state-loading"><h2>ordify</h2><p data-s="loading">loading…</p></div>
+</div>
+
+<!-- Firebase compat SDK — same init as the app; this page only ever reads
+     one /shares document (public GET by unguessable id, see firestore.rules) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-init.js?v=24"></script>
+<script src="share.js?v=24"></script>
+</body>
+</html>

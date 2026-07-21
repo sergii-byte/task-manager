@@ -5,18 +5,18 @@
  */
 'use strict';
 
-const CACHE = 'ordify-v22';
+const CACHE = 'ordify-v24';
 const CORE = [
     './',
     './index.html',
-    './style.css?v=22',
-    './app.js?v=22',
-    './attach.js?v=22',
-    './google.js?v=22',
-    './docimport.js?v=22',
-    './omni.js?v=22',
-    './firebase-init.js?v=22',
-    './auth.js?v=22',
+    './style.css?v=24',
+    './app.js?v=24',
+    './attach.js?v=24',
+    './google.js?v=24',
+    './docimport.js?v=24',
+    './omni.js?v=24',
+    './firebase-init.js?v=24',
+    './auth.js?v=24',
     './manifest.webmanifest',
     './icon.svg'
 ];
@@ -60,15 +60,21 @@ self.addEventListener('fetch', (event) => {
     // Never intercept Firebase / Anthropic / Google API calls
     if (url.origin !== location.origin) return;
 
-    // Navigation: network-first, fall back to cached index.html
+    // Navigation: network-first, fall back to cached index.html.
+    // Only the app shell itself may refresh the cached index.html — other
+    // pages (share.html) must not overwrite it.
     if (req.mode === 'navigate') {
+        const isShell = url.pathname === '/' || url.pathname.endsWith('/index.html');
         event.respondWith((async () => {
             try {
                 const fresh = await fetch(req);
-                const cache = await caches.open(CACHE);
-                cache.put('./index.html', fresh.clone()).catch(() => {});
+                if (isShell) {
+                    const cache = await caches.open(CACHE);
+                    cache.put('./index.html', fresh.clone()).catch(() => {});
+                }
                 return fresh;
             } catch (e) {
+                if (!isShell) return Response.error();
                 const cache = await caches.open(CACHE);
                 return (await cache.match('./index.html')) || Response.error();
             }

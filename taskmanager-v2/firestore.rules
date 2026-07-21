@@ -34,5 +34,25 @@ service cloud.firestore {
         && request.auth.uid == resource.data.ownerId;
     }
 
+    // /shares/{shareId} — a sanitized, read-only status snapshot for one
+    // client (no rates, amounts, invoices or internal notes). The document
+    // id is an unguessable 128-bit token; anyone who has the link can GET
+    // the document, but listing the collection is forbidden — so the token
+    // in the URL is the only way in. Only the hub can write.
+    match /shares/{shareId} {
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.ownerId
+        && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.ownerId;
+    }
+
   }
 }

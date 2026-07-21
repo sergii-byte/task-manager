@@ -1813,3 +1813,37 @@ table.t th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.0
     .inbox-row { grid-template-columns: 1fr; gap: 4px; }
     .inbox-when { text-align: left; }
 }
+
+/* ---- client portal (share) ---- */
+.badge.stuck { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
+.share-box {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    background: var(--bg);
+    margin-bottom: 8px;
+}
+.share-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.share-url {
+    flex: 1;
+    min-width: 220px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--fg-mute);
+}
+.share-box .hint { display: block; color: var(--fg-mute); font-size: 12px; line-height: 1.5; }
+.share-opt { font-size: 12.5px; color: var(--fg-mute); }
+.share-select {
+    font-family: var(--font);
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+}

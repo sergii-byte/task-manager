@@ -242,6 +242,7 @@ const Store = {
     save() {
         // localStorage mirror — offline safety net
         try { localStorage.setItem(STORE_KEY, Store._serialize()); } catch (e) {}
+        Share.schedule();   // keep client portals fresh (no-op if none enabled)
         if (!Store.docRef) return;
         clearTimeout(Store._saveTimer);
         Store._saveTimer = setTimeout(() => {
@@ -328,6 +329,7 @@ const Tasks = {
         Tasks._own.forEach(t => { byId[t.id] = t; });
         Tasks._assigned.forEach(t => { byId[t.id] = t; });
         state.tasks = Object.values(byId);
+        Share.schedule();
         render();
     },
 
@@ -369,6 +371,7 @@ const Tasks = {
             clientName: c ? c.name : (t.clientName || null),
             due: t.due || null,
             priority: t.priority || 'normal',
+            blockedReason: t.blockedReason || null,
             notes: t.notes || '',
             status: t.status || 'todo',
             createdAt: t.createdAt || new Date().toISOString(),
@@ -390,6 +393,7 @@ const Tasks = {
             console.error('task save failed', e);
             toast('Task sync failed: ' + e.message, 'error');
         });
+        Share.schedule();
     },
 
     /* permanently delete one task */
@@ -400,6 +404,125 @@ const Tasks = {
             return;
         }
         Tasks.coll.doc(id).delete().catch((e) => console.error('task delete failed', e));
+    }
+};
+
+/* =========================================================================
+ * 2a½. SHARE — client status pages (/shares collection)
+ *
+ * A client with sharing enabled gets a stable secret link
+ * (share.html#<token>) showing a sanitized live snapshot of their matters
+ * and tasks: titles, status, priority, deadlines, logged time and "stuck"
+ * reasons — never rates, amounts, invoices, internal notes or teammate
+ * emails. The snapshot republishes automatically (debounced) whenever
+ * data changes; the share page listens to the doc in realtime.
+ * ========================================================================= */
+
+const Share = {
+    _timer: null,
+    _last: {},          // shareId -> last published JSON, to skip no-op writes
+
+    token() {
+        const bytes = new Uint8Array(16);
+        crypto.getRandomValues(bytes);
+        return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    url(c) {
+        const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+        return base + 'share.html#' + c.shareId;
+    },
+
+    enable(clientId) {
+        const c = clientById(clientId);
+        if (!c) return;
+        if (!c.shareId) c.shareId = Share.token();
+        c.shareEnabled = true;
+        audit('shareEnable', c.id, c.name);
+        Store.save();
+        Share._publishNow();
+        render();
+    },
+
+    disable(clientId) {
+        const c = clientById(clientId);
+        if (!c) return;
+        const id = c.shareId;
+        c.shareEnabled = false;
+        c.shareId = null;          // re-enabling mints a fresh token
+        delete Share._last[id];
+        audit('shareDisable', c.id, c.name);
+        Store.save();
+        if (fbDb && id) {
+            fbDb.collection('shares').doc(id).delete()
+                .catch((e) => console.error('share delete failed', e));
+        }
+        render();
+    },
+
+    /* Sanitized snapshot — the ONLY data that ever reaches the client.
+     * Excluded on purpose: rates, unbilled amounts, invoices, task/client
+     * notes, assignee emails, attachments. */
+    /* How far back completed tasks are published (days). Configurable per
+     * client on the portal, 7…365. Defaults to 30. */
+    doneDays(c) {
+        const n = Number(c.shareDoneDays);
+        return (n >= 1 && n <= 365) ? n : 30;
+    },
+
+    payload(c) {
+        const matters = mattersForClient(c.id).map(m => ({
+            title: m.title || '',
+            status: m.status || 'open',
+            minutes: logsForMatter(m.id).reduce((s, l) => s + l.minutes, 0)
+        }));
+        const days = Share.doneDays(c);
+        const doneCutoff = new Date(Date.now() - days * 86400000).toISOString();
+        const tasks = tasksForClient(c.id)
+            .filter(t => t.status !== 'done' || (t.completedAt || t.createdAt || '') >= doneCutoff)
+            .map(t => ({
+                title: t.title || '',
+                status: t.status === 'done' ? 'done' : 'open',
+                overdue: taskStatus(t) === 'overdue',
+                priority: t.priority || 'normal',
+                due: t.due || null,
+                stuck: (t.status !== 'done' && t.blockedReason) ? t.blockedReason : null,
+                matter: (matterById(t.matterId) || {}).title || null,
+                minutes: logsForTask(t.id).reduce((s, l) => s + l.minutes, 0),
+                completedAt: t.completedAt || null,
+                createdAt: t.createdAt || null
+            }));
+        return { client: c.name || '', from: state.profile.name || '', doneDays: days, matters, tasks };
+    },
+
+    setDoneDays(clientId, days) {
+        const c = clientById(clientId);
+        if (!c) return;
+        c.shareDoneDays = Number(days) || 30;
+        Store.save();          // triggers Share.schedule() → republish
+        Share._publishNow();
+    },
+
+    /* Debounced republish of every enabled share. Called from Store.save()
+     * and Tasks.put()/Tasks._merge() — cheap, because unchanged payloads
+     * are skipped before any network write. */
+    schedule() {
+        if (!fbDb) return;
+        clearTimeout(Share._timer);
+        Share._timer = setTimeout(() => Share._publishNow(), 1500);
+    },
+
+    _publishNow() {
+        if (!fbDb || !fbAuth || !fbAuth.currentUser) return;
+        const uid = fbAuth.currentUser.uid;
+        liveClients().filter(c => c.shareEnabled && c.shareId).forEach(c => {
+            const json = JSON.stringify(Share.payload(c));
+            if (Share._last[c.shareId] === json) return;
+            fbDb.collection('shares').doc(c.shareId)
+                .set({ ownerId: uid, state: json, updatedAt: Date.now() })
+                .then(() => { Share._last[c.shareId] = json; })
+                .catch((e) => console.error('share publish failed', e));
+        });
     }
 };
 
@@ -979,7 +1102,9 @@ function _todayTaskRow(t) {
         : '';
     const cliName = (cli && cli.name) || t.clientName || '';
     const matName = (mat && mat.title) || t.matterName || '';
-    const ctx = [cliName, matName, due, t.assigneeEmail ? '→ ' + t.assigneeEmail : '']
+    const ctx = [cliName, matName, due,
+        t.assigneeEmail ? '→ ' + t.assigneeEmail : '',
+        (t.status !== 'done' && t.blockedReason) ? '⚑ ' + t.blockedReason : '']
         .filter(Boolean).map(x => esc(x)).join(' · ');
     return `
         <div class="t-task ${st==='done'?'done':''} ${st==='overdue'?'overdue':''}" data-task="${t.id}">
@@ -1077,7 +1202,7 @@ function renderTaskList(tasks) {
                         <div class="task-title ${st==='done'?'is-done':''}">${esc(t.title)}</div>
                         ${meta ? `<div class="task-meta">${meta}</div>` : ''}
                     </td>
-                    <td>${t.due ? `<span class="badge ${st==='overdue'?'overdue':''}">${fmtDate(t.due)}</span>` : ''}</td>
+                    <td>${t.status !== 'done' && t.blockedReason ? `<span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span> ` : ''}${t.due ? `<span class="badge ${st==='overdue'?'overdue':''}">${fmtDate(t.due)}</span>` : ''}</td>
                     <td style="width:80px">
                         ${mat ? `<button class="play" data-start="${t.id}" title="Start timer">▶</button>` : ''}
                         ${t.due ? `<button class="play" data-act="gcal-task" data-id="${t.id}" title="Add to Google Calendar" style="font-size:11px;width:auto;padding:0 6px">📅</button>` : ''}
@@ -1166,6 +1291,37 @@ function viewClient(id) {
             ${c.address ? `<div><span class="lbl">Address</span>${esc(c.address)}</div>` : ''}
         </div>
         ${c.notes ? `<div class="notes-block">${esc(c.notes)}</div>` : ''}
+
+        <h2 class="section-h">Client portal</h2>
+        ${c.shareEnabled && c.shareId ? (() => {
+            const cur = Share.doneDays(c);
+            const opts = [
+                [7, '7 days'], [30, '30 days'], [90, '3 months'],
+                [180, '6 months'], [365, '12 months']
+            ].map(([v, l]) => `<option value="${v}" ${v === cur ? 'selected' : ''}>${l}</option>`).join('');
+            return `
+            <div class="share-box">
+                <div class="share-row">
+                    <input class="share-url" id="share-url" readonly value="${esc(Share.url(c))}" onclick="this.select()">
+                    <button class="btn" data-act="share-copy" data-id="${c.id}">Copy link</button>
+                    <a class="btn" href="${esc(Share.url(c))}" target="_blank" rel="noopener">Open</a>
+                    <button class="btn" data-act="share-disable" data-id="${c.id}">Disable</button>
+                </div>
+                <div class="share-row">
+                    <label class="share-opt" for="share-done-days">Show completed tasks from the last</label>
+                    <select id="share-done-days" class="share-select" data-id="${c.id}">${opts}</select>
+                </div>
+                <small class="hint">Live status page for ${esc(c.name)}: tasks, priorities, deadlines and what's stuck.
+                Rates, amounts, invoices and internal notes are never published. Updates automatically.
+                Disabling kills the link immediately.</small>
+            </div>`;
+        })() : `
+            <div class="share-box">
+                <button class="btn primary" data-act="share-enable" data-id="${c.id}">Share status page with client</button>
+                <small class="hint">Creates a secret live link the client can open — their tasks, priorities,
+                deadlines and stuck items only. No rates, amounts, invoices or internal notes.</small>
+            </div>
+        `}
 
         <h2 class="section-h">Attachments</h2>
         <div id="att-host-client"></div>
@@ -2014,7 +2170,10 @@ function openTaskForm(id = null, defaultMatterId = null) {
             { name: 'assigneeEmail', label: 'Assignee email', type: 'email', value: t?.assigneeEmail || '',
                 placeholder: 'teammate@example.com',
                 hint: 'Leave blank to keep the task yours. The assignee sees it when they sign in.' },
-            { name: 'notes', label: 'Notes', type: 'textarea', value: t?.notes || '', rows: 3, full: true }
+            { name: 'blockedReason', label: 'Stuck / waiting on', value: t?.blockedReason || '', full: true,
+                placeholder: 'e.g. waiting for signed POA from the client',
+                hint: 'Why the task is not moving. Shown on the client portal if this client is shared — write it for the client to read.' },
+            { name: 'notes', label: 'Notes (internal)', type: 'textarea', value: t?.notes || '', rows: 3, full: true }
         ],
         onSave: (data) => {
             if (!data.title?.trim()) { toast('Title is required', 'error'); return false; }
@@ -2026,6 +2185,7 @@ function openTaskForm(id = null, defaultMatterId = null) {
                 due: data.due || null,
                 priority: data.priority,
                 assigneeEmail: (data.assigneeEmail || '').trim().toLowerCase() || null,
+                blockedReason: (data.blockedReason || '').trim() || null,
                 notes: data.notes
             };
             if (t) {
@@ -2278,6 +2438,26 @@ function bindGlobalActions() {
         const a = act.dataset.act;
         switch (a) {
             case 'new-client': openClientForm(); break;
+            case 'share-enable': Share.enable(act.dataset.id); toast('Client portal enabled — link is ready'); break;
+            case 'share-disable': {
+                if (confirm('Disable the client portal? The link stops working immediately.')) {
+                    Share.disable(act.dataset.id);
+                    toast('Client portal disabled');
+                }
+                break;
+            }
+            case 'share-copy': {
+                const c = clientById(act.dataset.id);
+                if (!c || !c.shareId) break;
+                const link = Share.url(c);
+                (navigator.clipboard?.writeText(link) || Promise.reject())
+                    .then(() => toast('Link copied'))
+                    .catch(() => {
+                        const el = $('#share-url');
+                        if (el) { el.select(); document.execCommand('copy'); toast('Link copied'); }
+                    });
+                break;
+            }
             case 'edit-client': openClientForm(act.dataset.id); break;
             case 'new-matter': openMatterForm(null, act.dataset.client); break;
             case 'edit-matter': openMatterForm(act.dataset.id); break;
@@ -2532,6 +2712,11 @@ function render() {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);
     } else if (view === 'clients' && id) {
         Attach.renderInto('att-host-client', Attach.forClient(id), true);
+        const sel = $('#share-done-days');
+        if (sel) sel.addEventListener('change', () => {
+            Share.setDoneDays(sel.dataset.id, sel.value);
+            toast('Portal window updated');
+        });
     }
 }
 

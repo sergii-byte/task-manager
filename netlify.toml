@@ -25,3 +25,16 @@
   for = "/manifest.webmanifest"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Client status page — must always be fresh, and never indexed.
+[[headers]]
+  for = "/share.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+    X-Robots-Tag = "noindex, nofollow"
+
+# Short link for client status pages: ordify.me/s#<token>
+[[redirects]]
+  from = "/s"
+  to = "/share.html"
+  status = 200
