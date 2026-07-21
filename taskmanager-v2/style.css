@@ -1982,3 +1982,63 @@ input, select, textarea, button { font-size: var(--t-base); }
 h3 { font-size: var(--t-lg); }
 p.muted { font-size: var(--t-sm); }
 .today-v3 .t-headline { font-size: var(--t-2xl); }
+
+/* ---- nav groups: day / work / money ---- */
+.nav-group-label {
+    font-size: var(--t-xs);
+    text-transform: lowercase;
+    letter-spacing: 0.09em;
+    /* --fg-faint measures 4.3:1 on the sidebar's tinted background — just
+       under AA. --fg-mute clears it with margin. */
+    color: var(--fg-mute);
+    padding: var(--s-4) var(--s-3) var(--s-1);
+    user-select: none;
+}
+.nav-group-label:first-child { padding-top: var(--s-2); }
+@media (max-width: 720px) {
+    /* on a phone the groups read as visual gaps, not headings */
+    .nav-group-label { display: none; }
+    #nav .nav-item:nth-child(even) { margin-right: var(--s-2); }
+}
+
+/* ---- assistant cards on Today ---- */
+.t-assist { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-4) 0 var(--s-2); }
+.assist-card {
+    display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+    border: 1px solid var(--accent-line);
+    background: var(--accent-soft);
+    border-radius: var(--radius-lg);
+    padding: var(--s-2) var(--s-3);
+}
+.assist-ic { flex: none; }
+.assist-text { font-size: var(--t-sm); min-width: 180px; flex: 1; }
+.assist-chips { display: flex; gap: var(--s-1); flex-wrap: wrap; }
+.assist-chips .chip { background: var(--surface); min-height: 28px; padding: 2px var(--s-3); }
+.assist-chips .chip:hover { border-color: var(--accent); color: var(--accent); }
+.assist-chips .chip.ghost { border-color: transparent; color: var(--fg-faint); }
+
+/* ---- quick-log chips inside the toast ---- */
+.toast-chip {
+    margin-left: var(--s-2);
+    border: 1px solid rgba(255,255,255,0.45);
+    background: transparent;
+    color: inherit;
+    font: 600 var(--t-xs) var(--font);
+    padding: 3px 10px;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+}
+.toast-chip:hover { background: rgba(255,255,255,0.16); }
+.toast-chip.ghost { border-color: transparent; opacity: 0.7; }
+
+/* ---- unbilled-by-client strip on Time ---- */
+.unbilled-strip { display: flex; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-4); }
+.unbilled-card {
+    display: flex; align-items: center; gap: var(--s-3);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: var(--s-2) var(--s-3);
+}
+.unbilled-card .u-name { font-weight: 600; font-size: var(--t-sm); }
+.unbilled-card .u-amt { font-family: var(--font-mono); font-size: var(--t-sm); color: var(--fg-mute); }

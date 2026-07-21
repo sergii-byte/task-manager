@@ -689,6 +689,158 @@ function toast(message, kind = 'ok', undo = null) {
     _toastTimer = setTimeout(() => { el.hidden = true; }, undo ? 8000 : 2400);
 }
 
+/* One-tap time capture. The user's stated failure mode is never logging
+ * time ("friction, lazy") — so the moment a task is closed with nothing
+ * logged on it, the toast offers four durations. One tap writes the log;
+ * ignoring it costs nothing. */
+function quickLogPrompt(t) {
+    const el = $('#toast');
+    if (!el || !t.matterId) return;
+    clearTimeout(_toastTimer);
+    el.dataset.kind = 'ok';
+    el.innerHTML = `<span>✓ done — how long did it take?</span>` +
+        [15, 30, 60, 120].map(m =>
+            `<button class="toast-chip" data-mins="${m}">${fmtMinutes(m)}</button>`).join('') +
+        `<button class="toast-chip ghost" data-mins="0">skip</button>`;
+    el.hidden = false;
+    el.querySelectorAll('[data-mins]').forEach(b => b.addEventListener('click', () => {
+        el.hidden = true;
+        const mins = Number(b.dataset.mins);
+        if (!mins) return;
+        const end = Date.now();
+        state.logs.push({
+            id: uuid(), taskId: t.id, matterId: t.matterId, clientId: t.clientId,
+            startedAt: new Date(end - mins * 60000).toISOString(),
+            endedAt: new Date(end).toISOString(),
+            minutes: mins, notes: t.title, invoiceId: null
+        });
+        Store.save(); render();
+        toast(`Logged ${fmtMinutes(mins)}`);
+    }));
+    _toastTimer = setTimeout(() => { el.hidden = true; }, 12000);
+}
+
+/* =========================================================================
+ * ASSISTANT — the app does the bookkeeping, the user just answers.
+ *
+ * Every card is a piece of admin ordify noticed on its own (unlogged time,
+ * a slipped deadline, billable work piling up, a stalled task) turned into
+ * a one-tap question. Cards can always be dismissed; "skip" answers are
+ * remembered so the same nag never comes back twice.
+ * ========================================================================= */
+
+const Assist = {
+    _key: 'ordify-assist-dismissed',
+
+    _dismissed() {
+        try { return JSON.parse(localStorage.getItem(Assist._key)) || {}; }
+        catch (e) { return {}; }
+    },
+    dismiss(id, days = 1) {
+        const d = Assist._dismissed();
+        d[id] = new Date(Date.now() + days * 86400000).toISOString();
+        try { localStorage.setItem(Assist._key, JSON.stringify(d)); } catch (e) {}
+    },
+    _hidden(id) {
+        const until = Assist._dismissed()[id];
+        return !!until && until > new Date().toISOString();
+    },
+
+    cards() {
+        const out = [];
+
+        // closed recently, nothing logged — the money is evaporating
+        const recent = new Date(Date.now() - 48 * 3600000).toISOString();
+        liveTasks().filter(t => t.status === 'done' && t.matterId
+                && (t.completedAt || '') >= recent
+                && !logsForTask(t.id).length && !Assist._hidden('log:' + t.id))
+            .slice(0, 2).forEach(t => out.push({
+                icon: '⏱', text: `“${t.title}” closed — no time on it`,
+                chips: [15, 30, 60, 120].map(m => ({ label: fmtMinutes(m), assist: `log:${t.id}:${m}` }))
+                    .concat([{ label: 'skip', assist: `dismiss:log:${t.id}`, ghost: true }])
+            }));
+
+        // overdue — reschedule honestly instead of letting it rot in red
+        liveTasks().filter(t => taskStatus(t) === 'overdue' && !Assist._hidden('due:' + t.id))
+            .slice(0, 2).forEach(t => {
+                const days = Math.max(1, Math.round((Date.now() - new Date(t.due + 'T00:00:00').getTime()) / 86400000));
+                out.push({
+                    icon: '⚠', text: `“${t.title}” — ${days} day${days === 1 ? '' : 's'} overdue`,
+                    chips: [
+                        { label: 'today', assist: `due:${t.id}:0` },
+                        { label: 'tomorrow', assist: `due:${t.id}:1` },
+                        { label: '+1 week', assist: `due:${t.id}:7` },
+                        { label: 'later', assist: `dismiss:due:${t.id}`, ghost: true }
+                    ]
+                });
+            });
+
+        // 5h+ of unbilled work on one client — worth turning into money
+        liveClients().forEach(c => {
+            const mins = state.logs.filter(l => l.clientId === c.id && !l.invoiceId && !l.deletedAt)
+                .reduce((s, l) => s + l.minutes, 0);
+            if (mins >= 300 && !Assist._hidden('bill:' + c.id)) out.push({
+                icon: '€', text: `${c.name} — ${fmtMinutes(mins)} unbilled (${fmtMoney(totalUnbilledForClient(c.id), profileCurrency())})`,
+                chips: [{ label: '→ invoice', assist: `bill:${c.id}` },
+                        { label: 'later', assist: `dismiss:bill:${c.id}`, ghost: true }]
+            });
+        });
+
+        // stalled work — surface the blocker instead of hoping someone remembers
+        liveTasks().filter(t => t.status !== 'done' && t.blockedReason && !Assist._hidden('stuck:' + t.id))
+            .slice(0, 1).forEach(t => {
+                const c = clientById(t.clientId);
+                out.push({
+                    icon: '🚧', text: `“${t.title}” — waiting on: ${t.blockedReason}`,
+                    chips: [
+                        ...(c && c.shareEnabled ? [{ label: 'nudge in portal', assist: `nudge:${t.clientId}` }] : []),
+                        { label: 'open', assist: `open:${t.id}` },
+                        { label: 'hide', assist: `dismiss:stuck:${t.id}`, ghost: true }
+                    ]
+                });
+            });
+
+        // dateless tasks can never appear in the day plan — that is how things get dropped
+        const nodate = liveTasks().filter(t => t.status !== 'done' && !t.due);
+        if (nodate.length >= 3 && !Assist._hidden('nodate')) out.push({
+            icon: '▦', text: `${nodate.length} open tasks have no date — invisible to your day plan`,
+            chips: [{ label: 'show them', assist: 'filter:nodate' },
+                    { label: 'hide', assist: 'dismiss:nodate', ghost: true }]
+        });
+
+        return out.slice(0, 4);
+    },
+
+    handle(cmd) {
+        const [verb, ...rest] = cmd.split(':');
+        if (verb === 'dismiss') { Assist.dismiss(rest.join(':')); render(); return; }
+        if (verb === 'log') {
+            const [id, mins] = rest, t = taskById(id), m = Number(mins);
+            if (!t || !m) return;
+            const end = Date.now();
+            state.logs.push({
+                id: uuid(), taskId: t.id, matterId: t.matterId, clientId: t.clientId,
+                startedAt: new Date(end - m * 60000).toISOString(),
+                endedAt: new Date(end).toISOString(),
+                minutes: m, notes: t.title, invoiceId: null
+            });
+            Store.save(); render(); toast(`Logged ${fmtMinutes(m)}`);
+            return;
+        }
+        if (verb === 'due') {
+            const [id, days] = rest, t = taskById(id);
+            if (!t) return;
+            t.due = new Date(Date.now() + Number(days) * 86400000).toISOString().slice(0, 10);
+            Tasks.put(t); render(); toast('Rescheduled to ' + fmtDate(t.due));
+            return;
+        }
+        if (verb === 'bill')   { openInvoiceForm(null, null, rest[0]); return; }
+        if (verb === 'nudge')  { navigate('clients/' + rest[0]); return; }
+        if (verb === 'open')   { openTaskForm(rest[0]); return; }
+        if (verb === 'filter') { todayFilter = rest[0]; render(); }
+    }
+};
+
 /* Soft-deletes hand the toast the exact objects they touched, so one click
  * puts a cascade back. Tasks live in their own collection and need a write
  * of their own; everything else rides along in the blob. */
@@ -840,7 +992,7 @@ const Timer = {
             Timer.stop({ silent: true });
         }
         if (!matterId) {
-            toast('Pick a matter first', 'error');
+            toast('Pick a project first', 'error');
             return;
         }
         state.timer = {
@@ -899,33 +1051,45 @@ const Timer = {
  * 8. SIDEBAR
  * ========================================================================= */
 
-const NAV_ITEMS = [
-    { id: 'today',    label: 'today',     icon: '○' },
-    { id: 'inbox',    label: 'inbox',     icon: '✉' },
-    { id: 'clients',  label: 'clients',   icon: '◐' },
-    { id: 'matters',  label: 'matters',   icon: '◇' },
-    { id: 'time',     label: 'time',      icon: '◴' },
-    { id: 'invoices', label: 'invoices',  icon: '$' }
+/* Three groups = three working modes with different rhythms:
+ *   day   — "what am I doing right now"      (opened every morning)
+ *   work  — "who and what am I working for"  (a few times a week)
+ *   money — "what do I get paid for it"      (end of month)
+ * Note: internally a project is still `matter` everywhere (matterId,
+ * mattersForClient …) — only the words the user sees changed. */
+const NAV_GROUPS = [
+    { label: 'day',   items: [
+        { id: 'today',    label: 'today',     icon: '○' },
+        { id: 'inbox',    label: 'inbox',     icon: '✉' } ] },
+    { label: 'work',  items: [
+        { id: 'clients',  label: 'clients',   icon: '◐' },
+        { id: 'matters',  label: 'projects',  icon: '◇' } ] },
+    { label: 'money', items: [
+        { id: 'time',     label: 'time',      icon: '◴' },
+        { id: 'invoices', label: 'invoices',  icon: '$' } ] }
 ];
+const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items);
 
 function renderSidebar() {
     // #/tasks is an alias for Today, so it must light up the same nav item
     const cur = parseHash().view === 'tasks' ? 'today' : parseHash().view;
     const nav = $('#nav');
-    nav.innerHTML = NAV_ITEMS.map(it => {
+    const item = (it) => {
         let count = '';
         if (it.id === 'today') {
             const n = liveTasks().filter(t => taskStatus(t) !== 'done' && (t.due === todayISO() || taskStatus(t) === 'overdue')).length;
             if (n) count = `<span class="count">${n}</span>`;
         } else if (it.id === 'clients') count = `<span class="count">${liveClients().length || ''}</span>`;
         else if (it.id === 'matters') count = `<span class="count">${liveMatters().filter(m=>m.status!=='closed').length || ''}</span>`;
-        else if (it.id === 'tasks') count = `<span class="count">${liveTasks().filter(t=>t.status!=='done').length || ''}</span>`;
         else if (it.id === 'invoices') count = `<span class="count">${liveInvoices().filter(i=>i.status!=='paid').length || ''}</span>`;
 
         return `<button class="nav-item ${cur===it.id?'active':''}" data-nav="${it.id}">
             <span class="ic">${it.icon}</span><span>${it.label}</span>${count}
         </button>`;
-    }).join('');
+    };
+    nav.innerHTML = NAV_GROUPS.map(g =>
+        `<div class="nav-group-label">${g.label}</div>` + g.items.map(item).join('')
+    ).join('');
     nav.onclick = (e) => {
         const btn = e.target.closest('[data-nav]');
         if (btn) navigate(btn.dataset.nav);
@@ -1085,6 +1249,20 @@ function viewToday() {
                 </div>
             </div>
         </header>
+
+        ${(() => {
+            const cards = Assist.cards();
+            return cards.length ? `
+        <section class="t-assist" aria-label="Suggestions">
+            ${cards.map(c => `
+            <div class="assist-card">
+                <span class="assist-ic">${c.icon}</span>
+                <span class="assist-text">${esc(c.text)}</span>
+                <span class="assist-chips">${c.chips.map(ch =>
+                    `<button class="chip ${ch.ghost ? 'ghost' : ''}" data-assist="${esc(ch.assist)}">${esc(ch.label)}</button>`).join('')}</span>
+            </div>`).join('')}
+        </section>` : '';
+        })()}
 
         <section class="t-sec">
             <div class="t-sechdr">
@@ -1254,7 +1432,7 @@ function viewClients() {
         ` : `
             <table class="t">
                 <thead><tr>
-                    <th>Name</th><th>Email</th><th class="num">Matters</th><th class="num">Open tasks</th><th class="num">Unbilled</th>
+                    <th>Name</th><th>Email</th><th class="num">Projects</th><th class="num">Open tasks</th><th class="num">Unbilled</th>
                 </tr></thead>
                 <tbody>
                     ${list.map(c => {
@@ -1291,12 +1469,12 @@ function viewClient(id) {
             <h1>${esc(c.name)}</h1>
             <div class="actions">
                 <button class="btn" data-act="edit-client" data-id="${c.id}">Edit</button>
-                <button class="btn primary" data-act="new-matter" data-client="${c.id}">＋ New matter</button>
+                <button class="btn primary" data-act="new-matter" data-client="${c.id}">＋ New project</button>
             </div>
         </div>
 
         <div class="cards">
-            <div class="card"><div class="card-label">Matters</div><div class="card-value">${matters.length}</div></div>
+            <div class="card"><div class="card-label">Projects</div><div class="card-value">${matters.length}</div></div>
             <div class="card"><div class="card-label">Total time</div><div class="card-value">${fmtMinutes(totalMins)}</div></div>
             <div class="card"><div class="card-label">Unbilled</div><div class="card-value">${fmtMoney(unbilled, profileCurrency())}</div></div>
             <div class="card"><div class="card-label">Open tasks</div><div class="card-value">${tasks.filter(t=>t.status!=='done').length}</div></div>
@@ -1352,7 +1530,7 @@ function viewClient(id) {
         <h2 class="section-h">Attachments</h2>
         <div id="att-host-client"></div>
 
-        <h2 class="section-h">Matters</h2>
+        <h2 class="section-h">Projects</h2>
         ${matters.length ? `
             <table class="t">
                 <thead><tr><th>Title</th><th>Status</th><th class="num">Tasks</th><th class="num">Time</th><th>Rate</th></tr></thead>
@@ -1369,7 +1547,7 @@ function viewClient(id) {
                     </tr>`;
                 }).join('')}</tbody>
             </table>
-        ` : '<div class="empty">No matters yet.</div>'}
+        ` : '<div class="empty">No projects yet.</div>'}
 
         ${invoices.length ? `
             <h2 class="section-h">Invoices</h2>
@@ -1453,17 +1631,17 @@ function viewMatters() {
     const list = [...liveMatters()].sort((a,b)=> (a.title||'').localeCompare(b.title||''));
     return `
         <div class="view-head">
-            <h1>Matters</h1>
+            <h1>Projects</h1>
             <div class="meta">${list.length} total · ${list.filter(m=>m.status!=='closed').length} active</div>
             <div class="actions">
-                <button class="btn primary" data-act="new-matter">＋ New matter</button>
+                <button class="btn primary" data-act="new-matter">＋ New project</button>
             </div>
         </div>
         ${list.length === 0 ? `
             <div class="empty-state">
-                <h3>No matters yet</h3>
-                <p>Matters group tasks, time, and invoices for a client engagement.</p>
-                <button class="btn primary" data-act="new-matter">＋ New matter</button>
+                <h3>No projects yet</h3>
+                <p>Projects group tasks, time, and invoices for a client engagement.</p>
+                <button class="btn primary" data-act="new-matter">＋ New project</button>
             </div>
         ` : `
             <table class="t">
@@ -1490,7 +1668,7 @@ function viewMatters() {
 
 function viewMatter(id) {
     const m = matterById(id);
-    if (!m) return `<div class="empty-state"><h3>Matter not found</h3><a href="#/matters">Back</a></div>`;
+    if (!m) return `<div class="empty-state"><h3>Project not found</h3><a href="#/matters">Back</a></div>`;
     const c = clientById(m.clientId);
     const tasks = tasksForMatter(id);
     const logs = logsForMatter(id);
@@ -1500,7 +1678,7 @@ function viewMatter(id) {
 
     return `
         <div class="breadcrumb">
-            <a href="#/matters">Matters</a> ›
+            <a href="#/matters">Projects</a> ›
             ${c ? `<a href="#/clients/${c.id}">${esc(c.name)}</a> ›` : ''}
         </div>
         <div class="view-head">
@@ -1567,6 +1745,27 @@ function viewTime() {
                 <button class="btn" data-act="new-log">＋ Manual entry</button>
             </div>
         </div>
+        ${(() => {
+            // Unbilled time is only useful if it can become an invoice right
+            // here — a bare "Xh unbilled" number closes no loop.
+            const byClient = {};
+            list.filter(l => !l.invoiceId).forEach(l => {
+                if (l.clientId) byClient[l.clientId] = (byClient[l.clientId] || 0) + l.minutes;
+            });
+            const rows = Object.entries(byClient)
+                .map(([cid, m]) => ({ c: clientById(cid), m, money: totalUnbilledForClient(cid) }))
+                .filter(r => r.c && !r.c.deletedAt && r.m > 0)
+                .sort((a, b) => b.money - a.money);
+            return rows.length ? `
+            <div class="unbilled-strip">
+                ${rows.map(r => `
+                <div class="unbilled-card">
+                    <div class="u-name">${esc(r.c.name)}</div>
+                    <div class="u-amt">${fmtMinutes(r.m)} · ${fmtMoney(r.money, profileCurrency())}</div>
+                    <button class="btn sm primary" data-act="invoice-client" data-client="${r.c.id}">→ invoice</button>
+                </div>`).join('')}
+            </div>` : '';
+        })()}
         ${list.length === 0 ? `
             <div class="empty-state">
                 <h3>No time entries yet</h3>
@@ -1575,7 +1774,7 @@ function viewTime() {
         ` : `
             <table class="t">
                 <thead><tr>
-                    <th>Date</th><th>Client</th><th>Matter</th><th>Notes</th>
+                    <th>Date</th><th>Client</th><th>Project</th><th>Notes</th>
                     <th class="num">Duration</th><th>Status</th>
                 </tr></thead>
                 <tbody>${list.map(l => {
@@ -2032,7 +2231,7 @@ function openClientForm(id = null) {
         },
         onDelete: c ? () => {
             const has = mattersForClient(c.id).length || tasksForClient(c.id).length || logsForClient(c.id).length;
-            if (has && !confirm('This client has matters/tasks/time. Delete all of it?')) return;
+            if (has && !confirm('This client has projects/tasks/time. Delete all of it?')) return;
             const ts = new Date().toISOString();
             const blob = [c], tasks = [];
             state.matters.forEach(m => { if (m.clientId === c.id) { m.deletedAt = ts; blob.push(m); } });
@@ -2054,7 +2253,7 @@ function openMatterForm(id = null, defaultClientId = null) {
         return;
     }
     Modal.open({
-        title: m ? 'Edit matter' : 'New matter',
+        title: m ? 'Edit project' : 'New project',
         fields: [
             { name: 'title', label: 'Title', value: m?.title || '', required: true, full: true },
             { name: 'clientId', label: 'Client', type: 'select', required: true,
@@ -2080,11 +2279,11 @@ function openMatterForm(id = null, defaultClientId = null) {
                 state.matters.push(nm);
             }
             Store.save(); render();
-            toast(m ? 'Matter updated' : 'Matter created');
+            toast(m ? 'Project updated' : 'Project created');
         },
         onDelete: m ? () => {
             const has = tasksForMatter(m.id).length || logsForMatter(m.id).length;
-            if (has && !confirm('This matter has tasks/time. Delete all of it?')) return;
+            if (has && !confirm('This project has tasks/time. Delete all of it?')) return;
             const ts = new Date().toISOString();
             const blob = [m], tasks = [];
             state.tasks.forEach(t => { if (t.matterId === m.id) { t.deletedAt = ts; Tasks.put(t); tasks.push(t); } });
@@ -2092,7 +2291,7 @@ function openMatterForm(id = null, defaultClientId = null) {
             m.deletedAt = ts;
             Store.save();
             navigate('matters');
-            deletedWithUndo('Matter deleted', { blob, tasks });
+            deletedWithUndo('Project deleted', { blob, tasks });
         } : null
     });
 }
@@ -2103,7 +2302,7 @@ function openTaskForm(id = null, defaultMatterId = null) {
         title: t ? 'Edit task' : 'New task',
         fields: [
             { name: 'title', label: 'Title', value: t?.title || '', required: true, full: true },
-            { name: 'matterId', label: 'Matter', type: 'select',
+            { name: 'matterId', label: 'Project', type: 'select',
                 value: t?.matterId || defaultMatterId || '',
                 options: [{ value:'', label:'— none —' }, ...state.matters.map(m => ({
                     value: m.id, label: `${clientById(m.clientId)?.name || '—'} · ${m.title}`
@@ -2171,11 +2370,11 @@ function openLogForm(id = null) {
     Modal.open({
         title: l ? 'Edit time entry' : 'Manual time entry',
         fields: [
-            { name: 'matterId', label: 'Matter', type: 'select', required: true,
+            { name: 'matterId', label: 'Project', type: 'select', required: true,
                 value: l?.matterId || '',
                 options: state.matters.length
                     ? state.matters.map(m => ({ value: m.id, label: `${clientById(m.clientId)?.name||'—'} · ${m.title}` }))
-                    : [{ value:'', label:'— add a matter first —' }]},
+                    : [{ value:'', label:'— add a project first —' }]},
             { name: 'date', label: 'Date', type: 'date', required: true, value: fmtDateInput(l?.startedAt) || todayISO() },
             { name: 'minutes', label: 'Minutes', type: 'number', required: true, min: 1, step: 1, value: l?.minutes ?? 30 },
             { name: 'notes', label: 'Notes', type: 'textarea', value: l?.notes || '', rows: 3, full: true }
@@ -2211,7 +2410,7 @@ function openLogForm(id = null) {
     });
 }
 
-function openInvoiceForm(matterId = null, existingId = null) {
+function openInvoiceForm(matterId = null, existingId = null, clientId = null) {
     const existing = existingId ? invoiceById(existingId) : null;
 
     if (existing) {
@@ -2255,7 +2454,7 @@ function openInvoiceForm(matterId = null, existingId = null) {
         toast('No unbilled time to invoice yet', 'error');
         return;
     }
-    const preClient = matterId ? (matterById(matterId)?.clientId || '') : '';
+    const preClient = clientId || (matterId ? (matterById(matterId)?.clientId || '') : '');
     Modal.open({
         title: 'New invoice',
         fields: [
@@ -2369,12 +2568,19 @@ function bindGlobalActions() {
         if (toggle) {
             const t = taskById(toggle.dataset.toggle);
             if (t) {
+                const becameDone = t.status !== 'done';
                 t.status = t.status === 'done' ? 'todo' : 'done';
                 t.completedAt = t.status === 'done' ? new Date().toISOString() : null;
                 Tasks.put(t); render();
+                // closing a task with no time on it → offer to log it in one tap
+                if (becameDone && t.matterId && !logsForTask(t.id).length) quickLogPrompt(t);
             }
             return;
         }
+
+        // assistant cards — every chip is a one-tap answer
+        const assist = e.target.closest('[data-assist]');
+        if (assist) { Assist.handle(assist.dataset.assist); return; }
 
         // start timer for a task
         const startBtn = e.target.closest('[data-start]');
@@ -2433,6 +2639,7 @@ function bindGlobalActions() {
             case 'new-log': openLogForm(); break;
             case 'edit-log': openLogForm(act.dataset.id); break;
             case 'new-invoice': openInvoiceForm(act.dataset.matter); break;
+            case 'invoice-client': openInvoiceForm(null, null, act.dataset.client); break;
             case 'edit-invoice': openInvoiceForm(null, act.dataset.id); break;
             case 'invoice-status': {
                 const inv = invoiceById(act.dataset.id);

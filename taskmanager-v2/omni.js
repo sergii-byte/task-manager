@@ -104,7 +104,7 @@ const Omni = {
         });
         state.matters.filter(m => !m.deletedAt).forEach(m => {
             if ((m.title||'').toLowerCase().includes(q))
-                out.push({ kind: 'matter', label: m.title, sub: clientById(m.clientId)?.name||'', path: 'matters/'+m.id });
+                out.push({ kind: 'project', label: m.title, sub: clientById(m.clientId)?.name||'', path: 'matters/'+m.id });
         });
         state.tasks.filter(t => !t.deletedAt).forEach(t => {
             if ((t.title||'').toLowerCase().includes(q))
@@ -312,11 +312,11 @@ const Omni = {
             const mSel = li && li.querySelector('select[data-gap="matter"]');
             const tSel = li && li.querySelector('select[data-gap="task"]');
             if (!mSel || !mSel.value) {
-                toast('Pick a matter first', 'error');
+                toast('Pick a project first', 'error');
                 return false;
             }
             if (mSel.value === '__new__') {
-                const title = (prompt('New matter name:', 'General') || '').trim();
+                const title = (prompt('New project name:', 'General') || '').trim();
                 if (!title) return false;
                 p.data.matterName = title;
                 delete p.data.matterId;
@@ -342,7 +342,7 @@ const Omni = {
         return ({
             createClient: 'New client',
             updateClient: 'Update client',
-            createMatter: 'New matter',
+            createMatter: 'New project',
             updateMatter: 'Update matter',
             createTask:   'New task',
             updateTask:   'Update task',
@@ -410,7 +410,7 @@ const Omni = {
                 <label>Matter
                     <select data-gap="matter" data-i="${i}">
                         ${matterOpts}
-                        <option value="__new__" ${newSelected}>＋ New matter…</option>
+                        <option value="__new__" ${newSelected}>＋ New project…</option>
                     </select>
                 </label>
                 <label>Task
