@@ -904,13 +904,13 @@ const NAV_ITEMS = [
     { id: 'inbox',    label: 'inbox',     icon: '✉' },
     { id: 'clients',  label: 'clients',   icon: '◐' },
     { id: 'matters',  label: 'matters',   icon: '◇' },
-    { id: 'tasks',    label: 'tasks',     icon: '☐' },
     { id: 'time',     label: 'time',      icon: '◴' },
     { id: 'invoices', label: 'invoices',  icon: '$' }
 ];
 
 function renderSidebar() {
-    const cur = parseHash().view;
+    // #/tasks is an alias for Today, so it must light up the same nav item
+    const cur = parseHash().view === 'tasks' ? 'today' : parseHash().view;
     const nav = $('#nav');
     nav.innerHTML = NAV_ITEMS.map(it => {
         let count = '';
@@ -993,17 +993,61 @@ function viewToday() {
         timerSub = state.timer.label || 'running';
     }
 
-    // "open this week" — overdue first, then due today, then rest of the week
+    // The task list below the schedule replaces the old separate Tasks view:
+    // same tasks, sliced by when they are due rather than by which screen
+    // you happened to open.
     const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate() + 7);
     const wkEndISO = wkEnd.toISOString().slice(0, 10);
-    const weekTasks = [
+
+    const byUrgency = (a, b) =>
+        (a.due || '9999').localeCompare(b.due || '9999')
+        || ({ high: 0, normal: 1, low: 2 }[a.priority || 'normal'] - { high: 0, normal: 1, low: 2 }[b.priority || 'normal']);
+
+    let list;
+    if (todayFilter === 'today')        list = [...overdue, ...dueToday];
+    else if (todayFilter === 'overdue') list = [...overdue];
+    else if (todayFilter === 'nodate')  list = openTasks.filter(t => !t.due);
+    else if (todayFilter === 'all')     list = [...openTasks].sort(byUrgency);
+    else if (todayFilter === 'done')    list = liveTasks().filter(t => t.status === 'done')
+                                                .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
+                                                .slice(0, 50);
+    else /* week */                     list = [
         ...overdue,
         ...dueToday,
         ...openTasks.filter(t => t.due && t.due > today && t.due < wkEndISO),
         ...openTasks.filter(t => !t.due).slice(0, 4)
     ];
     const seen = new Set();
-    const weekTasksUniq = weekTasks.filter(t => (seen.has(t.id) ? false : seen.add(t.id)));
+    list = list.filter(t => (seen.has(t.id) ? false : seen.add(t.id)));
+
+    const FILTERS = [
+        ['today',   'today'],
+        ['week',    'this week'],
+        ['overdue', 'overdue'],
+        ['nodate',  'no date'],
+        ['all',     'all open'],
+        ['done',    'done']
+    ];
+    const counts = {
+        today:   overdue.length + dueToday.length,
+        overdue: overdue.length,
+        nodate:  openTasks.filter(t => !t.due).length,
+        all:     openTasks.length
+    };
+    const chips = FILTERS.map(([id, label]) => {
+        const n = counts[id];
+        return `<button class="chip ${todayFilter === id ? 'on' : ''}" data-filter="${id}"
+            aria-pressed="${todayFilter === id}">${label}${n ? `<span class="chip-n">${n}</span>` : ''}</button>`;
+    }).join('');
+
+    const EMPTY = {
+        today:   'Nothing due today. Enjoy it.',
+        week:    'No open tasks this week — capture one with the bar above.',
+        overdue: 'Nothing overdue. ✓',
+        nodate:  'Every open task has a date on it.',
+        all:     'No open tasks at all.',
+        done:    'Nothing completed yet.'
+    };
 
     return `
     <div class="today-v3">
@@ -1053,13 +1097,14 @@ function viewToday() {
 
         <section class="t-sec">
             <div class="t-sechdr">
-                <h2>open this week</h2>
-                <span class="count">${weekTasksUniq.length} task${weekTasksUniq.length===1?'':'s'}</span>
-                <span class="right"><a href="#/tasks">see all</a></span>
+                <h2>tasks</h2>
+                <span class="count">${list.length}</span>
+                <span class="right"><button class="btn sm" data-act="new-task">＋ task</button></span>
             </div>
-            ${weekTasksUniq.length
-                ? `<div class="t-tasks">${weekTasksUniq.map(_todayTaskRow).join('')}</div>`
-                : `<div class="t-sched-msg">No open tasks this week — capture one with the bar above.</div>`}
+            <div class="t-filters" role="group" aria-label="Filter tasks">${chips}</div>
+            ${list.length
+                ? `<div class="t-tasks">${list.map(_todayTaskRow).join('')}</div>`
+                : `<div class="t-sched-msg">${EMPTY[todayFilter] || EMPTY.week}</div>`}
         </section>
     </div>`;
 }
@@ -1500,40 +1545,10 @@ function viewMatter(id) {
     `;
 }
 
-/* =========================================================================
- * 13. VIEW: TASKS
- * ========================================================================= */
-
-let tasksFilter = 'open';
-
-function viewTasks() {
-    let list = [...liveTasks()];
-    if (tasksFilter === 'open') list = list.filter(t => t.status !== 'done');
-    else if (tasksFilter === 'done') list = list.filter(t => t.status === 'done');
-    else if (tasksFilter === 'overdue') list = list.filter(t => taskStatus(t) === 'overdue');
-    list.sort((a,b) => {
-        if (a.status === 'done' && b.status !== 'done') return 1;
-        if (b.status === 'done' && a.status !== 'done') return -1;
-        return (a.due || '9999').localeCompare(b.due || '9999');
-    });
-
-    return `
-        <div class="view-head">
-            <h1>Tasks</h1>
-            <div class="meta">${list.length} ${tasksFilter}</div>
-            <div class="actions">
-                <button class="btn primary" data-act="new-task">＋ New task</button>
-            </div>
-        </div>
-        <div class="filter-row">
-            <button class="chip ${tasksFilter==='open'?'on':''}" data-filter="open">Open</button>
-            <button class="chip ${tasksFilter==='overdue'?'on':''}" data-filter="overdue">Overdue</button>
-            <button class="chip ${tasksFilter==='done'?'on':''}" data-filter="done">Done</button>
-            <button class="chip ${tasksFilter==='all'?'on':''}" data-filter="all">All</button>
-        </div>
-        ${renderTaskList(list)}
-    `;
-}
+/* Tasks no longer have a screen of their own — Today owns the list and this
+ * drives which slice of it is showing. Kept here next to the other view
+ * state rather than inside viewToday so a re-render does not reset it. */
+let todayFilter = 'week';
 
 /* =========================================================================
  * 14. VIEW: TIME
@@ -2502,7 +2517,7 @@ function bindGlobalActions() {
     document.body.addEventListener('click', (e) => {
         const f = e.target.closest('[data-filter]');
         if (f) {
-            tasksFilter = f.dataset.filter;
+            todayFilter = f.dataset.filter;
             render();
         }
     });
@@ -2572,10 +2587,10 @@ function render() {
     let html = '';
     try {
         switch (view) {
-            case 'today':    html = viewToday(); break;
+            case 'today':
+            case 'tasks':    html = viewToday(); break;   // #/tasks folded into Today
             case 'clients':  html = id ? viewClient(id) : viewClients(); break;
             case 'matters':  html = id ? viewMatter(id) : viewMatters(); break;
-            case 'tasks':    html = viewTasks(); break;
             case 'time':     html = viewTime(); break;
             case 'invoices': html = id ? viewInvoice(id) : viewInvoices(); break;
             case 'inbox':    html = viewInbox(); break;

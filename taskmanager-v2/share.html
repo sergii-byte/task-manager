@@ -14,14 +14,16 @@
 :root {
     --bg:        #fafaf7;
     --ink:       #0a0a0a;
-    --fg-mute:   #8a8780;
-    --fg-faint:  #b5b2aa;
+    /* kept in step with the app's tokens — both clear WCAG AA on --bg, so
+       nothing the client needs to read is set in unreadable grey */
+    --fg-mute:   #6e6b64;
+    --fg-faint:  #757269;
     --line:      #e8e6df;
     --accent:    #6a1b9a;
     --accent-soft: #f3e8fb;
     --ok:        #15803d;
-    --warn:      #c98a00;
-    --danger:    #b91c1c;
+    --warn:      #8a6000;
+    --danger:    #b3341a;
     --radius: 6px;
     --radius-lg: 10px;
     --font: 'Inter', system-ui, sans-serif;
@@ -177,7 +179,7 @@ td.date.overdue { color: var(--danger); font-weight: 700; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-init.js?v=27"></script>
-<script src="share.js?v=27"></script>
+<script src="firebase-init.js?v=31"></script>
+<script src="share.js?v=31"></script>
 </body>
 </html>

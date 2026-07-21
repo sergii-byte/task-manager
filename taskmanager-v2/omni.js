@@ -86,8 +86,14 @@ const Omni = {
         const q = Omni.input.value.trim().toLowerCase();
         if (!q) return;
         const results = Omni._search(q);
-        if (results.length) { navigate(results[0].path); Omni.clear(); }
+        if (results.length) { Omni._go(results[0]); Omni.clear(); }
         else toast('No matches');
+    },
+
+    /* Tasks have no page of their own — land on Today and open the task. */
+    _go({ path, taskId }) {
+        navigate(path);
+        if (taskId) setTimeout(() => openTaskForm(taskId), 0);
     },
 
     _search(q) {
@@ -102,7 +108,8 @@ const Omni = {
         });
         state.tasks.filter(t => !t.deletedAt).forEach(t => {
             if ((t.title||'').toLowerCase().includes(q))
-                out.push({ kind: 'task', label: t.title, sub: matterById(t.matterId)?.title||'', path: 'tasks' });
+                out.push({ kind: 'task', label: t.title, sub: matterById(t.matterId)?.title||'',
+                           path: 'today', taskId: t.id });
         });
         state.invoices.filter(i => !i.deletedAt).forEach(i => {
             if ((i.number||'').toLowerCase().includes(q))
@@ -123,7 +130,7 @@ const Omni = {
                     : `<kbd>Enter</kbd> to jump · <kbd>⌘+Enter</kbd> to ask AI`}
             </div>
             ${results.length ? `<ul class="omni-results">${results.map((r,i) => `
-                <li class="omni-row" data-go="${esc(r.path)}">
+                <li class="omni-row" data-go="${esc(r.path)}" data-task="${esc(r.taskId || '')}">
                     <span class="kind">${esc(r.kind)}</span>
                     <span class="lbl">${esc(r.label)}</span>
                     <span class="sub">${esc(r.sub)}</span>
@@ -132,7 +139,10 @@ const Omni = {
         `;
         Omni.panel.hidden = false;
         $$('.omni-row', Omni.panel).forEach(li => {
-            li.addEventListener('click', () => { navigate(li.dataset.go); Omni.clear(); });
+            li.addEventListener('click', () => {
+                Omni._go({ path: li.dataset.go, taskId: li.dataset.task || null });
+                Omni.clear();
+            });
         });
     },
 
