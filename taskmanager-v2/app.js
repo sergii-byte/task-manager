@@ -68,6 +68,37 @@ const debounce = (fn, ms) => {
 };
 
 /* =========================================================================
+ * 1a. ICONS — one visual language for the whole app.
+ * Line icons, 24px grid, stroke inherits currentColor. The emoji that used
+ * to stand in for icons rendered differently on every OS and clashed with
+ * the editorial tone.
+ * ========================================================================= */
+
+const ICONS = {
+    circle:   '<circle cx="12" cy="12" r="9"/>',
+    mail:     '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    users:    '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7"/><path d="M21 20c0-2.6-1.6-4.8-4-5.7"/>',
+    folder:   '<path d="M3 7a2 2 0 012-2h4l2 3h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+    clock:    '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    receipt:  '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+    sliders:  '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.5"/><circle cx="8" cy="17" r="2.5"/>',
+    paperclip:'<path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7L14 5.5a3.5 3.5 0 015 5L10.5 19a2 2 0 01-3-3L15 8.5"/>',
+    mic:      '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>',
+    spark:    '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>',
+    play:     '<path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/>',
+    alert:    '<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.5"/>',
+    flag:     '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+    banknote: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/>',
+    grid:     '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
+    chat:     '<path d="M4 5h16v11H8l-4 4z"/>',
+    calendar: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
+    check:    '<path d="M5 13l4 4 10-10"/>'
+};
+
+const icon = (name, size = 16) =>
+    `<svg class="ic-svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+
+/* =========================================================================
  * 2. STORE
  * ========================================================================= */
 
@@ -752,7 +783,7 @@ const Assist = {
         // unsorted intake — morning triage belongs at the top of the day
         const pending = inboxPending();
         if (pending > 0 && !Assist._hidden('inbox')) out.push({
-            icon: '✉', text: `${pending} email${pending === 1 ? '' : 's'} waiting to become tasks`,
+            icon: 'mail', text: `${pending} email${pending === 1 ? '' : 's'} waiting to become tasks`,
             chips: [{ label: 'triage', assist: 'goinbox' },
                     { label: 'hide', assist: 'dismiss:inbox', ghost: true }]
         });
@@ -763,7 +794,7 @@ const Assist = {
                 && (t.completedAt || '') >= recent
                 && !logsForTask(t.id).length && !Assist._hidden('log:' + t.id))
             .slice(0, 2).forEach(t => out.push({
-                icon: '⏱', text: `“${t.title}” closed — no time on it`,
+                icon: 'clock', text: `“${t.title}” closed — no time on it`,
                 chips: [15, 30, 60, 120].map(m => ({ label: fmtMinutes(m), assist: `log:${t.id}:${m}` }))
                     .concat([{ label: 'skip', assist: `dismiss:log:${t.id}`, ghost: true }])
             }));
@@ -773,7 +804,7 @@ const Assist = {
             .slice(0, 2).forEach(t => {
                 const days = Math.max(1, Math.round((Date.now() - new Date(t.due + 'T00:00:00').getTime()) / 86400000));
                 out.push({
-                    icon: '⚠', text: `“${t.title}” — ${days} day${days === 1 ? '' : 's'} overdue`,
+                    icon: 'alert', text: `“${t.title}” — ${days} day${days === 1 ? '' : 's'} overdue`,
                     chips: [
                         { label: 'today', assist: `due:${t.id}:0` },
                         { label: 'tomorrow', assist: `due:${t.id}:1` },
@@ -788,7 +819,7 @@ const Assist = {
             const mins = state.logs.filter(l => l.clientId === c.id && !l.invoiceId && !l.deletedAt)
                 .reduce((s, l) => s + l.minutes, 0);
             if (mins >= 300 && !Assist._hidden('bill:' + c.id)) out.push({
-                icon: '€', text: `${c.name} — ${fmtMinutes(mins)} unbilled (${fmtMoney(totalUnbilledForClient(c.id), profileCurrency())})`,
+                icon: 'banknote', text: `${c.name} — ${fmtMinutes(mins)} unbilled (${fmtMoney(totalUnbilledForClient(c.id), profileCurrency())})`,
                 chips: [{ label: '→ invoice', assist: `bill:${c.id}` },
                         { label: 'later', assist: `dismiss:bill:${c.id}`, ghost: true }]
             });
@@ -799,7 +830,7 @@ const Assist = {
             .slice(0, 1).forEach(t => {
                 const c = clientById(t.clientId);
                 out.push({
-                    icon: '🚧', text: `“${t.title}” — waiting on: ${t.blockedReason}`,
+                    icon: 'flag', text: `“${t.title}” — waiting on: ${t.blockedReason}`,
                     chips: [
                         ...(c && c.shareEnabled ? [{ label: 'nudge in portal', assist: `nudge:${t.clientId}` }] : []),
                         { label: 'open', assist: `open:${t.id}` },
@@ -811,7 +842,7 @@ const Assist = {
         // dateless tasks can never appear in the day plan — that is how things get dropped
         const nodate = liveTasks().filter(t => t.status !== 'done' && !t.due);
         if (nodate.length >= 3 && !Assist._hidden('nodate')) out.push({
-            icon: '▦', text: `${nodate.length} open tasks have no date — invisible to your day plan`,
+            icon: 'grid', text: `${nodate.length} open tasks have no date — invisible to your day plan`,
             chips: [{ label: 'show them', assist: 'filter:nodate' },
                     { label: 'hide', assist: 'dismiss:nodate', ghost: true }]
         });
@@ -1071,13 +1102,13 @@ const Timer = {
  * intake pipe, and announces itself on Today via an assistant card. */
 const NAV_GROUPS = [
     { label: 'day',   items: [
-        { id: 'today',    label: 'today',     icon: '○' } ] },
+        { id: 'today',    label: 'today',     icon: 'circle' } ] },
     { label: 'work',  items: [
-        { id: 'clients',  label: 'clients',   icon: '◐' },
-        { id: 'matters',  label: 'projects',  icon: '◇' } ] },
+        { id: 'clients',  label: 'clients',   icon: 'users' },
+        { id: 'matters',  label: 'projects',  icon: 'folder' } ] },
     { label: 'money', items: [
-        { id: 'time',     label: 'time',      icon: '◴' },
-        { id: 'invoices', label: 'invoices',  icon: '$' } ] }
+        { id: 'time',     label: 'time',      icon: 'clock' },
+        { id: 'invoices', label: 'invoices',  icon: 'receipt' } ] }
 ];
 const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items);
 
@@ -1095,7 +1126,7 @@ function renderSidebar() {
         else if (it.id === 'invoices') count = `<span class="count">${liveInvoices().filter(i=>i.status!=='paid').length || ''}</span>`;
 
         return `<button class="nav-item ${cur===it.id?'active':''}" data-nav="${it.id}">
-            <span class="ic">${it.icon}</span><span>${it.label}</span>${count}
+            <span class="ic">${icon(it.icon)}</span><span>${it.label}</span>${count}
         </button>`;
     };
     nav.innerHTML = NAV_GROUPS.map(g =>
@@ -1240,32 +1271,17 @@ function viewToday() {
             <span>${overdue.length} overdue · ${openTasks.length} open</span>
         </div>
 
-        <header class="t-hero">
-            <div class="t-greet">${esc(greet)}, ${esc(firstName)}</div>
-            <h1 class="t-headline">${esc(headline)}<span class="dot">.</span></h1>
-            <div class="t-stats">
-                <div class="t-stat">
-                    <div class="k">closed today</div>
-                    <div class="v">${doneToday.length}</div>
-                    <div class="sub">${openTasks.length} still open</div>
-                </div>
-                <div class="t-stat">
-                    <div class="k">timer</div>
-                    <div class="v ${state.timer?'accent':''}">${esc(timerVal)}</div>
-                    <div class="sub">${esc(timerSub)}</div>
-                </div>
-                <div class="t-stat">
-                    <div class="k">this week</div>
-                    <div class="v">${(weekMins/60).toFixed(1)}<span class="small">h</span></div>
-                    <div class="sub">${fmtMoney(weekBillable, profileCurrency())} billable</div>
-                </div>
-                <div class="t-stat">
-                    <div class="k">next deadline</div>
-                    <div class="v">${daysToDeadline != null ? daysToDeadline + 'd' : '—'}</div>
-                    <div class="sub ${daysToDeadline != null && daysToDeadline <= 2 ? 'warn' : ''}">${nextDeadline ? esc(nextDeadline.title) : 'nothing scheduled'}</div>
-                </div>
-            </div>
-        </header>
+        <!-- The hero answers "what should I be doing right now": the ongoing
+             or imminent meeting (with join), else the most urgent task. The
+             decorative greeting this replaced answered nothing. -->
+        <div id="t-now">${nowCardHtml()}</div>
+
+        <div class="t-statline">
+            <span>${doneToday.length} closed today</span><span class="sep">·</span>
+            <span class="${state.timer?'accent':''}">timer ${esc(timerVal)}</span><span class="sep">·</span>
+            <span>${(weekMins/60).toFixed(1)}h this week · ${fmtMoney(weekBillable, profileCurrency())}</span><span class="sep">·</span>
+            <span class="${daysToDeadline != null && daysToDeadline <= 2 ? 'warn' : ''}">next deadline ${daysToDeadline != null ? 'in ' + daysToDeadline + 'd' : '—'}</span>
+        </div>
 
         ${(() => {
             const cards = Assist.cards();
@@ -1273,7 +1289,7 @@ function viewToday() {
         <section class="t-assist" aria-label="Suggestions">
             ${cards.map(c => `
             <div class="assist-card">
-                <span class="assist-ic">${c.icon}</span>
+                <span class="assist-ic">${icon(c.icon)}</span>
                 <span class="assist-text">${esc(c.text)}</span>
                 <span class="assist-chips">${c.chips.map(ch =>
                     `<button class="chip ${ch.ghost ? 'ghost' : ''}" data-assist="${esc(ch.assist)}">${esc(ch.label)}</button>`).join('')}</span>
@@ -1317,7 +1333,7 @@ function _todayTaskRow(t) {
     const matName = (mat && mat.title) || t.matterName || '';
     const ctx = [cliName, matName, due,
         t.assigneeEmail ? '→ ' + t.assigneeEmail : '',
-        (t.status !== 'done' && t.blockedReason) ? '⚑ ' + t.blockedReason : '']
+        (t.status !== 'done' && t.blockedReason) ? 'stuck: ' + t.blockedReason : '']
         .filter(Boolean).map(x => esc(x)).join(' · ');
     return `
         <div class="t-task ${st==='done'?'done':''} ${st==='overdue'?'overdue':''}" data-task="${t.id}">
@@ -1326,7 +1342,59 @@ function _todayTaskRow(t) {
                 <div class="t-task-title">${esc(t.title)}</div>
                 ${ctx ? `<div class="t-task-ctx">${ctx}</div>` : ''}
             </div>
-            ${mat ? `<button class="t-task-go" data-start="${t.id}" title="Start timer">▶</button>` : ''}
+            ${mat ? `<button class="t-task-go" data-start="${t.id}" title="Start timer">${icon('play', 12)}</button>` : ''}
+        </div>`;
+}
+
+/* =========================================================================
+ * NOW — the hero of Today.
+ * Priority: an ongoing meeting > a meeting starting within 3h > the most
+ * urgent open task. Calendar data arrives async, so the card renders
+ * immediately from tasks and upgrades itself once events land.
+ * ========================================================================= */
+
+let todayEventsCache = [];
+
+function nowCardHtml() {
+    const nowMs = Date.now();
+    const timed = todayEventsCache.filter(e => !e.allDay && e.start && e.end);
+    const ongoing = timed.find(e => new Date(e.start) <= nowMs && new Date(e.end) >= nowMs);
+    const next = timed.filter(e => new Date(e.start) > nowMs)
+        .sort((a, b) => a.start.localeCompare(b.start))[0];
+    const ev = ongoing || (next && (new Date(next.start) - nowMs) < 3 * 3600000 ? next : null);
+
+    if (ev) {
+        const mins = ongoing
+            ? Math.max(1, Math.round((new Date(ev.end) - nowMs) / 60000))
+            : Math.max(1, Math.round((new Date(ev.start) - nowMs) / 60000));
+        return `
+        <div class="now-card ${ongoing ? 'live' : ''}">
+            <div class="now-k">${ongoing ? 'in a meeting' : 'next up'}</div>
+            <div class="now-title">${esc(ev.title)}</div>
+            <div class="now-meta">${ongoing ? mins + 'm left' : 'in ' + mins + 'm'}${ev.calendar ? ' · ' + esc(ev.calendar) : ''}${ev.location ? ' · ' + esc(ev.location) : ''}</div>
+            ${ev.joinLink ? `<div class="now-actions"><a class="btn primary" href="${esc(ev.joinLink)}" target="_blank" rel="noopener">join ↗</a></div>` : ''}
+        </div>`;
+    }
+
+    const rank = { high: 0, normal: 1, low: 2 };
+    const t = liveTasks().filter(x => x.status !== 'done').sort((a, b) =>
+        ((taskStatus(b) === 'overdue') - (taskStatus(a) === 'overdue'))
+        || (a.due || '9999').localeCompare(b.due || '9999')
+        || (rank[a.priority || 'normal'] - rank[b.priority || 'normal']))[0];
+    if (!t) return '';
+    const cli = clientById(t.clientId), mat = matterById(t.matterId);
+    const meta = [cli?.name, mat?.title,
+        t.due ? (taskStatus(t) === 'overdue' ? 'overdue · ' + fmtDate(t.due) : 'due ' + fmtDate(t.due)) : '']
+        .filter(Boolean).map(esc).join(' · ');
+    return `
+        <div class="now-card">
+            <div class="now-k">focus</div>
+            <div class="now-title" data-task="${t.id}" role="button" tabindex="0">${esc(t.title)}</div>
+            ${meta ? `<div class="now-meta">${meta}</div>` : ''}
+            <div class="now-actions">
+                ${t.matterId ? `<button class="btn primary" data-start="${t.id}">${icon('play', 13)} start timer</button>` : ''}
+                <button class="btn" data-toggle="${t.id}">${icon('check', 13)} done</button>
+            </div>
         </div>`;
 }
 
@@ -1355,6 +1423,9 @@ async function populateTodaySchedule() {
     host.innerHTML = `<div class="t-sched-msg">Loading calendar…</div>`;
     try {
         const events = await Google.listTodayEvents();
+        todayEventsCache = events;
+        const nowHost = document.getElementById('t-now');
+        if (nowHost) nowHost.innerHTML = nowCardHtml();
         if (!events.length) {
             host.innerHTML = `<div class="t-sched-msg">No events on the calendar today.</div>`;
             return;
@@ -1417,10 +1488,21 @@ function renderTaskList(tasks) {
                         <div class="task-title ${st==='done'?'is-done':''}">${esc(t.title)}</div>
                         ${meta ? `<div class="task-meta">${meta}</div>` : ''}
                     </td>
-                    <td>${t.status !== 'done' && t.blockedReason ? `<span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span> ` : ''}${t.due ? `<span class="badge ${st==='overdue'?'overdue':''}">${fmtDate(t.due)}</span>` : ''}</td>
+                    <td>${(() => {
+                        // ONE colored signal per row — badge soup tells the eye nothing.
+                        // Urgency order: overdue > stuck > high priority; the due date
+                        // itself is quiet text unless it IS the alarm.
+                        if (st === 'overdue') return `<span class="badge overdue">${fmtDate(t.due)}</span>`;
+                        const dueTxt = t.due ? `<span class="due-quiet">${fmtDate(t.due)}</span> ` : '';
+                        if (t.status !== 'done' && t.blockedReason)
+                            return dueTxt + `<span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span>`;
+                        if (t.status !== 'done' && t.priority === 'high')
+                            return dueTxt + `<span class="badge high">high</span>`;
+                        return dueTxt;
+                    })()}</td>
                     <td style="width:80px">
-                        ${mat ? `<button class="play" data-start="${t.id}" title="Start timer">▶</button>` : ''}
-                        ${t.due ? `<button class="play" data-act="gcal-task" data-id="${t.id}" title="Add to Google Calendar" style="font-size:11px;width:auto;padding:0 6px">📅</button>` : ''}
+                        ${mat ? `<button class="play" data-start="${t.id}" title="Start timer">${icon('play', 12)}</button>` : ''}
+                        ${t.due ? `<button class="play" data-act="gcal-task" data-id="${t.id}" title="Add to Google Calendar" style="width:auto;padding:0 6px">${icon('calendar', 13)}</button>` : ''}
                     </td>
                 </tr>`;
         }).join('')}
@@ -1449,25 +1531,27 @@ function viewClients() {
                 <button class="btn primary" data-act="new-client">＋ New client</button>
             </div>
         ` : `
-            <table class="t">
-                <thead><tr>
-                    <th>Name</th><th>Email</th><th class="num">Projects</th><th class="num">Open tasks</th><th class="num">Unbilled</th>
-                </tr></thead>
-                <tbody>
-                    ${list.map(c => {
-                        const matters = mattersForClient(c.id).length;
-                        const openTasks = tasksForClient(c.id).filter(t => t.status !== 'done').length;
-                        const unbilled = totalUnbilledForClient(c.id);
-                        return `<tr class="row" data-go="clients/${c.id}">
-                            <td><strong>${esc(c.name)}</strong></td>
-                            <td class="muted">${esc(c.email||'')}</td>
-                            <td class="num">${matters}</td>
-                            <td class="num">${openTasks}</td>
-                            <td class="num">${unbilled ? fmtMoney(unbilled, profileCurrency()) : '—'}</td>
-                        </tr>`;
-                    }).join('')}
-                </tbody>
-            </table>
+            <div class="entity-grid">
+                ${list.map(c => {
+                    const matters = mattersForClient(c.id).length;
+                    const openTasks = tasksForClient(c.id).filter(t => t.status !== 'done').length;
+                    const stuck = tasksForClient(c.id).filter(t => t.status !== 'done' && t.blockedReason).length;
+                    const unbilled = totalUnbilledForClient(c.id);
+                    return `<div class="entity-card" data-go="clients/${c.id}" role="link" tabindex="0">
+                        <div class="e-name">${esc(c.name)}</div>
+                        ${c.email ? `<div class="e-sub">${esc(c.email)}</div>` : ''}
+                        <div class="e-stats">
+                            <span>${matters} project${matters === 1 ? '' : 's'}</span>
+                            <span>${openTasks} open</span>
+                            ${unbilled ? `<span class="e-money">${fmtMoney(unbilled, profileCurrency())} unbilled</span>` : ''}
+                        </div>
+                        <div class="e-flags">
+                            ${stuck ? `<span class="badge stuck">${stuck} stuck</span>` : ''}
+                            ${c.shareEnabled ? `<span class="badge open">portal</span>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
         `}
     `;
 }
@@ -1663,24 +1747,25 @@ function viewMatters() {
                 <button class="btn primary" data-act="new-matter">＋ New project</button>
             </div>
         ` : `
-            <table class="t">
-                <thead><tr>
-                    <th>Title</th><th>Client</th><th>Status</th><th class="num">Tasks</th><th class="num">Time</th><th>Rate</th>
-                </tr></thead>
-                <tbody>${list.map(m => {
+            <div class="entity-grid">
+                ${list.map(m => {
                     const c = clientById(m.clientId);
-                    const tcount = tasksForMatter(m.id).length;
+                    const open = tasksForMatter(m.id).filter(t => t.status !== 'done').length;
                     const mins = logsForMatter(m.id).reduce((s,l)=>s+l.minutes,0);
-                    return `<tr class="row" data-go="matters/${m.id}">
-                        <td><strong>${esc(m.title)}</strong></td>
-                        <td>${esc(c?.name || '—')}</td>
-                        <td><span class="badge ${m.status||'open'}">${esc(m.status||'open')}</span></td>
-                        <td class="num">${tcount}</td>
-                        <td class="num">${fmtMinutes(mins)}</td>
-                        <td>${fmtMoney(matterRate(m), profileCurrency())}/h</td>
-                    </tr>`;
-                }).join('')}</tbody>
-            </table>
+                    return `<div class="entity-card ${m.status === 'closed' ? 'is-muted' : ''}" data-go="matters/${m.id}" role="link" tabindex="0">
+                        <div class="e-name">${esc(m.title)}</div>
+                        <div class="e-sub">${esc(c?.name || '—')}</div>
+                        <div class="e-stats">
+                            <span>${open} open</span>
+                            <span>${fmtMinutes(mins)}</span>
+                            <span>${fmtMoney(matterRate(m), profileCurrency())}/h</span>
+                        </div>
+                        <div class="e-flags">
+                            ${m.status && m.status !== 'open' ? `<span class="badge ${esc(m.status)}">${esc(m.status)}</span>` : ''}
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
         `}
     `;
 }

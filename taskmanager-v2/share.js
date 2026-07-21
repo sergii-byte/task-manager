@@ -198,7 +198,8 @@ function threadToggle(taskId) {
     const n = msgsFor(taskId).length;
     const open = openThreads.has(taskId);
     return `<button class="thread-toggle ${open ? 'on' : ''}" data-toggle="${esc(taskId)}">
-        💬 ${n ? n : ''} ${esc(s.reply)}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="vertical-align:-1px"><path d="M4 5h16v11H8l-4 4z"/></svg>
+        ${n ? n : ''} ${esc(s.reply)}
     </button>`;
 }
 

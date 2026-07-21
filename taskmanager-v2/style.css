@@ -2081,3 +2081,113 @@ p.muted { font-size: var(--t-sm); }
 }
 .t-slot-join:hover { background: var(--accent); color: #fff; }
 .t-slot.now .t-slot-join { background: var(--accent); color: #fff; }
+
+/* =========================================================================
+ * DESIGN PASS: one icon language, "now" hero, entity cards, bottom nav
+ * ========================================================================= */
+
+.ic-svg { display: inline-block; vertical-align: -2px; flex: none; }
+.nav-item .ic { display: grid; place-items: center; width: 18px; }
+#settings-btn .ic-svg { vertical-align: -2px; margin-right: 2px; }
+
+/* ---- the NOW hero on Today ---- */
+.now-card {
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: var(--s-4) var(--s-5);
+    margin: var(--s-4) 0 var(--s-3);
+    box-shadow: var(--shadow-sm);
+}
+.now-card.live { border-left-color: var(--ok); background: var(--ok-bg); }
+.now-k {
+    font-size: var(--t-xs);
+    text-transform: lowercase;
+    letter-spacing: 0.08em;
+    color: var(--fg-mute);
+}
+.now-card.live .now-k { color: var(--ok); font-weight: 700; }
+.now-title {
+    font-family: var(--font-display);
+    font-size: var(--t-xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-top: var(--s-1);
+    line-height: 1.2;
+}
+.now-title[data-task] { cursor: pointer; }
+.now-title[data-task]:hover { color: var(--accent); }
+.now-meta { margin-top: var(--s-1); color: var(--fg-mute); font-size: var(--t-sm); }
+.now-actions { display: flex; gap: var(--s-2); margin-top: var(--s-3); flex-wrap: wrap; }
+.now-actions .btn { display: inline-flex; align-items: center; gap: var(--s-1); }
+
+/* ---- compact stat line (replaces the four-tile hero) ---- */
+.t-statline {
+    display: flex; flex-wrap: wrap; gap: var(--s-2);
+    font-family: var(--font-mono); font-size: var(--t-xs);
+    color: var(--fg-mute);
+    margin-bottom: var(--s-2);
+}
+.t-statline .sep { color: var(--fg-faint); }
+.t-statline .warn { color: var(--warn); font-weight: 700; }
+.t-statline .accent { color: var(--accent); font-weight: 700; }
+
+/* ---- entity cards (clients / projects) ---- */
+.entity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: var(--s-3);
+}
+.entity-card {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: var(--s-4);
+    cursor: pointer;
+    transition: border-color 0.1s, box-shadow 0.1s, transform 0.1s;
+}
+.entity-card:hover { border-color: var(--accent); box-shadow: var(--shadow); transform: translateY(-1px); }
+.entity-card.is-muted { opacity: 0.6; }
+.e-name { font-family: var(--font-display); font-weight: 700; font-size: var(--t-lg); letter-spacing: -0.01em; }
+.e-sub { color: var(--fg-mute); font-size: var(--t-sm); margin-top: 2px; }
+.e-stats {
+    display: flex; flex-wrap: wrap; gap: var(--s-3);
+    margin-top: var(--s-3);
+    font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-mute);
+}
+.e-stats .e-money { color: var(--fg); font-weight: 700; }
+.e-flags { display: flex; gap: var(--s-1); margin-top: var(--s-2); min-height: 18px; }
+
+/* ---- one-signal task rows ---- */
+.due-quiet { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-mute); }
+.badge.high { color: var(--danger); border-color: var(--danger-line); background: var(--danger-bg); }
+
+/* ---- mobile: bottom tab bar instead of a scrolling top strip ---- */
+@media (max-width: 720px) {
+    #nav {
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        z-index: 60;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--line);
+        padding: var(--s-1) var(--s-2) calc(var(--s-1) + env(safe-area-inset-bottom, 0px));
+    }
+    #nav .nav-item {
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        padding: var(--s-1);
+        font-size: 10px;
+        min-height: 44px;
+    }
+    #nav .nav-item .ic-svg { width: 19px; height: 19px; }
+    #nav .nav-item.active { color: var(--accent); background: transparent; }
+    #view { padding-bottom: 84px; }
+    .sidebar-foot { display: flex; }  /* settings comes back on mobile */
+    #sidebar { justify-content: space-between; }
+}
