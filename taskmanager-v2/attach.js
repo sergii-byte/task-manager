@@ -68,7 +68,6 @@ const Attach = {
         if (!Array.isArray(state.attachments)) state.attachments = [];
         const meta = { ...item }; delete meta.blob;
         state.attachments.push(meta);
-        audit('attach', item.id, `${item.kind}: ${item.name}`);
         Store.save();
         return item.id;
     },
@@ -94,7 +93,6 @@ const Attach = {
         if (Array.isArray(state.attachments)) {
             state.attachments = state.attachments.filter(a => a.id !== id);
         }
-        audit('detach', id, '');
         Store.save();
     },
 

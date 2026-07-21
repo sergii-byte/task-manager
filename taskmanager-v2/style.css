@@ -1879,3 +1879,14 @@ table.t th { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.0
     background: var(--bg); color: var(--ink);
 }
 .thread-input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.toast-undo {
+    margin-left: 14px;
+    border: 1px solid rgba(255,255,255,0.45);
+    background: transparent;
+    color: inherit;
+    font: 600 11px var(--font);
+    padding: 3px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.toast-undo:hover { background: rgba(255,255,255,0.16); }

@@ -198,7 +198,6 @@ const Google = {
                 body: JSON.stringify({ message: { raw } })
             }
         );
-        audit('gmailDraft', draft.id || null, `to ${to}: ${subject}`);
         return draft;
     },
 
@@ -339,7 +338,6 @@ const Google = {
                 body: JSON.stringify({ summary, description, start, end, attendees: attendees.map(e => ({ email: e })) })
             }
         );
-        audit('calendarEvent', evt.id || null, summary);
         return evt;
     },
 

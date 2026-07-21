@@ -93,7 +93,6 @@ const defaultState = () => ({
     tasks: [],            // mirror of the /tasks collection (owned by the Tasks module)
     logs: [],
     invoices: [],
-    audits: [],
     attachments: [],
     emailHandled: [],     // Gmail message ids already turned into tasks / dismissed
     tasksMigrated: false, // set true once blob tasks moved into /tasks
@@ -185,7 +184,7 @@ const Store = {
     },
 
     _normalize(s) {
-        ['clients','matters','tasks','logs','invoices','audits','attachments','emailHandled'].forEach(k => {
+        ['clients','matters','tasks','logs','invoices','attachments','emailHandled'].forEach(k => {
             if (!Array.isArray(s[k])) s[k] = [];
         });
         s.profile = Object.assign(defaultState().profile, s.profile || {});
@@ -232,7 +231,6 @@ const Store = {
             }
         }
         if (migrated > 0) {
-            audit('migrateLegacy', null, `imported ${migrated} setting${migrated===1?'':'s'} from first project`);
             Store.save();
             setTimeout(() => toast(`Imported ${migrated} setting${migrated===1?'':'s'} from your first project`), 600);
         }
@@ -438,7 +436,6 @@ const Share = {
         if (!c.shareId) c.shareId = Share.token();
         c.shareEnabled = true;
         if (c.shareComments === undefined) c.shareComments = true;
-        audit('shareEnable', c.id, c.name);
         Store.save();
         Share._publishNow();
         Comments.sync();
@@ -452,7 +449,6 @@ const Share = {
         c.shareEnabled = false;
         c.shareId = null;          // re-enabling mints a fresh token
         delete Share._last[id];
-        audit('shareDisable', c.id, c.name);
         Store.save();
         if (fbDb && id) {
             fbDb.collection('shares').doc(id).delete()
@@ -619,21 +615,6 @@ const Comments = {
  * 2b. AUDIT LOG
  * ========================================================================= */
 
-function audit(action, entityId = null, detail = '') {
-    state.audits = state.audits || [];
-    state.audits.push({
-        id: uuid(),
-        ts: new Date().toISOString(),
-        action,
-        entityId,
-        detail
-    });
-    // keep a short internal tail only (History view was removed in the cleanup)
-    if (state.audits.length > 50) {
-        state.audits = state.audits.slice(-50);
-    }
-}
-
 /* =========================================================================
  * 3. SELECTORS / DERIVED
  * ========================================================================= */
@@ -684,14 +665,61 @@ const totalUnbilledForClient = (cid) => {
  * ========================================================================= */
 
 let _toastTimer = null;
-function toast(message, kind = 'ok') {
+/* `undo` turns the toast into the only route back from a delete — there is
+ * no Trash section by design, so it stays up longer than a plain message. */
+function toast(message, kind = 'ok', undo = null) {
     const el = $('#toast');
     if (!el) return;
     el.textContent = message;
     el.dataset.kind = kind;
+    if (undo) {
+        const btn = document.createElement('button');
+        btn.className = 'toast-undo';
+        btn.type = 'button';
+        btn.textContent = 'Undo';
+        btn.addEventListener('click', () => {
+            el.hidden = true;
+            clearTimeout(_toastTimer);
+            undo();
+        });
+        el.appendChild(btn);
+    }
     el.hidden = false;
     clearTimeout(_toastTimer);
-    _toastTimer = setTimeout(() => { el.hidden = true; }, 2400);
+    _toastTimer = setTimeout(() => { el.hidden = true; }, undo ? 8000 : 2400);
+}
+
+/* Soft-deletes hand the toast the exact objects they touched, so one click
+ * puts a cascade back. Tasks live in their own collection and need a write
+ * of their own; everything else rides along in the blob. */
+function deletedWithUndo(message, { blob = [], tasks = [] }) {
+    toast(message, 'ok', () => {
+        blob.forEach(o => { delete o.deletedAt; });
+        tasks.forEach(t => { delete t.deletedAt; Tasks.put(t); });
+        Store.save();
+        render();
+        toast('Restored');
+    });
+}
+
+/* Anything soft-deleted longer ago than this is gone for good. Without a
+ * Trash view nothing would ever clear it out otherwise. */
+const PURGE_AFTER_DAYS = 30;
+
+function purgeOldDeletions() {
+    const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * 86400000).toISOString();
+    const stale = (o) => o.deletedAt && o.deletedAt < cutoff;
+    let n = 0;
+    ['clients', 'matters', 'logs', 'invoices', 'attachments'].forEach(k => {
+        const before = state[k].length;
+        state[k] = state[k].filter(o => !stale(o));
+        n += before - state[k].length;
+    });
+    state.tasks.filter(stale).forEach(t => { Tasks.remove(t.id); n++; });
+    if (n) {
+        console.log(`[ordify] purged ${n} item(s) deleted over ${PURGE_AFTER_DAYS} days ago`);
+        Store.save();
+    }
 }
 
 /* =========================================================================
@@ -841,7 +869,6 @@ const Timer = {
             invoiceId: null
         };
         state.logs.push(log);
-        audit('logTime', log.id, `${minutes}m on ${matterById(t.matterId)?.title || '?'}`);
         state.timer = null;
         Store.save();
         Timer._refresh();
@@ -1948,7 +1975,6 @@ async function emailToTasksAI(em) {
                 notes: (td.notes ? td.notes + '\n\n' : '') + `From email: ${em.subject}\n${link}`
             };
             Tasks.put(t);
-            audit('createTask', t.id, t.title);
         });
         state.emailHandled = state.emailHandled || [];
         state.emailHandled.push(em.id);
@@ -1982,27 +2008,25 @@ function openClientForm(id = null) {
             if (!data.name?.trim()) { toast('Name is required', 'error'); return false; }
             if (c) {
                 Object.assign(c, data);
-                audit('updateClient', c.id, c.name);
             } else {
                 const nc = { id: uuid(), createdAt: new Date().toISOString(), ...data };
                 state.clients.push(nc);
-                audit('createClient', nc.id, nc.name);
             }
             Store.save(); render();
             toast(c ? 'Client updated' : 'Client added');
         },
         onDelete: c ? () => {
             const has = mattersForClient(c.id).length || tasksForClient(c.id).length || logsForClient(c.id).length;
-            if (has && !confirm('This client has matters/tasks/time. Move them all to Trash?')) return;
+            if (has && !confirm('This client has matters/tasks/time. Delete all of it?')) return;
             const ts = new Date().toISOString();
-            state.matters.forEach(m => { if (m.clientId === c.id) m.deletedAt = ts; });
-            state.tasks.forEach(t => { if (t.clientId === c.id) { t.deletedAt = ts; Tasks.put(t); } });
-            state.logs.forEach(l => { if (l.clientId === c.id) l.deletedAt = ts; });
+            const blob = [c], tasks = [];
+            state.matters.forEach(m => { if (m.clientId === c.id) { m.deletedAt = ts; blob.push(m); } });
+            state.tasks.forEach(t => { if (t.clientId === c.id) { t.deletedAt = ts; Tasks.put(t); tasks.push(t); } });
+            state.logs.forEach(l => { if (l.clientId === c.id) { l.deletedAt = ts; blob.push(l); } });
             c.deletedAt = ts;
-            audit('deleteClient', c.id, c.name);
             Store.save();
             navigate('clients');
-            toast('Moved to Trash');
+            deletedWithUndo('Client deleted', { blob, tasks });
         } : null
     });
 }
@@ -2036,26 +2060,24 @@ function openMatterForm(id = null, defaultClientId = null) {
             if (!data.title?.trim()) { toast('Title is required', 'error'); return false; }
             if (m) {
                 Object.assign(m, data);
-                audit('updateMatter', m.id, m.title);
             } else {
                 const nm = { id: uuid(), openedAt: new Date().toISOString(), ...data };
                 state.matters.push(nm);
-                audit('createMatter', nm.id, nm.title);
             }
             Store.save(); render();
             toast(m ? 'Matter updated' : 'Matter created');
         },
         onDelete: m ? () => {
             const has = tasksForMatter(m.id).length || logsForMatter(m.id).length;
-            if (has && !confirm('This matter has tasks/time. Move them all to Trash?')) return;
+            if (has && !confirm('This matter has tasks/time. Delete all of it?')) return;
             const ts = new Date().toISOString();
-            state.tasks.forEach(t => { if (t.matterId === m.id) { t.deletedAt = ts; Tasks.put(t); } });
-            state.logs.forEach(l => { if (l.matterId === m.id) l.deletedAt = ts; });
+            const blob = [m], tasks = [];
+            state.tasks.forEach(t => { if (t.matterId === m.id) { t.deletedAt = ts; Tasks.put(t); tasks.push(t); } });
+            state.logs.forEach(l => { if (l.matterId === m.id) { l.deletedAt = ts; blob.push(l); } });
             m.deletedAt = ts;
-            audit('deleteMatter', m.id, m.title);
             Store.save();
             navigate('matters');
-            toast('Moved to Trash');
+            deletedWithUndo('Matter deleted', { blob, tasks });
         } : null
     });
 }
@@ -2102,11 +2124,9 @@ function openTaskForm(id = null, defaultMatterId = null) {
             };
             if (t) {
                 Object.assign(t, payload);
-                audit('updateTask', t.id, t.title);
                 Tasks.put(t);
             } else {
                 const nt = { id: uuid(), status: 'todo', createdAt: new Date().toISOString(), ...payload };
-                audit('createTask', nt.id, nt.title);
                 Tasks.put(nt);
             }
             render();
@@ -2114,12 +2134,19 @@ function openTaskForm(id = null, defaultMatterId = null) {
         },
         onDelete: t ? () => {
             t.deletedAt = new Date().toISOString();
-            // unlink logs from deleted task but keep them
-            state.logs.forEach(l => { if (l.taskId === t.id) l.taskId = null; });
-            audit('deleteTask', t.id, t.title);
+            // unlink logs from deleted task but keep them — remember which,
+            // so undo can hook the time back onto the task
+            const unlinked = state.logs.filter(l => l.taskId === t.id);
+            unlinked.forEach(l => { l.taskId = null; });
             Tasks.put(t);
             Store.save(); render();
-            toast('Task deleted');
+            toast('Task deleted', 'ok', () => {
+                delete t.deletedAt;
+                unlinked.forEach(l => { l.taskId = t.id; });
+                Tasks.put(t);
+                Store.save(); render();
+                toast('Restored');
+            });
         } : null
     });
 }
@@ -2153,11 +2180,9 @@ function openLogForm(id = null) {
             if (l) {
                 if (l.invoiceId) { toast('Cannot edit billed entry', 'error'); return false; }
                 Object.assign(l, payload);
-                audit('updateLog', l.id, `${l.minutes}m`);
             } else {
                 const nl = { id: uuid(), taskId: null, invoiceId: null, ...payload };
                 state.logs.push(nl);
-                audit('createLog', nl.id, `${nl.minutes}m`);
             }
             Store.save(); render();
             toast(l ? 'Entry updated' : 'Entry added');
@@ -2165,9 +2190,8 @@ function openLogForm(id = null) {
         onDelete: l ? () => {
             if (l.invoiceId) { toast('Cannot delete billed entry', 'error'); return; }
             l.deletedAt = new Date().toISOString();
-            audit('deleteLog', l.id, `${l.minutes}m`);
             Store.save(); render();
-            toast('Moved to Trash');
+            deletedWithUndo('Entry deleted', { blob: [l] });
         } : null
     });
 }
@@ -2191,13 +2215,18 @@ function openInvoiceForm(matterId = null, existingId = null) {
                 toast('Invoice updated');
             },
             onDelete: () => {
-                // unlink logs (so they become unbilled again) — but keep the invoice in Trash
-                state.logs.forEach(l => { if (l.invoiceId === existing.id) l.invoiceId = null; });
+                // unlink logs so they become unbilled again; undo re-bills them
+                const unbilled = state.logs.filter(l => l.invoiceId === existing.id);
+                unbilled.forEach(l => { l.invoiceId = null; });
                 existing.deletedAt = new Date().toISOString();
-                audit('deleteInvoice', existing.id, existing.number);
                 Store.save();
                 navigate('invoices');
-                toast('Moved to Trash');
+                toast('Invoice deleted', 'ok', () => {
+                    delete existing.deletedAt;
+                    unbilled.forEach(l => { l.invoiceId = existing.id; });
+                    Store.save(); render();
+                    toast('Restored');
+                });
             }
         });
         return;
@@ -2264,7 +2293,6 @@ function openInvoiceForm(matterId = null, existingId = null) {
             state.invoices.push(inv);
             state.profile.invoiceNumberCounter += 1;
             unbilled.forEach(l => l.invoiceId = inv.id);
-            audit('createInvoice', inv.id, `${number} (${c.name})`);
             Store.save();
             navigate('invoices/' + inv.id);
             toast(`Invoice ${number} created`);
@@ -2295,9 +2323,15 @@ function openBankAccountForm(id = null) {
             toast(a ? 'Account updated' : 'Account added');
         },
         onDelete: a ? () => {
+            // hard delete — bank accounts carry no deletedAt, so undo re-adds it
+            const at = accts.indexOf(a);
             state.profile.bankAccounts = accts.filter(x => x.id !== a.id);
             Store.save(); render();
-            toast('Account removed');
+            toast('Account removed', 'ok', () => {
+                state.profile.bankAccounts.splice(at < 0 ? state.profile.bankAccounts.length : at, 0, a);
+                Store.save(); render();
+                toast('Restored');
+            });
         } : null
     });
 }
@@ -2322,7 +2356,6 @@ function bindGlobalActions() {
             if (t) {
                 t.status = t.status === 'done' ? 'todo' : 'done';
                 t.completedAt = t.status === 'done' ? new Date().toISOString() : null;
-                audit(t.status === 'done' ? 'completeTask' : 'reopenTask', t.id, t.title);
                 Tasks.put(t); render();
             }
             return;
@@ -2390,7 +2423,6 @@ function bindGlobalActions() {
                 const inv = invoiceById(act.dataset.id);
                 if (inv) {
                     inv.status = act.dataset.status;
-                    audit('invoiceStatus', inv.id, `${inv.number} → ${inv.status}`);
                     Store.save(); render(); toast('Marked '+inv.status);
                 }
                 break;
@@ -2485,7 +2517,6 @@ function bindGlobalActions() {
                 if (numericFields.has(k)) state.profile[k] = Number(v) || 0;
                 else state.profile[k] = v;
             }
-            audit('updateSettings', null, '');
             Store.save();
             toast('Settings saved');
             render();
@@ -2606,6 +2637,7 @@ async function boot(user) {
     await Store.init(uid);          // loads the blob from Firestore, realtime sync
     await Tasks.init(user);         // tasks collection + one-time migration
     Comments.sync();                // open a thread listener per shared client
+    purgeOldDeletions();            // nothing else ever clears soft-deleted rows
     render();
 }
 

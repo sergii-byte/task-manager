@@ -634,7 +634,6 @@ Rules:
                 id: uuid(), name: d.clientName, createdAt: new Date().toISOString()
             };
             state.clients.push(c);
-            audit('createClient', c.id, `auto-created "${c.name}" via AI`);
             return c;
         }
         return null;
@@ -661,7 +660,6 @@ Rules:
                     openedAt: new Date().toISOString()
                 };
                 state.matters.push(m);
-                audit('createMatter', m.id, m.title + (c ? ` (${c.name})` : ''));
                 return m;
             }
         }
@@ -678,14 +676,12 @@ Rules:
             createdAt: new Date().toISOString()
         };
         state.clients.push(c);
-        audit('createClient', c.id, c.name);
     },
 
     _applyUpdateClient(d) {
         const c = clientById(d.clientId) || state.clients.find(x => !x.deletedAt && x.name?.toLowerCase() === (d.name||'').toLowerCase());
         if (!c) throw new Error('Client not found');
         Object.assign(c, d);
-        audit('updateClient', c.id, c.name);
     },
 
     _applyCreateMatter(d) {
@@ -701,14 +697,12 @@ Rules:
             openedAt: new Date().toISOString()
         };
         state.matters.push(m);
-        audit('createMatter', m.id, `${m.title} (${c.name})`);
     },
 
     _applyUpdateMatter(d) {
         const m = AI._resolveMatter(d);
         if (!m) throw new Error('Matter not found');
         Object.assign(m, d);
-        audit('updateMatter', m.id, m.title);
     },
 
     _applyCreateTask(d) {
@@ -726,7 +720,6 @@ Rules:
             createdAt: new Date().toISOString()
         };
         Tasks.put(t);
-        audit('createTask', t.id, t.title);
     },
 
     _applyUpdateTask(d) {
@@ -734,7 +727,6 @@ Rules:
         if (!t) throw new Error('Task not found');
         Object.assign(t, d);
         Tasks.put(t);
-        audit('updateTask', t.id, t.title);
     },
 
     _applyCompleteTask(d) {
@@ -743,7 +735,6 @@ Rules:
         t.status = 'done';
         t.completedAt = new Date().toISOString();
         Tasks.put(t);
-        audit('completeTask', t.id, t.title);
     },
 
     _applyLogTime(d) {
@@ -765,7 +756,6 @@ Rules:
             invoiceId: null
         };
         state.logs.push(log);
-        audit('logTime', log.id, `${minutes}m on ${m.title}`);
     },
 
     _applyCreateInvoice(d) {
@@ -793,7 +783,6 @@ Rules:
         state.invoices.push(inv);
         state.profile.invoiceNumberCounter += 1;
         unbilled.forEach(l => l.invoiceId = inv.id);
-        audit('createInvoice', inv.id, `${number} (${m.title})`);
     }
 };
 
