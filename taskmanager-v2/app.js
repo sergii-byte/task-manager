@@ -749,6 +749,14 @@ const Assist = {
     cards() {
         const out = [];
 
+        // unsorted intake — morning triage belongs at the top of the day
+        const pending = inboxPending();
+        if (pending > 0 && !Assist._hidden('inbox')) out.push({
+            icon: '✉', text: `${pending} email${pending === 1 ? '' : 's'} waiting to become tasks`,
+            chips: [{ label: 'triage', assist: 'goinbox' },
+                    { label: 'hide', assist: 'dismiss:inbox', ghost: true }]
+        });
+
         // closed recently, nothing logged — the money is evaporating
         const recent = new Date(Date.now() - 48 * 3600000).toISOString();
         liveTasks().filter(t => t.status === 'done' && t.matterId
@@ -834,6 +842,7 @@ const Assist = {
             Tasks.put(t); render(); toast('Rescheduled to ' + fmtDate(t.due));
             return;
         }
+        if (verb === 'goinbox') { navigate('inbox'); return; }
         if (verb === 'bill')   { openInvoiceForm(null, null, rest[0]); return; }
         if (verb === 'nudge')  { navigate('clients/' + rest[0]); return; }
         if (verb === 'open')   { openTaskForm(rest[0]); return; }
@@ -1057,10 +1066,12 @@ const Timer = {
  *   money — "what do I get paid for it"      (end of month)
  * Note: internally a project is still `matter` everywhere (matterId,
  * mattersForClient …) — only the words the user sees changed. */
+/* Inbox is deliberately NOT here: it is an intake pipe (email → task),
+ * not a destination — so it lives in the topbar next to omni, its sibling
+ * intake pipe, and announces itself on Today via an assistant card. */
 const NAV_GROUPS = [
     { label: 'day',   items: [
-        { id: 'today',    label: 'today',     icon: '○' },
-        { id: 'inbox',    label: 'inbox',     icon: '✉' } ] },
+        { id: 'today',    label: 'today',     icon: '○' } ] },
     { label: 'work',  items: [
         { id: 'clients',  label: 'clients',   icon: '◐' },
         { id: 'matters',  label: 'projects',  icon: '◇' } ] },
@@ -1095,6 +1106,12 @@ function renderSidebar() {
         if (btn) navigate(btn.dataset.nav);
     };
     $('#settings-btn').onclick = () => navigate('settings');
+    const ib = $('#omni-inbox');
+    if (ib && !ib.dataset.wired) {
+        ib.dataset.wired = '1';
+        ib.addEventListener('click', () => navigate('inbox'));
+    }
+    updateInboxBadge();
 }
 
 /* =========================================================================
@@ -2092,12 +2109,26 @@ function viewSettings() {
 
 let inboxEmails = [];
 
+/* Pending-intake count, cached by populateInbox. */
+function inboxPending() {
+    try { return Number(localStorage.getItem('ordify-inbox-pending')) || 0; }
+    catch (e) { return 0; }
+}
+
+function updateInboxBadge() {
+    const b = $('#inbox-badge');
+    if (!b) return;
+    const n = inboxPending();
+    b.hidden = !n;
+    b.textContent = n > 99 ? '99+' : String(n);
+}
+
 function viewInbox() {
     const connected = (typeof Google !== 'undefined') && Google.configured && Google.hasToken();
     return `
         <div class="view-head">
             <h1>Inbox</h1>
-            <div class="meta">triage — turn what matters into a task, dismiss the rest</div>
+            <div class="meta">intake, not a place to live — every email becomes a task or disappears. Goal: empty.</div>
             <div class="actions">
                 ${connected ? `<button class="btn sm" data-act="email-switch" title="Disconnect and pick another Google account">Switch mailbox</button>` : ''}
             </div>
@@ -2135,6 +2166,10 @@ async function populateInbox() {
         const all = await Google.listInbox(30);
         const handled = new Set(state.emailHandled || []);
         inboxEmails = all.filter(e => !handled.has(e.id));
+        // cache the pending count — the topbar badge and the Today assistant
+        // card read it, so intake announces itself without another fetch
+        try { localStorage.setItem('ordify-inbox-pending', String(inboxEmails.length)); } catch (e) {}
+        updateInboxBadge();
         if (!inboxEmails.length) {
             host.innerHTML = `<div class="empty-state">
                 <h3>Inbox clear</h3>

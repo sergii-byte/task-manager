@@ -207,7 +207,7 @@ body {
     min-width: 0;
 }
 #omni-input::placeholder { color: var(--fg-faint); }
-#omni-mic, #omni-ai, #omni-attach {
+#omni-mic, #omni-ai, #omni-attach, #omni-inbox {
     appearance: none;
     border: 0;
     background: transparent;
@@ -221,7 +221,7 @@ body {
     display: grid;
     place-items: center;
 }
-#omni-mic:hover, #omni-ai:hover, #omni-attach:hover { background: var(--bg-hover); color: var(--accent); }
+#omni-mic:hover, #omni-ai:hover, #omni-attach:hover, #omni-inbox:hover { background: var(--bg-hover); color: var(--accent); }
 #omni-mic:disabled { opacity: 0.4; cursor: not-allowed; }
 #omni-mic.on {
     background: var(--danger);
@@ -2042,3 +2042,26 @@ p.muted { font-size: var(--t-sm); }
 }
 .unbilled-card .u-name { font-weight: 600; font-size: var(--t-sm); }
 .unbilled-card .u-amt { font-family: var(--font-mono); font-size: var(--t-sm); color: var(--fg-mute); }
+
+/* ---- inbox as an intake pipe in the topbar ---- */
+#omni-inbox { position: relative; }
+.inbox-badge {
+    position: absolute;
+    top: -2px; right: -4px;
+    min-width: 15px; height: 15px;
+    padding: 0 4px;
+    border-radius: var(--radius-pill);
+    background: var(--accent);
+    color: #fff;
+    font: 700 9.5px/15px var(--font-mono);
+    text-align: center;
+    pointer-events: none;
+}
+
+/* narrow screens: four intake buttons must not push the omni bar past the
+   edge — tighten the topbar and the buttons */
+@media (max-width: 720px) {
+    #topbar { padding: 0 var(--s-3); gap: var(--s-2); }
+    #omni-mic, #omni-ai, #omni-attach, #omni-inbox { width: 32px; height: 32px; font-size: var(--t-base); }
+    #omni-input { padding: 8px 10px; }
+}
