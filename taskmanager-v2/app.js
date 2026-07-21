@@ -92,7 +92,9 @@ const ICONS = {
     grid:     '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
     chat:     '<path d="M4 5h16v11H8l-4 4z"/>',
     calendar: '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/>',
-    check:    '<path d="M5 13l4 4 10-10"/>'
+    check:    '<path d="M5 13l4 4 10-10"/>',
+    video:    '<rect x="3" y="6" width="12" height="12" rx="2"/><path d="M15 11l6-3v8l-6-3z"/>',
+    checklist:'<path d="M4 7l2 2 3-3"/><path d="M4 17l2 2 3-3"/><path d="M13 8h7M13 18h7"/>'
 };
 
 const icon = (name, size = 16) =>
@@ -1297,20 +1299,24 @@ function viewToday() {
         </section>` : '';
         })()}
 
-        <section class="t-sec">
+        <!-- Two different kinds of thing, so two different shapes: the day is
+             fixed and time-ordered (a rail), the list is yours to reorder and
+             tick off (a checklist). They used to look identical. -->
+        <section class="t-sec is-schedule">
             <div class="t-sechdr">
+                <span class="sec-ic">${icon('calendar', 15)}</span>
                 <h2>schedule</h2>
                 <span class="count">today</span>
-                <span class="right"><button class="btn sm" data-act="new-task">＋ task</button></span>
             </div>
             <div id="t-schedule" class="t-schedule"><div class="t-sched-msg">Loading…</div></div>
         </section>
 
-        <section class="t-sec">
+        <section class="t-sec is-tasks">
             <div class="t-sechdr">
+                <span class="sec-ic">${icon('checklist', 15)}</span>
                 <h2>tasks</h2>
                 <span class="count">${list.length}</span>
-                <span class="right"><button class="btn sm" data-act="new-task">＋ task</button></span>
+                <span class="right"><button class="btn sm primary" data-act="new-task">＋ task</button></span>
             </div>
             <div class="t-filters" role="group" aria-label="Filter tasks">${chips}</div>
             ${list.length
@@ -1456,16 +1462,23 @@ function _scheduleSlot(ev, nowMs) {
     const isPast = !ev.allDay && new Date(ev.end).getTime() < nowMs;
     const isNow  = !ev.allDay && new Date(ev.start).getTime() <= nowMs && new Date(ev.end).getTime() >= nowMs;
     const ctx = [ev.calendar, ev.location].filter(Boolean).map(x=>esc(x)).join(' · ');
+    // There must always be a way into the meeting: the join URL when one is
+    // detectable, otherwise the event in Google Calendar, where it lives.
+    const action = isPast ? ''
+        : ev.joinLink
+            ? `<a class="t-slot-join" href="${esc(ev.joinLink)}" target="_blank" rel="noopener">${icon('video', 13)} join</a>`
+            : ev.htmlLink
+                ? `<a class="t-slot-join ghost" href="${esc(ev.htmlLink)}" target="_blank" rel="noopener">open ↗</a>`
+                : '';
     return `
         <div class="t-slot ${isPast?'past':''} ${isNow?'now':''}">
             <div class="t-slot-when">${when}</div>
             <div class="t-slot-marker"></div>
             <div class="t-slot-body">
-                <div class="t-slot-what">${esc(ev.title)}
-                    ${ev.joinLink && !isPast ? `<a class="t-slot-join" href="${esc(ev.joinLink)}" target="_blank" rel="noopener">join ↗</a>` : ''}
-                </div>
+                <div class="t-slot-what">${esc(ev.title)}</div>
                 ${ctx ? `<div class="t-slot-ctx">${ctx}</div>` : ''}
             </div>
+            ${action ? `<div class="t-slot-action">${action}</div>` : ''}
         </div>`;
 }
 

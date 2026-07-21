@@ -2191,3 +2191,83 @@ p.muted { font-size: var(--t-sm); }
     .sidebar-foot { display: flex; }  /* settings comes back on mobile */
     #sidebar { justify-content: space-between; }
 }
+
+/* =========================================================================
+ * TODAY: schedule vs tasks — two shapes, not one
+ * The day's meetings are fixed and time-ordered → a rail with a spine.
+ * The task list is yours to tick off → a checklist card.
+ * ========================================================================= */
+
+.today-v3 .t-sechdr .sec-ic { display: grid; place-items: center; color: var(--fg-mute); }
+.today-v3 .is-schedule .t-sechdr .sec-ic { color: var(--accent); }
+.today-v3 .is-tasks .t-sechdr .sec-ic { color: var(--ok); }
+.today-v3 .t-sechdr { align-items: center; }
+
+/* --- schedule: a timeline with a visible spine --- */
+.today-v3 .is-schedule .t-schedule {
+    position: relative;
+    padding-left: var(--s-2);
+    border-left: 2px solid var(--accent-line);
+    margin-left: 62px;
+}
+.today-v3 .is-schedule .t-slot {
+    position: relative;
+    display: grid;
+    grid-template-columns: 62px 14px 1fr auto;
+    align-items: center;
+    gap: var(--s-2);
+    margin-left: -76px;
+    padding: var(--s-2) 0;
+}
+.today-v3 .is-schedule .t-slot-when {
+    font-family: var(--font-mono); font-size: var(--t-xs);
+    color: var(--fg-mute); text-align: right; white-space: nowrap;
+}
+.today-v3 .is-schedule .t-slot-when .end { display: block; color: var(--fg-faint); }
+.today-v3 .is-schedule .t-slot-marker {
+    justify-self: center;
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--accent-line);
+}
+.today-v3 .is-schedule .t-slot.now .t-slot-marker { background: var(--ok); border-color: var(--ok); }
+.today-v3 .is-schedule .t-slot.now .t-slot-what { font-weight: 700; }
+.today-v3 .is-schedule .t-slot.past { opacity: 0.45; }
+.today-v3 .is-schedule .t-slot-what { font-size: var(--t-base); }
+.today-v3 .is-schedule .t-slot-ctx { font-size: var(--t-xs); color: var(--fg-mute); }
+.today-v3 .is-schedule .t-slot-body { min-width: 0; }
+.t-slot-action { justify-self: end; }
+
+/* the join affordance is the point of a meeting row — make it a real button */
+.t-slot-join {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+    font: 600 var(--t-xs) var(--font);
+    color: #fff; background: var(--accent); border: 1px solid var(--accent);
+    padding: 0 var(--s-3);
+    min-height: var(--tap);
+    border-radius: var(--radius-pill);
+    text-decoration: none; white-space: nowrap;
+}
+.t-slot-join:hover { opacity: 0.88; }
+.t-slot-join.ghost { background: transparent; color: var(--accent); border-color: var(--accent-line); }
+.t-slot-join.ghost:hover { background: var(--accent-soft); }
+
+/* --- tasks: a checklist card, clearly a different surface --- */
+.today-v3 .is-tasks {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: var(--s-4);
+}
+.today-v3 .is-tasks .t-tasks { margin-top: 2px; }
+.today-v3 .is-tasks .t-task { border-bottom: 1px solid var(--line-soft); }
+.today-v3 .is-tasks .t-task:last-child { border-bottom: 0; }
+
+@media (max-width: 720px) {
+    .today-v3 .is-schedule .t-schedule { margin-left: 48px; }
+    .today-v3 .is-schedule .t-slot {
+        grid-template-columns: 48px 14px 1fr;
+        margin-left: -62px;
+    }
+    .t-slot-action { grid-column: 3; justify-self: start; margin-top: var(--s-1); }
+}

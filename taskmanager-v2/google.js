@@ -344,6 +344,10 @@ const Google = {
                 location: e.location || '',
                 hangoutLink: e.hangoutLink || '',
                 joinLink: e.hangoutLink || (m ? m[1] : ''),
+                // fallback route into the meeting: not every invite exposes a
+                // machine-readable join URL, but every event opens in Google
+                // Calendar where the link lives
+                htmlLink: e.htmlLink || '',
                 calendar: cal.primary ? '' : (cal.summaryOverride || cal.summary || '')
             });
         }));
