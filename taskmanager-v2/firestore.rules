@@ -54,5 +54,43 @@ service cloud.firestore {
         && request.auth.uid == resource.data.ownerId;
     }
 
+    // /shares/{shareId}/comments/{id} — the two-way thread on a status page.
+    // The thread lives *under* the share, so reading or listing it already
+    // requires the unguessable token — same trust model as the page itself.
+    //
+    // Writers are told apart by the parent share's ownerId: the hub posts as
+    // 'hub', anyone else (an anonymous client session) posts as 'client', and
+    // client posts are only accepted while the hub leaves commentsEnabled on.
+    match /shares/{shareId}/comments/{commentId} {
+      function share() {
+        return get(/databases/$(database)/documents/shares/$(shareId)).data;
+      }
+      function isHub() {
+        return request.auth != null && share().ownerId == request.auth.uid;
+      }
+
+      allow get, list: if true;
+
+      allow create: if request.auth != null
+        && exists(/databases/$(database)/documents/shares/$(shareId))
+        && request.resource.data.keys().hasOnly(['taskId', 'author', 'text', 'createdAt'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000
+        && request.resource.data.createdAt == request.time
+        && (request.resource.data.taskId == null
+            || request.resource.data.taskId is string)
+        && (
+             (request.resource.data.author == 'hub' && isHub())
+             || (request.resource.data.author == 'client'
+                 && !isHub()
+                 && share().commentsEnabled == true)
+           );
+
+      // Posted messages are immutable; only the hub can prune a thread.
+      allow update: if false;
+      allow delete: if isHub();
+    }
+
   }
 }

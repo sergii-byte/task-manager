@@ -113,6 +113,44 @@ td.date.overdue { color: var(--danger); font-weight: 700; }
 .badge.overdue { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
 .badge.stuck   { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
 
+/* ---- conversation ---- */
+.thread-toggle {
+    margin-top: 6px;
+    border: 1px solid var(--line); background: #fff; color: var(--fg-mute);
+    font: 500 11.5px var(--font); padding: 3px 9px;
+    border-radius: 999px; cursor: pointer;
+}
+.thread-toggle:hover { border-color: var(--accent); color: var(--accent); }
+.thread-toggle.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.thread {
+    margin-top: 10px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: var(--radius-lg); background: #fff;
+}
+.thread-tr td { background: transparent; padding-top: 0; }
+.thread-empty { color: var(--fg-faint); font-size: 12.5px; }
+.msg { margin-bottom: 10px; }
+.msg:last-of-type { margin-bottom: 0; }
+.msg-who { font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); margin-bottom: 2px; }
+.msg-text {
+    font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    border-left: 2px solid var(--line); padding-left: 10px;
+}
+.msg.mine .msg-text { border-left-color: var(--accent); }
+.thread-reply { display: flex; gap: 8px; margin-top: 12px; }
+.thread-input {
+    flex: 1; min-width: 0;
+    font-family: var(--font); font-size: 13px; padding: 8px 11px;
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--bg); color: var(--ink);
+}
+.thread-input:focus { outline: none; border-color: var(--accent); background: #fff; }
+.thread-send {
+    border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    font: 600 12px var(--font); padding: 8px 14px;
+    border-radius: var(--radius); cursor: pointer; white-space: nowrap;
+}
+.thread-send:hover { opacity: 0.9; }
+
 .empty { color: var(--fg-mute); font-size: 13px; padding: 14px 2px; }
 .state { text-align: center; padding: 90px 20px; color: var(--fg-mute); }
 .state h2 { font-family: var(--font-tight); font-size: 22px; color: var(--ink); margin-bottom: 8px; }
@@ -139,7 +177,7 @@ td.date.overdue { color: var(--danger); font-weight: 700; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-init.js?v=24"></script>
-<script src="share.js?v=24"></script>
+<script src="firebase-init.js?v=25"></script>
+<script src="share.js?v=25"></script>
 </body>
 </html>

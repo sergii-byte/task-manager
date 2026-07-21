@@ -438,9 +438,11 @@ const Share = {
         if (!c) return;
         if (!c.shareId) c.shareId = Share.token();
         c.shareEnabled = true;
+        if (c.shareComments === undefined) c.shareComments = true;
         audit('shareEnable', c.id, c.name);
         Store.save();
         Share._publishNow();
+        Comments.sync();
         render();
     },
 
@@ -457,6 +459,7 @@ const Share = {
             fbDb.collection('shares').doc(id).delete()
                 .catch((e) => console.error('share delete failed', e));
         }
+        Comments.sync();
         render();
     },
 
@@ -481,6 +484,7 @@ const Share = {
         const tasks = tasksForClient(c.id)
             .filter(t => t.status !== 'done' || (t.completedAt || t.createdAt || '') >= doneCutoff)
             .map(t => ({
+                id: t.id,                     // opaque uuid — lets the portal thread comments per task
                 title: t.title || '',
                 status: t.status === 'done' ? 'done' : 'open',
                 overdue: taskStatus(t) === 'overdue',
@@ -517,12 +521,98 @@ const Share = {
         const uid = fbAuth.currentUser.uid;
         liveClients().filter(c => c.shareEnabled && c.shareId).forEach(c => {
             const json = JSON.stringify(Share.payload(c));
-            if (Share._last[c.shareId] === json) return;
+            const flag = c.shareComments !== false;
+            const stamp = json + '|' + flag;
+            if (Share._last[c.shareId] === stamp) return;
             fbDb.collection('shares').doc(c.shareId)
-                .set({ ownerId: uid, state: json, updatedAt: Date.now() })
-                .then(() => { Share._last[c.shareId] = json; })
+                .set({ ownerId: uid, state: json, commentsEnabled: flag, updatedAt: Date.now() })
+                .then(() => { Share._last[c.shareId] = stamp; })
                 .catch((e) => console.error('share publish failed', e));
         });
+    }
+};
+
+/* =========================================================================
+ * 2a¾. COMMENTS — the two-way thread on each client portal
+ *
+ * Messages live in /shares/{shareId}/comments, so the same unguessable
+ * token that unlocks the status page unlocks its thread. The hub keeps a
+ * listener open per enabled share; the client page keeps one on its own.
+ * ========================================================================= */
+
+const Comments = {
+    _unsubs: {},        // shareId -> unsubscribe fn
+    _byShare: {},       // shareId -> [ {id, taskId, author, text, createdAt} ]
+
+    /* Reconcile listeners with the set of currently shared clients. */
+    sync() {
+        if (!fbDb) return;
+        const want = {};
+        liveClients().filter(c => c.shareEnabled && c.shareId).forEach(c => { want[c.shareId] = true; });
+
+        Object.keys(Comments._unsubs).forEach(sid => {
+            if (want[sid]) return;
+            Comments._unsubs[sid]();
+            delete Comments._unsubs[sid];
+            delete Comments._byShare[sid];
+        });
+
+        Object.keys(want).forEach(sid => {
+            if (Comments._unsubs[sid]) return;
+            Comments._unsubs[sid] = fbDb.collection('shares').doc(sid).collection('comments')
+                .orderBy('createdAt')
+                .onSnapshot(
+                    (snap) => {
+                        Comments._byShare[sid] = snap.docs.map(d => {
+                            const v = d.data();
+                            return {
+                                id: d.id,
+                                taskId: v.taskId || null,
+                                author: v.author || 'client',
+                                text: v.text || '',
+                                createdAt: v.createdAt && v.createdAt.toMillis ? v.createdAt.toMillis() : 0
+                            };
+                        });
+                        render();
+                    },
+                    (err) => console.error('comments snapshot error', err)
+                );
+        });
+    },
+
+    forClient(c) {
+        return (c && c.shareId && Comments._byShare[c.shareId]) || [];
+    },
+
+    /* Unread = client messages newer than the last time this thread was opened. */
+    _seenKey: (sid) => 'ordify-thread-seen-' + sid,
+
+    unread(c) {
+        if (!c || !c.shareId) return 0;
+        const seen = Number(localStorage.getItem(Comments._seenKey(c.shareId)) || 0);
+        return Comments.forClient(c).filter(m => m.author === 'client' && m.createdAt > seen).length;
+    },
+
+    markSeen(c) {
+        if (!c || !c.shareId) return;
+        localStorage.setItem(Comments._seenKey(c.shareId), String(Date.now()));
+    },
+
+    post(clientId, taskId, text) {
+        const c = clientById(clientId);
+        const body = (text || '').trim();
+        if (!c || !c.shareId || !body) return;
+        if (body.length > 2000) { toast('Message is too long (2000 characters max)', 'error'); return; }
+        fbDb.collection('shares').doc(c.shareId).collection('comments').add({
+            taskId: taskId || null,
+            author: 'hub',
+            text: body,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => toast('Reply sent'))
+          .catch((e) => {
+              console.error('comment post failed', e);
+              toast('Could not send: ' + e.message, 'error');
+          });
     }
 };
 
@@ -1311,6 +1401,12 @@ function viewClient(id) {
                     <label class="share-opt" for="share-done-days">Show completed tasks from the last</label>
                     <select id="share-done-days" class="share-select" data-id="${c.id}">${opts}</select>
                 </div>
+                <div class="share-row">
+                    <label class="share-opt cb">
+                        <input type="checkbox" id="share-comments" data-id="${c.id}" ${c.shareComments !== false ? 'checked' : ''}>
+                        Let ${esc(c.name)} reply to tasks on the portal
+                    </label>
+                </div>
                 <small class="hint">Live status page for ${esc(c.name)}: tasks, priorities, deadlines and what's stuck.
                 Rates, amounts, invoices and internal notes are never published. Updates automatically.
                 Disabling kills the link immediately.</small>
@@ -1322,6 +1418,8 @@ function viewClient(id) {
                 deadlines and stuck items only. No rates, amounts, invoices or internal notes.</small>
             </div>
         `}
+
+        ${renderClientThread(c)}
 
         <h2 class="section-h">Attachments</h2>
         <div id="att-host-client"></div>
@@ -1359,6 +1457,63 @@ function viewClient(id) {
                 </tbody>
             </table>
         `: ''}
+    `;
+}
+
+/* Portal conversation, grouped by task. Threads with unanswered client
+ * messages float to the top — those are the ones costing time. */
+function renderClientThread(c) {
+    if (!c.shareEnabled || !c.shareId) return '';
+    const all = Comments.forClient(c);
+    const unread = Comments.unread(c);
+
+    const groups = {};
+    all.forEach(m => {
+        const key = m.taskId || '_general';
+        (groups[key] = groups[key] || []).push(m);
+    });
+
+    const ordered = Object.keys(groups).sort((a, b) => {
+        const la = groups[a][groups[a].length - 1];
+        const lb = groups[b][groups[b].length - 1];
+        const waiting = (g) => g.author === 'client' ? 1 : 0;
+        return (waiting(lb) - waiting(la)) || (lb.createdAt - la.createdAt);
+    });
+
+    const when = (ms) => ms
+        ? new Date(ms).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : 'sending…';
+
+    return `
+        <h2 class="section-h">Portal conversation
+            ${unread ? `<span class="badge overdue">${unread} new</span>` : ''}</h2>
+        ${!ordered.length ? `
+            <div class="empty">No messages yet. ${c.shareComments !== false
+                ? 'Replies your client posts on the portal land here.'
+                : 'Replying is currently switched off for this client.'}</div>
+        ` : ordered.map(key => {
+            const msgs = groups[key];
+            const t = key === '_general' ? null : taskById(key);
+            const title = t ? t.title : (key === '_general' ? 'General' : 'Deleted task');
+            const awaiting = msgs[msgs.length - 1].author === 'client';
+            return `
+                <div class="thread ${awaiting ? 'awaiting' : ''}">
+                    <div class="thread-head">
+                        ${esc(title)}
+                        ${awaiting ? '<span class="badge stuck">awaiting your reply</span>' : ''}
+                    </div>
+                    ${msgs.map(m => `
+                        <div class="msg ${m.author === 'hub' ? 'mine' : ''}">
+                            <div class="msg-who">${m.author === 'hub' ? 'You' : esc(c.name)} · ${esc(when(m.createdAt))}</div>
+                            <div class="msg-text">${esc(m.text)}</div>
+                        </div>`).join('')}
+                    <div class="thread-reply">
+                        <input type="text" class="thread-input" data-thread="${esc(key)}"
+                               placeholder="Reply to ${esc(c.name)}…" maxlength="2000">
+                        <button class="btn" data-act="comment-send" data-id="${c.id}" data-thread="${esc(key)}">Send</button>
+                    </div>
+                </div>`;
+        }).join('')}
     `;
 }
 
@@ -2446,6 +2601,14 @@ function bindGlobalActions() {
                 }
                 break;
             }
+            case 'comment-send': {
+                const key = act.dataset.thread;
+                const input = document.querySelector(`.thread-input[data-thread="${CSS.escape(key)}"]`);
+                if (!input || !input.value.trim()) break;
+                Comments.post(act.dataset.id, key === '_general' ? null : key, input.value);
+                input.value = '';
+                break;
+            }
             case 'share-copy': {
                 const c = clientById(act.dataset.id);
                 if (!c || !c.shareId) break;
@@ -2717,6 +2880,27 @@ function render() {
             Share.setDoneDays(sel.dataset.id, sel.value);
             toast('Portal window updated');
         });
+        const cb = $('#share-comments');
+        if (cb) cb.addEventListener('change', () => {
+            const c = clientById(cb.dataset.id);
+            if (!c) return;
+            c.shareComments = cb.checked;
+            Store.save();
+            Share._publishNow();
+            toast(cb.checked ? 'Client replies enabled' : 'Client replies switched off');
+        });
+        // Enter sends a reply without reaching for the button
+        $$('.thread-input').forEach(inp => inp.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter') return;
+            e.preventDefault();
+            const c = clientById(id);
+            if (!c || !inp.value.trim()) return;
+            const key = inp.dataset.thread;
+            Comments.post(c.id, key === '_general' ? null : key, inp.value);
+            inp.value = '';
+        }));
+        const cl = clientById(id);
+        if (cl && Comments.unread(cl)) Comments.markSeen(cl);
     }
 }
 
@@ -2732,6 +2916,7 @@ async function boot(user) {
     const uid = (user && user.uid) ? user.uid : null;
     await Store.init(uid);          // loads the blob from Firestore, realtime sync
     await Tasks.init(user);         // tasks collection + one-time migration
+    Comments.sync();                // open a thread listener per shared client
     render();
 }
 

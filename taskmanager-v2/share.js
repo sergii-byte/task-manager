@@ -43,7 +43,15 @@ const STRINGS = {
         prio: { high: 'high', normal: 'normal', low: 'low' },
         mstatus: { open: 'open', 'on-hold': 'on hold', closed: 'closed' },
         footNote: 'this page shows work status only — it contains no financial details.',
-        poweredBy: 'powered by'
+        poweredBy: 'powered by',
+        reply: 'reply',
+        replyPlaceholder: 'Write a reply…',
+        send: 'send',
+        you: 'you',
+        sending: 'sending…',
+        sendFailed: 'could not send — try again',
+        threadEmpty: 'no messages on this task yet',
+        commentsOff: 'replies are switched off for this page'
     },
     ua: {
         statusPage: 'сторінка статусу',
@@ -75,7 +83,15 @@ const STRINGS = {
         prio: { high: 'високий', normal: 'звичайний', low: 'низький' },
         mstatus: { open: 'активна', 'on-hold': 'на паузі', closed: 'закрита' },
         footNote: 'ця сторінка показує лише статус роботи — без фінансових деталей.',
-        poweredBy: 'працює на'
+        poweredBy: 'працює на',
+        reply: 'відповісти',
+        replyPlaceholder: 'Напишіть відповідь…',
+        send: 'надіслати',
+        you: 'ви',
+        sending: 'надсилання…',
+        sendFailed: 'не вдалося надіслати — спробуйте ще раз',
+        threadEmpty: 'по цій задачі ще немає повідомлень',
+        commentsOff: 'відповіді для цієї сторінки вимкнено'
     }
 };
 
@@ -118,7 +134,73 @@ const windowLabel = (days) => {
 
 /* ---------------------------------------------------------------- render */
 
-let current = null;   // { data, updatedAt }
+let current = null;        // { data, updatedAt }
+let token = '';            // the share token from location.hash
+let comments = [];         // [{ id, taskId, author, text, createdAt }]
+let commentsOn = false;    // hub's kill switch, read off the share doc
+const openThreads = new Set();   // task ids whose thread is expanded
+const drafts = {};         // taskId -> in-progress text, survives re-render
+
+const msgsFor = (taskId) => comments.filter(m => (m.taskId || '_general') === taskId);
+
+/* Anonymous session — created lazily, only when the client actually posts.
+ * If the hub happens to be signed in on this origin, that session is used
+ * instead and the rules will accept the message as a 'hub' reply. */
+async function ensureAuth() {
+    if (fbAuth && fbAuth.currentUser) return fbAuth.currentUser;
+    const cred = await fbAuth.signInAnonymously();
+    return cred.user;
+}
+
+async function postComment(taskId, text) {
+    const body = (text || '').trim();
+    if (!body || !token || token === 'demo') return;
+    await ensureAuth();
+    await fbDb.collection('shares').doc(token).collection('comments').add({
+        taskId: taskId === '_general' ? null : taskId,
+        author: (fbAuth.currentUser && !fbAuth.currentUser.isAnonymous) ? 'hub' : 'client',
+        text: body,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+}
+
+/* Messages + compose box for one task. */
+function threadHtml(taskId) {
+    const s = T();
+    const msgs = msgsFor(taskId);
+    const when = (ms) => ms
+        ? new Date(ms).toLocaleString(lang === 'ua' ? 'uk-UA' : 'en-GB',
+            { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+        : s.sending;
+    return `
+        <div class="thread">
+            ${msgs.length
+                ? msgs.map(m => `
+                    <div class="msg ${m.author === 'client' ? 'mine' : ''}">
+                        <div class="msg-who">${m.author === 'client' ? s.you : esc(current.data.from || 'ordify')} · ${esc(when(m.createdAt))}</div>
+                        <div class="msg-text">${esc(m.text)}</div>
+                    </div>`).join('')
+                : `<div class="thread-empty">${s.threadEmpty}</div>`}
+            ${commentsOn ? `
+                <div class="thread-reply">
+                    <input type="text" class="thread-input" data-thread="${esc(taskId)}"
+                           placeholder="${esc(s.replyPlaceholder)}" maxlength="2000"
+                           value="${esc(drafts[taskId] || '')}">
+                    <button class="thread-send" data-send="${esc(taskId)}">${esc(s.send)}</button>
+                </div>
+            ` : `<div class="thread-empty">${s.commentsOff}</div>`}
+        </div>`;
+}
+
+/* The toggle that opens a task's thread. */
+function threadToggle(taskId) {
+    const s = T();
+    const n = msgsFor(taskId).length;
+    const open = openThreads.has(taskId);
+    return `<button class="thread-toggle ${open ? 'on' : ''}" data-toggle="${esc(taskId)}">
+        💬 ${n ? n : ''} ${esc(s.reply)}
+    </button>`;
+}
 
 function dueCell(t) {
     if (!t.due) return '<td class="date"></td>';
@@ -181,6 +263,8 @@ function render() {
                     <div class="t">${esc(t.title)}</div>
                     <div class="why"><b>${s.waitingOn}</b> ${esc(t.stuck)}</div>
                     <div class="meta">${[t.matter, t.due ? fmtDate(t.due) : ''].filter(Boolean).map(esc).join(' · ')}</div>
+                    ${t.id ? threadToggle(t.id) : ''}
+                    ${t.id && openThreads.has(t.id) ? threadHtml(t.id) : ''}
                 </div>`).join('')}
         ` : ''}
 
@@ -194,11 +278,14 @@ function render() {
                         <td>
                             <div class="task-title">${esc(t.title)}</div>
                             ${t.matter ? `<div class="task-meta">${esc(t.matter)}</div>` : ''}
+                            ${t.id ? threadToggle(t.id) : ''}
                         </td>
                         ${dueCell(t)}
                         <td><span class="badge ${esc(t.priority)}">${esc(s.prio[t.priority] || t.priority)}</span></td>
                         <td class="num">${fmtMinutes(t.minutes)}</td>
-                    </tr>`).join('')}
+                    </tr>
+                    ${t.id && openThreads.has(t.id) ? `
+                        <tr class="thread-tr"><td colspan="4">${threadHtml(t.id)}</td></tr>` : ''}`).join('')}
                 </tbody>
             </table>
         ` : `<div class="empty">${s.noOpen}</div>`}
@@ -245,6 +332,47 @@ function render() {
         localStorage.setItem('ordify-share-lang', lang);
         render();
     }));
+
+    app.querySelectorAll('[data-toggle]').forEach(btn => btn.addEventListener('click', () => {
+        const key = btn.dataset.toggle;
+        if (openThreads.has(key)) openThreads.delete(key); else openThreads.add(key);
+        render();
+    }));
+
+    // keep the draft alive across the re-renders the live listener triggers
+    app.querySelectorAll('.thread-input').forEach(inp => {
+        inp.addEventListener('input', () => { drafts[inp.dataset.thread] = inp.value; });
+        inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); send(inp.dataset.thread); }
+        });
+    });
+
+    app.querySelectorAll('[data-send]').forEach(btn =>
+        btn.addEventListener('click', () => send(btn.dataset.send)));
+
+    // restore focus + caret after a re-render so typing is never interrupted
+    if (focusedThread) {
+        const inp = app.querySelector(`.thread-input[data-thread="${CSS.escape(focusedThread)}"]`);
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    }
+}
+
+let focusedThread = null;
+
+function send(taskId) {
+    const app = document.getElementById('app');
+    const inp = app.querySelector(`.thread-input[data-thread="${CSS.escape(taskId)}"]`);
+    if (!inp || !inp.value.trim()) return;
+    const text = inp.value;
+    inp.value = '';
+    drafts[taskId] = '';
+    focusedThread = taskId;
+    postComment(taskId, text).catch((e) => {
+        console.error('comment post failed', e);
+        drafts[taskId] = text;      // hand the text back rather than losing it
+        render();
+        alert(T().sendFailed);
+    });
 }
 
 function renderState(title, body) {
@@ -253,6 +381,11 @@ function renderState(title, body) {
 }
 
 /* ---------------------------------------------------------------- boot */
+
+const DEMO_COMMENTS = [
+    { id: 'dc1', taskId: 'demo-ubo', author: 'hub', text: 'Could you send a certified copy of the second director\'s passport? Notarised scan is enough to file.', createdAt: Date.now() - 2 * 86400000 },
+    { id: 'dc2', taskId: 'demo-ubo', author: 'client', text: 'Ordering the notarisation tomorrow — should have it by Thursday.', createdAt: Date.now() - 86400000 }
+];
 
 const DEMO = {
     client: 'Acme Ltd',
@@ -264,33 +397,35 @@ const DEMO = {
         { title: 'Trademark dispute', status: 'on-hold', minutes: 180 }
     ],
     tasks: [
-        { title: 'Draft shareholders agreement v2', status: 'open', overdue: false, priority: 'high',
+        { id: 'demo-sha', title: 'Draft shareholders agreement v2', status: 'open', overdue: false, priority: 'high',
           due: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10), stuck: null,
           matter: 'Corporate restructuring', minutes: 320, completedAt: null, createdAt: '2026-07-01' },
-        { title: 'File UBO declaration', status: 'open', overdue: true, priority: 'high',
+        { id: 'demo-ubo', title: 'File UBO declaration', status: 'open', overdue: true, priority: 'high',
           due: new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10),
           stuck: 'waiting for a certified passport copy of the second director',
           matter: 'MiCA licensing — KNF application', minutes: 45, completedAt: null, createdAt: '2026-06-20' },
-        { title: 'Review AML policy draft', status: 'open', overdue: false, priority: 'normal',
+        { id: 'demo-aml', title: 'Review AML policy draft', status: 'open', overdue: false, priority: 'normal',
           due: new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10), stuck: null,
           matter: 'MiCA licensing — KNF application', minutes: 150, completedAt: null, createdAt: '2026-07-05' },
-        { title: 'Prepare board resolution on share issue', status: 'open', overdue: false, priority: 'low',
+        { id: 'demo-res', title: 'Prepare board resolution on share issue', status: 'open', overdue: false, priority: 'low',
           due: null, stuck: 'waiting for the bank to confirm the capital deposit',
           matter: 'Corporate restructuring', minutes: 0, completedAt: null, createdAt: '2026-07-10' },
-        { title: 'Incorporation documents — final signing pack', status: 'done', overdue: false, priority: 'high',
+        { id: 'demo-inc', title: 'Incorporation documents — final signing pack', status: 'done', overdue: false, priority: 'high',
           due: null, stuck: null, matter: 'Corporate restructuring', minutes: 480,
           completedAt: new Date(Date.now() - 5 * 86400000).toISOString(), createdAt: '2026-06-01' },
-        { title: 'Answer KNF pre-filing questionnaire', status: 'done', overdue: false, priority: 'normal',
+        { id: 'demo-knf', title: 'Answer KNF pre-filing questionnaire', status: 'done', overdue: false, priority: 'normal',
           due: null, stuck: null, matter: 'MiCA licensing — KNF application', minutes: 610,
           completedAt: new Date(Date.now() - 12 * 86400000).toISOString(), createdAt: '2026-06-10' }
     ]
 };
 
 function boot() {
-    const token = (location.hash || '').replace(/^#/, '').trim();
+    token = (location.hash || '').replace(/^#/, '').trim();
 
     if (token === 'demo') {
         current = { data: DEMO, updatedAt: Date.now() };
+        commentsOn = true;
+        comments = DEMO_COMMENTS;
         render();
         return;
     }
@@ -309,6 +444,7 @@ function boot() {
                     data: JSON.parse(raw.state),
                     updatedAt: raw.updatedAt || Date.now()
                 };
+                commentsOn = raw.commentsEnabled === true;
                 render();
             } catch (e) {
                 console.error('share payload parse failed', e);
@@ -320,6 +456,26 @@ function boot() {
             renderState(T().notFoundTitle, T().notFoundBody);
         }
     );
+
+    // Live thread — new replies from either side appear without a refresh.
+    fbDb.collection('shares').doc(token).collection('comments')
+        .orderBy('createdAt')
+        .onSnapshot(
+            (snap) => {
+                comments = snap.docs.map(d => {
+                    const v = d.data();
+                    return {
+                        id: d.id,
+                        taskId: v.taskId || '_general',
+                        author: v.author || 'client',
+                        text: v.text || '',
+                        createdAt: v.createdAt && v.createdAt.toMillis ? v.createdAt.toMillis() : 0
+                    };
+                });
+                if (current) render();
+            },
+            (err) => console.error('comments load failed', err)
+        );
 }
 
 window.addEventListener('hashchange', () => location.reload());
