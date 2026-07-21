@@ -40,8 +40,17 @@ const App = {
         }
         this.bindEvents();
         this.restoreTimer();
+        // Auto-toggle AI rail based on viewport width (Neo-Swiss app shell)
+        this._syncAiRail();
+        window.addEventListener('resize', () => this._syncAiRail());
         // Make sure pending encrypted writes flush before the page closes.
         window.addEventListener('beforeunload', () => Store.flush && Store.flush());
+    },
+
+    _syncAiRail() {
+        const wide = window.innerWidth >= 1400;
+        const userHidden = localStorage.getItem('ai-rail-hidden') === '1';
+        document.body.classList.toggle('with-ai-rail', wide && !userHidden);
     },
 
     _showPassphraseGate() {
@@ -300,8 +309,24 @@ const App = {
         this._on('nav-calendar', 'click', () => this.showCalendar());
         this._on('nav-inbox', 'click', () => this.showInbox());
         this._on('nav-reports', 'click', () => this.showReports());
+        this._on('nav-invoices', 'click', () => this.showInvoices());
+        this._on('btn-invoice-new', 'click', () => this.createInvoiceFlow());
+        this._on('ai-rail-close', 'click', () => {
+            document.body.classList.remove('with-ai-rail');
+            localStorage.setItem('ai-rail-hidden', '1');
+        });
         this._on('add-client-btn', 'click', () => this.showModal('client'));
         this._on('btn-add-matter', 'click', () => this.showModal('project'));
+
+        // Sprint 5: floating timer pill
+        this._on('timer-float-open', 'click', () => this.openTimerTask());
+        this._on('timer-float-stop', 'click', () => this.stopTimer());
+
+        // Sprint 5: Reports — week navigation + CSV export
+        this._on('btn-reports-prev',   'click', () => this.shiftReportsWeek(-7));
+        this._on('btn-reports-next',   'click', () => this.shiftReportsWeek(+7));
+        this._on('btn-reports-today',  'click', () => { this._reportsWeekStart = null; this.renderReports(); });
+        this._on('btn-reports-export', 'click', () => this.exportTimesheetCsv());
 
         // Matters filters (delegated — active/on_hold/completed/all)
         document.getElementById('matters-filters')?.addEventListener('click', (e) => {
@@ -527,28 +552,39 @@ const App = {
         const clients = Store.getClients();
         const list = document.getElementById('clients-list');
 
+        // Stable swatch palette for clients/projects (cycles Neo-Swiss accents)
+        const swatchVars = ['var(--accent)', 'var(--cobalt)', 'var(--saffron)', 'var(--text)', 'var(--plum)', 'var(--lime)'];
+        const swatch = (i) => swatchVars[i % swatchVars.length];
+        // Numbering continues after the 7 fixed nav items (01-07)
+        let _projN = 8;
         if (clients.length === 0) {
-            list.innerHTML = `<li class="nav-item" style="color:var(--text-3);font-size:12px;cursor:default;padding:8px 12px">${this.t('noClients')}</li>`;
+            list.innerHTML = `<div class="proj" style="color:var(--text-3);font-size:11px;cursor:default;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.04em">${this.t('noClients')}</div>`;
         } else {
             let html = '';
-            clients.forEach(c => {
+            clients.forEach((c, ci) => {
                 const projects = Store.getProjects(c.id);
                 const isActive = this.currentClientId === c.id && this.currentView === 'client';
-                const initials = this.getInitials(c.name);
-                html += `<li class="nav-item${isActive ? ' active' : ''}" data-action="select-client" data-id="${c.id}" tabindex="0" role="button" aria-label="${this.esc(c.name)}">
-                    <span style="display:flex;align-items:center"><span class="client-avatar">${initials}</span>${this.esc(c.name)}</span>
-                    <span class="badge">${projects.length}</span>
-                </li>`;
+                const num = String(_projN++).padStart(2, '0');
+                html += `<div class="proj${isActive ? ' active' : ''}" data-action="select-client" data-id="${c.id}" tabindex="0" role="button" aria-label="${this.esc(c.name)}">
+                    <span class="proj-num">${num}</span>
+                    <span class="swatch-dot" style="background:${swatch(ci)}"></span>
+                    <span class="proj-label">${this.esc(c.name)}</span>
+                    <span class="proj-count">${projects.length}</span>
+                </div>`;
                 if (this.currentClientId === c.id && projects.length > 0) {
-                    html += '<ul class="nav-list nav-sub">';
-                    projects.forEach(p => {
+                    projects.forEach((p, pi) => {
                         const isProjActive = this.currentProjectId === p.id;
-                        const label = p.company ? `<span style="color:var(--text-3);font-size:11px">${this.esc(p.company)} \u00B7 </span>${this.esc(p.name)}` : this.esc(p.name);
-                        html += `<li class="nav-item${isProjActive ? ' active' : ''}" data-action="select-project" data-id="${p.id}" tabindex="0" role="button" aria-label="${this.esc(p.name)}">
-                            <span>${label}</span>
-                        </li>`;
+                        const projNum = String(_projN++).padStart(2, '0');
+                        const label = p.company
+                            ? `<span style="color:inherit;opacity:0.6;font-size:10px;font-family:var(--font-mono)">${this.esc(p.company)} \u00B7 </span>${this.esc(p.name)}`
+                            : this.esc(p.name);
+                        html += `<div class="proj${isProjActive ? ' active' : ''}" data-action="select-project" data-id="${p.id}" tabindex="0" role="button" aria-label="${this.esc(p.name)}" style="padding-left:32px">
+                            <span class="proj-num">${projNum}</span>
+                            <span class="swatch-dot" style="background:${swatch(ci + pi + 1)}"></span>
+                            <span class="proj-label">${label}</span>
+                            <span class="proj-count"></span>
+                        </div>`;
                     });
-                    html += '</ul>';
                 }
             });
             list.innerHTML = html;
@@ -561,6 +597,7 @@ const App = {
         document.getElementById('nav-calendar')?.classList.toggle('active', this.currentView === 'calendar');
         document.getElementById('nav-inbox')?.classList.toggle('active', this.currentView === 'inbox');
         document.getElementById('nav-reports')?.classList.toggle('active', this.currentView === 'reports');
+        document.getElementById('nav-invoices')?.classList.toggle('active', this.currentView === 'invoices');
 
         // Tasks badge — reflects the default "All" filter of the Tasks view
         // (active tasks everywhere), so the sidebar count matches what the
@@ -741,6 +778,360 @@ const App = {
         else if (h < 23) key = 'greetingEvening';
         else key = 'greetingNight';
         return this.t(key);
+    },
+
+    // ===== Reports — weekly timesheet (Sprint 5) =====
+    showReports() {
+        this.currentClientId = null;
+        this.currentProjectId = null;
+        this.showView('reports');
+        this.renderReports();
+        this.renderSidebar();
+        this.closeSidebar();
+    },
+
+    // ===== Invoices (Sprint 6 — Neo-Swiss editorial document) =====
+    showInvoices() {
+        this.currentClientId = null;
+        this.currentProjectId = null;
+        this.showView('invoices');
+        this.renderInvoices();
+        this.renderSidebar();
+        this.closeSidebar();
+    },
+
+    renderInvoices() {
+        const body = document.getElementById('invoices-body');
+        if (!body) return;
+        const invoices = (Store.getInvoices ? Store.getInvoices() : []) || [];
+        // Update sidebar count
+        const cnt = document.getElementById('invoices-count');
+        if (cnt) cnt.textContent = invoices.length || '';
+
+        if (invoices.length === 0) {
+            body.innerHTML = `
+                <div style="padding:48px 24px;text-align:center;border:1px solid var(--text);background:var(--bg)">
+                    <div style="font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:0.18em;color:var(--accent);margin-bottom:12px">NO INVOICES YET</div>
+                    <div style="font-family:var(--font);font-weight:800;font-size:32px;letter-spacing:-0.03em;text-transform:lowercase;line-height:1;margin-bottom:16px">no invoices, <span style="color:var(--accent)">paid.</span></div>
+                    <p style="color:var(--text-2);font-size:13px;max-width:48ch;margin:0 auto 20px">Generate invoices from billable hours logged on matters. Pick a matter and a date range.</p>
+                    <button class="btn" id="btn-invoice-empty-new" type="button">+ Generate first invoice</button>
+                </div>`;
+            this._on('btn-invoice-empty-new', 'click', () => this.createInvoiceFlow());
+            return;
+        }
+
+        // List of invoices — Swiss table-as-cards
+        body.innerHTML = invoices.map(inv => this.renderInvoiceCard(inv)).join('');
+        body.querySelectorAll('[data-action="view-invoice"]').forEach(el => {
+            el.addEventListener('click', () => this.showInvoiceDetail(el.dataset.id));
+        });
+    },
+
+    renderInvoiceCard(inv) {
+        const matter = inv.matterId ? Store.getProject(inv.matterId) : null;
+        const client = matter ? Store.getClient(matter.clientId) : null;
+        const total = (inv.amount || 0).toFixed(2);
+        const currency = inv.currency || '€';
+        const status = inv.status || 'draft';
+        const statusColor = status === 'paid' ? 'var(--green)' : status === 'sent' ? 'var(--cobalt)' : 'var(--accent)';
+        return `<div class="invoice" data-action="view-invoice" data-id="${inv.id}" style="margin-bottom:16px;cursor:pointer">
+            <div class="invoice-head" style="padding:24px 32px">
+                <div class="num">${this.esc(inv.number || 'inv')}</div>
+                <div class="meta-grid">
+                    <div><span class="k">CLIENT</span><span class="v">${this.esc(client?.name || '—')}</span></div>
+                    <div><span class="k">MATTER</span><span class="v">${this.esc(matter?.name || '—')}</span></div>
+                    <div><span class="k">ISSUED</span><span class="v">${this.esc((inv.issuedAt || '').slice(0, 10))}</span></div>
+                    <div><span class="k">STATUS</span><span class="v" style="color:${statusColor}">● ${status.toUpperCase()}</span></div>
+                </div>
+            </div>
+            <div style="padding:16px 32px;display:flex;justify-content:space-between;align-items:center;background:var(--bg-2)">
+                <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-2);text-transform:uppercase;letter-spacing:0.04em">${(inv.logIds || []).length} entries</span>
+                <span style="font-family:var(--font);font-size:28px;font-weight:800;letter-spacing:-0.03em">${currency}${total}</span>
+            </div>
+        </div>`;
+    },
+
+    showInvoiceDetail(invId) {
+        const inv = Store.getInvoice ? Store.getInvoice(invId) : null;
+        if (!inv) return;
+        const matter = inv.matterId ? Store.getProject(inv.matterId) : null;
+        const client = matter ? Store.getClient(matter.clientId) : null;
+        const logs = (inv.logIds || []).map(lid => Store.getTimeLog ? Store.getTimeLog(lid) : null).filter(Boolean);
+        const totalHours = logs.reduce((s, l) => s + (l.hours || 0), 0);
+        const rate = inv.rate || 0;
+        const subtotal = totalHours * rate;
+        const vatPct = inv.vatPct || 0;
+        const vat = subtotal * (vatPct / 100);
+        const total = subtotal + vat;
+        const currency = inv.currency || '€';
+
+        const rowsHtml = logs.map(l => {
+            const t = Store.getTask(l.taskId);
+            return `<tr>
+                <td><div class="desc">${this.esc(t?.title || '—')}</div><div class="meta">${this.esc((l.date || '').slice(0, 10))}</div></td>
+                <td class="num">${(l.hours || 0).toFixed(2)}</td>
+                <td class="num">${currency}${rate}</td>
+                <td class="num">${currency}${((l.hours || 0) * rate).toFixed(2)}</td>
+            </tr>`;
+        }).join('');
+
+        const body = document.getElementById('invoices-body');
+        body.innerHTML = `
+            <div style="margin-bottom:16px">
+                <button class="btn btn-sm" id="btn-invoice-back" type="button">‹ Back to invoices</button>
+            </div>
+            <div class="invoice" style="max-width:880px;margin:0 auto">
+                <div class="invoice-head">
+                    <div class="num">${this.esc((inv.number || 'inv').replace(/(\\d+)$/, '<span class="accent">$1</span>'))}</div>
+                    <div class="meta-grid">
+                        <div><span class="k">ISSUED</span><span class="v">${this.esc((inv.issuedAt || '').slice(0, 10))}</span></div>
+                        <div><span class="k">DUE</span><span class="v">${this.esc((inv.dueAt || '').slice(0, 10) || '—')}</span></div>
+                        <div><span class="k">CURRENCY</span><span class="v">${this.esc(inv.currency || 'EUR')}</span></div>
+                        <div><span class="k">STATUS</span><span class="v" style="color:var(--accent)">● ${(inv.status || 'draft').toUpperCase()}</span></div>
+                    </div>
+                </div>
+                <div class="invoice-parties">
+                    <div>
+                        <div class="role">FROM</div>
+                        <div class="name">${this.esc(inv.fromName || 'Your firm')}</div>
+                        <div class="addr">${this.esc(inv.fromAddr || '')}</div>
+                    </div>
+                    <div>
+                        <div class="role">BILL TO</div>
+                        <div class="name">${this.esc(client?.name || matter?.name || '—')}</div>
+                        <div class="addr">${this.esc(matter?.name || '')}</div>
+                    </div>
+                </div>
+                <table class="invoice-table">
+                    <thead><tr><th>DESCRIPTION</th><th class="num">HOURS</th><th class="num">RATE</th><th class="num">AMOUNT</th></tr></thead>
+                    <tbody>${rowsHtml || '<tr><td colspan="4" style="text-align:center;color:var(--text-2)">No entries</td></tr>'}</tbody>
+                </table>
+                <div class="invoice-total">
+                    <div class="totals-list">
+                        <div class="row"><span>Subtotal</span><span>${currency}${subtotal.toFixed(2)}</span></div>
+                        <div class="row"><span>VAT · ${vatPct}%</span><span>${currency}${vat.toFixed(2)}</span></div>
+                        <div class="row grand"><span>TOTAL DUE</span><span>${currency}${total.toFixed(2)}</span></div>
+                    </div>
+                    <div class="grand-amount">
+                        <span class="k">AMOUNT DUE</span>
+                        <span class="v">${currency}${Math.floor(total)}<span style="font-size:0.5em;vertical-align:top">.${total.toFixed(2).split('.')[1]}</span></span>
+                        <span class="due">PAYABLE BY ${this.esc((inv.dueAt || '').slice(0, 10) || '—')}</span>
+                    </div>
+                </div>
+                <div class="invoice-actions">
+                    <span class="ai-mark">AI ▸ generated from ${logs.length} time entries</span>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-sm" id="btn-inv-delete" type="button" style="background:transparent;color:var(--bg);border-color:var(--bg)">Delete</button>
+                        <button class="btn btn-sm" type="button" style="background:transparent;color:var(--bg);border-color:var(--bg)">PDF</button>
+                        <button class="btn btn-sm btn-accent" id="btn-inv-mark-sent" type="button" style="background:var(--accent);color:#fff;border-color:var(--accent)">▸ Mark sent</button>
+                    </div>
+                </div>
+            </div>`;
+
+        this._on('btn-invoice-back', 'click', () => this.renderInvoices());
+        this._on('btn-inv-delete', 'click', () => {
+            if (Store.deleteInvoice && confirm('Delete invoice ' + (inv.number || '') + '? Time logs will be unlocked.')) {
+                Store.deleteInvoice(inv.id);
+                this.renderInvoices();
+                this.toast('Invoice deleted', 'success');
+            }
+        });
+        this._on('btn-inv-mark-sent', 'click', () => {
+            if (Store.updateInvoice) {
+                Store.updateInvoice(inv.id, { status: 'sent' });
+                this.toast('Marked as sent', 'success');
+                this.showInvoiceDetail(inv.id);
+            }
+        });
+    },
+
+    createInvoiceFlow() {
+        // Minimal flow: pick a matter, generate invoice from all unbilled
+        // billable time logs for that matter.
+        const matters = Store.getProjects().filter(p => p.status !== 'completed');
+        if (!matters.length) {
+            this.toast('No active matters yet', 'warning');
+            return;
+        }
+        // Quick prompt-based picker
+        const list = matters.map((m, i) => {
+            const c = Store.getClient(m.clientId);
+            return `${i + 1}. ${c?.name || '?'} — ${m.name}`;
+        }).join('\n');
+        const choice = prompt('Pick a matter for new invoice:\n\n' + list + '\n\nEnter number:');
+        const idx = parseInt(choice, 10) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= matters.length) return;
+        const matter = matters[idx];
+        const unbilled = Store.getUnbilledForMatter ? Store.getUnbilledForMatter(matter.id) : [];
+        if (!unbilled.length) {
+            this.toast('No unbilled billable time on this matter', 'warning');
+            return;
+        }
+        const rateStr = prompt('Hourly rate (number, e.g. 85):', String(matter.rate || 85));
+        const rate = parseFloat(rateStr);
+        if (isNaN(rate) || rate <= 0) return;
+        const hours = unbilled.reduce((s, l) => s + (l.hours || 0), 0);
+        const amount = hours * rate;
+        const inv = Store.addInvoice({
+            matterId: matter.id,
+            logIds: unbilled.map(l => l.id),
+            rate,
+            currency: '€',
+            vatPct: 20,
+            amount,
+            status: 'draft',
+            issuedAt: new Date().toISOString(),
+            fromName: 'Sergiy Stakhovskyi',
+            fromAddr: 'sergiy@sblc.com.ua',
+        });
+        this.toast(`Invoice ${inv.number} drafted (${hours.toFixed(2)}h · €${amount.toFixed(2)})`, 'success');
+        this.renderInvoices();
+        this.showInvoiceDetail(inv.id);
+    },
+
+    /**
+     * Compute the Monday of a given date's ISO week. Mutates nothing.
+     * Used for week-start anchor in the Reports view.
+     */
+    _mondayOf(d) {
+        const x = new Date(d);
+        x.setHours(0, 0, 0, 0);
+        const dow = x.getDay();
+        // Sunday=0 → shift back 6; Mon=1 → shift 0; Tue=2 → shift 1, …
+        const shift = dow === 0 ? 6 : dow - 1;
+        x.setDate(x.getDate() - shift);
+        return x;
+    },
+
+    shiftReportsWeek(days) {
+        const cur = this._reportsWeekStart
+            ? Dates.parseLocal(this._reportsWeekStart) || this._mondayOf(new Date())
+            : this._mondayOf(new Date());
+        cur.setDate(cur.getDate() + days);
+        this._reportsWeekStart = Dates.toLocalKey(cur);
+        this.renderReports();
+    },
+
+    renderReports() {
+        const weekStart = this._reportsWeekStart
+            ? Dates.parseLocal(this._reportsWeekStart) || this._mondayOf(new Date())
+            : this._mondayOf(new Date());
+        const weekKey = Dates.toLocalKey(weekStart);
+        this._reportsWeekStart = weekKey;
+
+        const ts = Store.getTimesheet(weekKey);
+
+        // Range label: "14 Apr – 20 Apr 2026"
+        const rangeEl = document.getElementById('reports-range');
+        const end = new Date(weekStart);
+        end.setDate(end.getDate() + 6);
+        const locale = I18n.lang === 'uk' ? 'uk-UA' : 'en-GB';
+        const rangeLabel = `${weekStart.toLocaleDateString(locale, { day: 'numeric', month: 'short' })} \u2013 ${end.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        if (rangeEl) rangeEl.textContent = rangeLabel;
+
+        // Summary strip: week total + billable + non-billable + matter count
+        const sumEl = document.getElementById('reports-summary');
+        const nonBillable = Math.round((ts.weekTotal - ts.weekBillable) * 100) / 100;
+        if (sumEl) {
+            sumEl.innerHTML = `
+                <div class="reports-stat"><div class="reports-stat-v">${ts.weekTotal}h</div><div class="reports-stat-l">${this.t('weekTotal')}</div></div>
+                <div class="reports-stat"><div class="reports-stat-v">${ts.weekBillable}h</div><div class="reports-stat-l">${this.t('weekBillable')}</div></div>
+                <div class="reports-stat"><div class="reports-stat-v reports-stat-muted">${nonBillable}h</div><div class="reports-stat-l">${this.t('weekNonBillable')}</div></div>
+                <div class="reports-stat"><div class="reports-stat-v">${ts.matters.length}</div><div class="reports-stat-l">${this.t('weekMatters')}</div></div>
+            `;
+        }
+
+        const empty = document.getElementById('reports-empty');
+        const table = document.getElementById('reports-table');
+        if (!table) return;
+
+        if (ts.matters.length === 0) {
+            table.innerHTML = '';
+            if (empty) empty.hidden = false;
+            return;
+        }
+        if (empty) empty.hidden = true;
+
+        // Header row: Matter | Mon | Tue | … | Sun | Total
+        const dayLabels = I18n.t('dayLabels');  // ['Mon','Tue',...]
+        const headerCells = [`<th class="reports-th-matter">${this.t('matter')}</th>`];
+        ts.days.forEach((iso, i) => {
+            const d = Dates.parseLocal(iso);
+            const isToday = Dates.toLocalKey(Dates.todayLocal()) === iso;
+            const dayNum = d ? d.getDate() : '';
+            headerCells.push(`<th class="reports-th-day${isToday ? ' is-today' : ''}">
+                <span class="reports-th-day-l">${dayLabels[i] || ''}</span>
+                <span class="reports-th-day-n">${dayNum}</span>
+            </th>`);
+        });
+        headerCells.push(`<th class="reports-th-total">${this.t('total')}</th>`);
+
+        const rows = ts.matters.map(m => {
+            const nameCell = `<td class="reports-td-matter">
+                ${m.matterId
+                    ? `<a href="#" data-action="select-project" data-id="${m.matterId}">${this.esc(m.name)}</a>`
+                    : `<span>${this.esc(m.name)}</span>`}
+                ${m.clientName ? `<span class="reports-td-client">${this.esc(m.clientName)}</span>` : ''}
+            </td>`;
+            const dayCells = m.hoursByDay.map((h, i) => {
+                const billable = m.billableByDay[i];
+                const cls = h > 0 ? 'reports-td-day has-hours' : 'reports-td-day';
+                const nbTag = (billable < h) ? `<span class="reports-nb-dot" title="${this.t('weekNonBillable')}: ${Math.round((h - billable) * 100) / 100}h"></span>` : '';
+                return `<td class="${cls}">${h > 0 ? h : ''}${nbTag}</td>`;
+            }).join('');
+            const totalCell = `<td class="reports-td-total">${m.total}h</td>`;
+            return `<tr>${nameCell}${dayCells}${totalCell}</tr>`;
+        }).join('');
+
+        const totalsRow = `<tr class="reports-totals-row">
+            <td>${this.t('total')}</td>
+            ${ts.dayTotals.map(h => `<td>${h > 0 ? h + 'h' : ''}</td>`).join('')}
+            <td class="reports-td-total">${ts.weekTotal}h</td>
+        </tr>`;
+        const billableRow = `<tr class="reports-billable-row">
+            <td>${this.t('weekBillable')}</td>
+            ${ts.dayBillable.map(h => `<td>${h > 0 ? h + 'h' : ''}</td>`).join('')}
+            <td class="reports-td-total">${ts.weekBillable}h</td>
+        </tr>`;
+
+        table.innerHTML = `
+            <thead><tr>${headerCells.join('')}</tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot>${totalsRow}${billableRow}</tfoot>
+        `;
+    },
+
+    /**
+     * Export the current week's timesheet as CSV — one row per matter.
+     * Columns: Matter, Client, Mon (YYYY-MM-DD), …, Sun (YYYY-MM-DD), Total, Billable.
+     * Triggers a client-side download via Blob + object URL.
+     */
+    exportTimesheetCsv() {
+        const weekKey = this._reportsWeekStart || Dates.toLocalKey(this._mondayOf(new Date()));
+        const ts = Store.getTimesheet(weekKey);
+        if (ts.matters.length === 0) {
+            this.toast(this.t('noHoursThisWeek'), 'info');
+            return;
+        }
+        const escape = s => {
+            const str = String(s ?? '');
+            return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+        };
+        const header = ['Matter', 'Client', ...ts.days, 'Total', 'Billable'].map(escape).join(',');
+        const lines = ts.matters.map(m => [
+            m.name, m.clientName, ...m.hoursByDay, m.total, m.billable,
+        ].map(escape).join(','));
+        const totals = ['TOTAL', '', ...ts.dayTotals, ts.weekTotal, ts.weekBillable].map(escape).join(',');
+        const csv = [header, ...lines, totals].join('\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `timesheet-${weekKey}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     },
 
     // ===== Matters (all projects across all clients) =====
@@ -1737,24 +2128,35 @@ const App = {
             ? `<span class="task-timer active js-timer-display">${this.formatTimerElapsed()}</span>`
             : (task.hoursLogged ? `<span class="task-timer">${task.hoursLogged}h</span>` : '');
 
-        return `<div class="task-item${task.status === 'done' ? ' done' : ''}" data-id="${task.id}">
+        // Editorial idx — derive 4-char suffix from task.id so it's stable
+        const idStr = String(task.id || '');
+        const idxNum = idStr.length >= 4 ? idStr.slice(-4) : idStr.padStart(4, '0');
+        const idxLabel = `T-${idxNum}`;
+
+        // Priority pill (Swiss)
+        const prioMap = { urgent: 'urgent', high: 'high', medium: 'med', low: 'low' };
+        const prioCls = prioMap[task.priority] || 'med';
+        const prioCode = task.priority === 'urgent' ? 'P0' : task.priority === 'high' ? 'P1' : task.priority === 'medium' ? 'P2' : 'P3';
+        const prioPill = task.priority && task.priority !== 'medium'
+            ? `<span class="ns-priority ${prioCls}">${prioCode}</span>` : '';
+
+        return `<div class="task-row task-item${task.status === 'done' ? ' done' : ''}" data-id="${task.id}">
+            <span class="task-row-idx">${idxLabel}</span>
             <div class="task-checkbox ${checkClass}" data-action="cycle-status" data-id="${task.id}" role="checkbox" aria-checked="${task.status === 'done'}" title="${checkTitle}"></div>
-            <div class="priority-dot priority-${task.priority || 'medium'}"></div>
-            <div class="task-body">
+            <div class="task-row-body">
                 <div class="task-title" data-action="edit-task" data-id="${task.id}">${this.esc(task.title)}</div>
-                <div class="task-meta">${meta.join(' \u00B7 ')}${tags ? ` <div class="task-tags">${tags}</div>` : ''}</div>
+                ${meta.length || tags ? `<div class="task-meta">${meta.join(' \u00B7 ')}${tags ? ` ${tags}` : ''}</div>` : ''}
             </div>
-            ${timerHtml}
-            <div class="task-actions">
-                ${task.status !== 'done' ? `<button class="icon-btn done-btn" data-action="mark-done" data-id="${task.id}" title="${this.t('markDone')}">${Icons.check(14)}</button>` : `<button class="icon-btn" data-action="mark-todo" data-id="${task.id}" title="${this.t('markTodo')}">${Icons.arrowUp ? Icons.arrowUp(14) : '\u21BA'}</button>`}
-                ${showAssign && !task.projectId ? `<button class="icon-btn" data-action="assign-project" data-id="${task.id}" title="${this.t('assignToProject')}">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-                </button>` : ''}
-                <button class="icon-btn" data-action="toggle-timer" data-id="${task.id}" title="Timer">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${this.activeTimer?.taskId === task.id ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>' : '<polygon points="5 3 19 12 5 21 5 3"/>'}</svg>
-                </button>
-                <button class="icon-btn" data-action="edit-task" data-id="${task.id}" title="Edit">${Icons.edit(14)}</button>
-                <button class="icon-btn" data-action="delete-task" data-id="${task.id}" title="Delete">${Icons.trash(14)}</button>
+            <div class="task-row-right">
+                ${prioPill}
+                ${timerHtml}
+                <div class="task-row-actions">
+                    ${task.status !== 'done' ? `<button class="icon-btn done-btn" data-action="mark-done" data-id="${task.id}" title="${this.t('markDone')}">${Icons.check(12)}</button>` : `<button class="icon-btn" data-action="mark-todo" data-id="${task.id}" title="${this.t('markTodo')}">${Icons.arrowUp ? Icons.arrowUp(12) : '\u21BA'}</button>`}
+                    ${showAssign && !task.projectId ? `<button class="icon-btn" data-action="assign-project" data-id="${task.id}" title="${this.t('assignToProject')}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></button>` : ''}
+                    <button class="icon-btn" data-action="toggle-timer" data-id="${task.id}" title="Timer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${this.activeTimer?.taskId === task.id ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>' : '<polygon points="5 3 19 12 5 21 5 3"/>'}</svg></button>
+                    <button class="icon-btn" data-action="edit-task" data-id="${task.id}" title="Edit">${Icons.edit(12)}</button>
+                    <button class="icon-btn" data-action="delete-task" data-id="${task.id}" title="Delete">${Icons.trash(12)}</button>
+                </div>
             </div>
         </div>`;
     },
@@ -1822,6 +2224,7 @@ const App = {
         localStorage.setItem('taskflow_timer', JSON.stringify({ taskId, startTime }));
         this.activeTimer.interval = setInterval(() => this.updateTimerDisplay(), 1000);
         this.toast(this.t('timerStarted'), 'info');
+        this.showTimerFloat();
         this.refresh();
     },
 
@@ -1832,6 +2235,7 @@ const App = {
         if (elapsed > 0.01) Store.addTimeLog({ taskId: this.activeTimer.taskId, hours: Math.round(elapsed * 100) / 100, description: this.t('timer') });
         localStorage.removeItem('taskflow_timer');
         this.activeTimer = null;
+        this.hideTimerFloat();
         this.toast(this.t('timerStopped'), 'success');
         this.refresh();
     },
@@ -1844,8 +2248,45 @@ const App = {
                 if (Store.getTask(taskId)) {
                     this.activeTimer = { taskId, startTime };
                     this.activeTimer.interval = setInterval(() => this.updateTimerDisplay(), 1000);
+                    this.showTimerFloat();
                 }
             } catch(e) { localStorage.removeItem('taskflow_timer'); }
+        }
+    },
+
+    /**
+     * Show the floating timer pill — a persistent indicator in the
+     * bottom-right that a timer is running. Clicking the title area
+     * navigates to the running task's matter (or global task view for
+     * orphan tasks). Clicking stop ends the timer.
+     */
+    showTimerFloat() {
+        const el = document.getElementById('timer-float');
+        if (!el || !this.activeTimer) return;
+        const task = Store.getTask(this.activeTimer.taskId);
+        const titleEl = document.getElementById('timer-float-title');
+        if (titleEl) titleEl.textContent = task ? task.title : this.t('timer');
+        el.hidden = false;
+        // Prime the elapsed display immediately — don't wait a full second.
+        this.updateTimerDisplay();
+    },
+
+    hideTimerFloat() {
+        const el = document.getElementById('timer-float');
+        if (el) el.hidden = true;
+    },
+
+    /** Navigate to the running timer's matter (or edit task if orphan). */
+    openTimerTask() {
+        if (!this.activeTimer) return;
+        const task = Store.getTask(this.activeTimer.taskId);
+        if (!task) return;
+        if (task.projectId) {
+            this.selectProject(task.projectId);
+        } else if (task.clientId) {
+            this.selectClient(task.clientId);
+        } else {
+            this.showInbox();
         }
     },
 
@@ -2235,7 +2676,12 @@ const App = {
                 ${this._recurrenceFieldHtml(t.recurrence)}
                 ${allTags.length ? `<div class="form-group"><label>${this.t('tags')}</label><div style="display:flex;gap:8px;flex-wrap:wrap">${tagsHtml}</div></div>` : ''}
                 <div class="form-group"><label>${this.t('notes')}</label><textarea name="notes">${this.esc(t.notes || '')}</textarea></div>
-                ${isEdit ? `<div class="form-group"><label>${this.t('addHoursManual')}</label><input name="addHours" type="number" step="0.25" placeholder="0.5" min="0"></div>` : ''}
+                ${isEdit ? `<div class="form-row">
+                    <div class="form-group"><label>${this.t('addHoursManual')}</label><input name="addHours" type="number" step="0.25" placeholder="0.5" min="0"></div>
+                    <div class="form-group"><label>&nbsp;</label>
+                        <label class="form-check" style="margin-top:6px"><input type="checkbox" name="addHoursNonBillable"> ${this.t('nonBillable')}</label>
+                    </div>
+                </div>` : ''}
                 <div class="form-actions">
                     <button type="button" class="btn btn-glass" data-form-cancel>${this.t('cancel')}</button>
                     <button type="submit" class="btn">${isEdit ? this.t('save') : this.t('create')}</button>
@@ -2437,11 +2883,19 @@ const App = {
 
         if (this.editingId) {
             const addHours = parseFloat(data.addHours); delete data.addHours;
-            if (addHours > 0) Store.addTimeLog({ taskId: this.editingId, hours: addHours, description: this.t('manualEntry') });
+            const nonBillable = !!fd.get('addHoursNonBillable');
+            delete data.addHoursNonBillable;
+            if (addHours > 0) Store.addTimeLog({
+                taskId: this.editingId,
+                hours: addHours,
+                description: this.t('manualEntry'),
+                billable: !nonBillable,
+            });
             Store.updateTask(this.editingId, data);
             this.toast(this.t('saved'), 'success');
         } else {
             delete data.addHours;
+            delete data.addHoursNonBillable;
             Store.addTask(data);
             this.toast(`${this.t('taskCreated')}: ${data.title}`, 'success');
         }
@@ -2818,8 +3272,13 @@ const App = {
             (data.items || []).forEach((item, i) => {
                 const label = labels[item.action] || item.action;
                 const included = item._include !== false;
-                fieldsHtml += `<div class="ai-chain-item${included ? '' : ' excluded'}" data-ai-row="${i}">
-                    <div class="ai-chain-head">
+                fieldsHtml += `<div class="ai-chain-item${included ? '' : ' excluded'}" data-ai-row="${i}">`;
+                if (item._editing) {
+                    fieldsHtml += this._renderAiEditForm(item, i);
+                    fieldsHtml += `</div>`;
+                    return;
+                }
+                fieldsHtml += `<div class="ai-chain-head">
                         <label class="ai-chain-include" title="${this.t('importInclude')}">
                             <input type="checkbox" class="ai-include-cb" data-ai-include="${i}" ${included ? 'checked' : ''}>
                         </label>
@@ -2833,6 +3292,7 @@ const App = {
                     if (item.deadline) fieldsHtml += ` <span style="color:var(--text-3)">${this.t('deadline')}: ${item.deadline}</span>`;
                     if (item.priority && item.priority !== 'medium') fieldsHtml += ` <span style="color:var(--text-3)">${item.priority}</span>`;
                 }
+                fieldsHtml += ` <button class="ai-edit-btn" data-ai-edit="${i}" title="${this.t('aiEditItem')}" aria-label="${this.t('aiEditItem')}">${Icons.edit(13)}</button>`;
                 fieldsHtml += `</div>`;
                 // Dependencies badge row
                 if (Array.isArray(item.dependsOn) && item.dependsOn.length) {
@@ -2904,6 +3364,51 @@ const App = {
             });
         });
 
+        // Edit chain item — toggle inline edit form, then re-render
+        container.querySelectorAll('.ai-edit-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const idx = parseInt(btn.dataset.aiEdit, 10) || 0;
+                const target = (data.items || [])[idx];
+                if (!target) return;
+                target._editing = true;
+                this.showAiPreview(data);
+            });
+        });
+
+        // Cancel inline edit
+        container.querySelectorAll('.ai-edit-cancel').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const idx = parseInt(btn.dataset.aiEditCancel, 10) || 0;
+                const target = (data.items || [])[idx];
+                if (!target) return;
+                delete target._editing;
+                this.showAiPreview(data);
+            });
+        });
+
+        // Save inline edit
+        container.querySelectorAll('.ai-edit-save').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const idx = parseInt(btn.dataset.aiEditSave, 10) || 0;
+                this._commitAiEdit(data, idx);
+            });
+        });
+
+        // Submit on Enter inside the edit form
+        container.querySelectorAll('.ai-edit-form input').forEach(inp => {
+            inp.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const form = inp.closest('.ai-edit-form');
+                    const idx = parseInt(form?.dataset.aiEditForm, 10) || 0;
+                    this._commitAiEdit(data, idx);
+                }
+            });
+        });
+
         const actionsEl = document.getElementById('ai-preview-actions');
         actionsEl.innerHTML = `
             <button class="btn btn-glass" id="ai-btn-cancel">${this.t('cancel')}</button>
@@ -2921,6 +3426,104 @@ const App = {
         if (e && e.target !== e.currentTarget) return;
         document.getElementById('ai-overlay').classList.remove('open');
         this.closeModalA11y('ai-overlay');
+    },
+
+    // Inline edit form for a chain item — lets user fix the action type
+    // (e.g. "this is actually a client, not a project") and rename it.
+    _renderAiEditForm(item, i) {
+        const action = item.action || 'create_task';
+        const name = item.name || item.title || '';
+        const opt = (val, label) =>
+            `<option value="${val}"${val === action ? ' selected' : ''}>${this.esc(label)}</option>`;
+        const labels = {
+            create_client:  this.t('newClient'),
+            create_project: this.t('newProject'),
+            create_task:    this.t('newTask'),
+            log_hours:      this.t('logHours'),
+        };
+        const isHours = action === 'log_hours';
+        const isProject = action === 'create_project';
+        const isTask = action === 'create_task';
+        const parentField = isProject
+            ? `<div class="ai-edit-row"><label>${this.t('clientLabel')}</label>
+                 <input type="text" class="ai-edit-parent" value="${this.esc(item.clientName || '')}" placeholder="${this.esc(this.t('clientName'))}"></div>`
+            : isTask
+            ? `<div class="ai-edit-row"><label>${this.t('projectLabelShort')}</label>
+                 <input type="text" class="ai-edit-parent" value="${this.esc(item.projectName || '')}" placeholder="${this.esc(this.t('projectLabelShort'))}"></div>`
+            : (isHours
+                ? `<div class="ai-edit-row"><label>${this.t('taskTitle')}</label>
+                     <input type="text" class="ai-edit-parent" value="${this.esc(item.taskName || '')}" placeholder="${this.esc(this.t('taskTitle'))}"></div>`
+                : '');
+        const nameRow = isHours
+            ? `<div class="ai-edit-row"><label>${this.t('hours')}</label>
+                 <input type="number" step="0.25" min="0" class="ai-edit-name" value="${this.esc(item.hours || '')}"></div>`
+            : `<div class="ai-edit-row"><label>${this.t('name') || 'Name'}</label>
+                 <input type="text" class="ai-edit-name" value="${this.esc(name)}" placeholder="${this.esc(this.t('name') || 'Name')}"></div>`;
+        return `<div class="ai-edit-form" data-ai-edit-form="${i}">
+            <div class="ai-edit-row">
+                <label>${this.t('aiEditAction') || 'Type'}</label>
+                <select class="ai-edit-action">
+                    ${opt('create_client',  labels.create_client)}
+                    ${opt('create_project', labels.create_project)}
+                    ${opt('create_task',    labels.create_task)}
+                    ${opt('log_hours',      labels.log_hours)}
+                </select>
+            </div>
+            ${nameRow}
+            ${parentField}
+            <div class="ai-edit-actions">
+                <button class="btn btn-glass btn-sm ai-edit-cancel" data-ai-edit-cancel="${i}">${this.t('cancel')}</button>
+                <button class="btn btn-sm ai-edit-save" data-ai-edit-save="${i}">${this.t('save') || this.t('accept')}</button>
+            </div>
+        </div>`;
+    },
+
+    // Apply edit form values back to data.items[idx], then re-render
+    _commitAiEdit(data, idx) {
+        const target = (data.items || [])[idx];
+        if (!target) return;
+        const form = document.querySelector(`.ai-edit-form[data-ai-edit-form="${idx}"]`);
+        if (!form) return;
+        const newAction = form.querySelector('.ai-edit-action')?.value || target.action;
+        const nameInp = form.querySelector('.ai-edit-name');
+        const parentInp = form.querySelector('.ai-edit-parent');
+        const nameVal = (nameInp?.value || '').trim();
+        const parentVal = (parentInp?.value || '').trim();
+
+        // If action type changed, reset stale picker matches/choices for the
+        // old action — they don't apply to the new shape.
+        if (newAction !== target.action) {
+            delete target._clientMatches; delete target._clientChoice;
+            delete target._projectMatches; delete target._projectChoice;
+            delete target._taskMatches; delete target._taskChoice;
+            target.action = newAction;
+        }
+
+        if (newAction === 'log_hours') {
+            const h = parseFloat(nameVal);
+            if (!isNaN(h) && h > 0) target.hours = h;
+            if (parentVal) target.taskName = parentVal;
+            // Hours items don't use name/title
+            delete target.name; delete target.title;
+        } else if (newAction === 'create_client') {
+            target.name = nameVal || target.name || '';
+            // Clients have no parent reference
+            delete target.clientName; delete target.projectName; delete target.taskName;
+            delete target.title;
+        } else if (newAction === 'create_project') {
+            target.name = nameVal || target.name || target.title || '';
+            if (parentVal) target.clientName = parentVal;
+            delete target.projectName; delete target.taskName;
+            delete target.title;
+        } else if (newAction === 'create_task') {
+            target.title = nameVal || target.title || target.name || '';
+            if (parentVal) target.projectName = parentVal;
+            delete target.clientName; delete target.taskName;
+            delete target.name;
+        }
+        delete target._editing;
+        // Re-run fuzzy matching on the (possibly renamed) refs
+        this.showAiPreview(data);
     },
 
     _pendingAiData: null,
@@ -3489,6 +4092,8 @@ const App = {
         else if (this.currentView === 'dashboard') this.renderDashboard();
         else if (this.currentView === 'matters') this.renderMatters();
         else if (this.currentView === 'calendar') this.renderCalendarFull();
+        else if (this.currentView === 'reports') this.renderReports();
+        else if (this.currentView === 'invoices') this.renderInvoices();
         else if (this.currentView === 'inbox') this.renderInbox();
         else if (this.currentView === 'client') this.renderClient();
         else if (this.currentView === 'project') this.renderProject();

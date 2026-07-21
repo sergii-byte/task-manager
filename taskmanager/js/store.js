@@ -7,7 +7,7 @@
 //   On project company rename, tasks of that project get their company updated.
 const Store = {
     SCHEMA_VERSION: 3,
-    _data: { clients: [], projects: [], tasks: [], tags: [], timeLogs: [], schemaVersion: 3 },
+    _data: { clients: [], projects: [], tasks: [], tags: [], timeLogs: [], invoices: [], schemaVersion: 3 },
     _key: 'taskflow_data',                  // legacy plaintext blob
     _vaultKey: 'ordify:vault',              // encrypted blob (base64)
     _vaultCheckKey: 'ordify:vault-check',   // encrypted canary for passphrase verification
@@ -62,7 +62,7 @@ const Store = {
     },
 
     _normalizeShape() {
-        const keys = ['clients', 'projects', 'tasks', 'tags', 'timeLogs'];
+        const keys = ['clients', 'projects', 'tasks', 'tags', 'timeLogs', 'invoices'];
         keys.forEach(k => { if (!Array.isArray(this._data[k])) this._data[k] = []; });
         this._data.schemaVersion = this.SCHEMA_VERSION;
     },
@@ -684,7 +684,13 @@ const Store = {
     },
     addTimeLog(data) {
         const now = this._now();
-        const l = { id: this.id(), date: now, created: now, updated: now, ...data };
+        // Billable defaults to true — lawyers bill by default. Non-billable
+        // (pro bono, internal admin) is the exception. Honour an explicit
+        // false from caller, only default when the caller didn't specify.
+        const billable = data.billable === undefined ? true : !!data.billable;
+        const l = { id: this.id(), date: now, created: now, updated: now, billable, ...data };
+        // Ensure the post-spread value respects the explicit default we set.
+        if (data.billable === undefined) l.billable = true;
         this._data.timeLogs.push(l);
         const task = this.getTask(data.taskId);
         if (task) {
@@ -696,6 +702,19 @@ const Store = {
         this.save();
         return l;
     },
+    updateTimeLog(id, data) {
+        const i = this._data.timeLogs.findIndex(t => t.id === id);
+        if (i === -1) return null;
+        this._data.timeLogs[i] = { ...this._data.timeLogs[i], ...data, updated: this._now() };
+        // Re-roll-up hoursLogged if hours changed
+        const log = this._data.timeLogs[i];
+        const total = this._data.timeLogs
+            .filter(t => t.taskId === log.taskId)
+            .reduce((sum, t) => sum + (parseFloat(t.hours) || 0), 0);
+        this.updateTask(log.taskId, { hoursLogged: Math.round(total * 100) / 100 });
+        this.save();
+        return log;
+    },
     deleteTimeLog(id) {
         const log = this._data.timeLogs.find(t => t.id === id);
         this._data.timeLogs = this._data.timeLogs.filter(t => t.id !== id);
@@ -706,6 +725,167 @@ const Store = {
             this.updateTask(log.taskId, { hoursLogged: Math.round(total * 100) / 100 });
         }
         this.save();
+    },
+
+    // --- Invoices (Sprint 6) ---
+    getInvoices(matterId) {
+        if (matterId) return this._data.invoices.filter(inv => inv.matterId === matterId);
+        return this._data.invoices;
+    },
+    getInvoice(id) { return this._data.invoices.find(inv => inv.id === id); },
+    addInvoice(data) {
+        const now = this._now();
+        const inv = {
+            id: this.id(),
+            status: 'draft',
+            created: now,
+            updated: now,
+            invoiceNo: data.invoiceNo || this._nextInvoiceNo(),
+            ...data,
+        };
+        this._data.invoices.push(inv);
+        // Lock every time log referenced by this invoice — prevents double-billing.
+        if (Array.isArray(inv.logIds)) {
+            inv.logIds.forEach(lid => {
+                const log = this._data.timeLogs.find(l => l.id === lid);
+                if (log) { log.invoiceId = inv.id; log.updated = now; }
+            });
+        }
+        this.save();
+        return inv;
+    },
+    updateInvoice(id, data) {
+        const i = this._data.invoices.findIndex(inv => inv.id === id);
+        if (i === -1) return null;
+        this._data.invoices[i] = { ...this._data.invoices[i], ...data, updated: this._now() };
+        this.save();
+        return this._data.invoices[i];
+    },
+    deleteInvoice(id) {
+        const inv = this._data.invoices.find(inv => inv.id === id);
+        if (!inv) return;
+        this._data.invoices = this._data.invoices.filter(inv => inv.id !== id);
+        // Unlock its time logs so they can be re-billed.
+        const now = this._now();
+        (inv.logIds || []).forEach(lid => {
+            const log = this._data.timeLogs.find(l => l.id === lid);
+            if (log && log.invoiceId === id) { delete log.invoiceId; log.updated = now; }
+        });
+        this.save();
+    },
+    /** Auto-increment invoice number: INV-YYYY-NNNN within current year. */
+    _nextInvoiceNo() {
+        const year = new Date().getFullYear();
+        const yearInvs = this._data.invoices.filter(inv => {
+            const m = /^INV-(\d{4})-/.exec(inv.invoiceNo || '');
+            return m && +m[1] === year;
+        });
+        const maxN = yearInvs.reduce((max, inv) => {
+            const m = /-(\d{4})$/.exec(inv.invoiceNo || '');
+            return m ? Math.max(max, +m[1]) : max;
+        }, 0);
+        return `INV-${year}-${String(maxN + 1).padStart(4, '0')}`;
+    },
+
+    /**
+     * Unbilled time logs for a matter within a date range (inclusive).
+     * "Unbilled" = no invoiceId set. Date range is inclusive on both
+     * ends, parsed via Dates.parseLocal so a log on the last day is
+     * included regardless of timezone.
+     *
+     * Returns [{log, task}] so the caller can render task titles.
+     */
+    getUnbilledForMatter(matterId, fromISO, toISO) {
+        const tasks = this.getTasks(matterId);
+        const taskIds = new Set(tasks.map(t => t.id));
+        const from = fromISO ? Dates.parseLocal(fromISO) : null;
+        const to = toISO ? Dates.parseLocal(toISO) : null;
+        if (to) to.setHours(23, 59, 59, 999);
+        const logs = this._data.timeLogs.filter(l => {
+            if (!taskIds.has(l.taskId)) return false;
+            if (l.invoiceId) return false;
+            if (l.billable === false) return false;  // non-billable never invoiced
+            const d = Dates.parseLocal(l.date) || new Date(l.date);
+            if (from && d < from) return false;
+            if (to && d > to) return false;
+            return true;
+        });
+        return logs.map(l => ({ log: l, task: this.getTask(l.taskId) }));
+    },
+
+    /**
+     * Weekly timesheet grid for Reports view. Returns { days[7], matters[]
+     * { matterId, name, clientName, hoursByDay[7], total } } for the week
+     * starting at weekStartISO (Monday, YYYY-MM-DD). Tasks without a
+     * project are grouped under a synthetic "Inbox" row.
+     */
+    getTimesheet(weekStartISO) {
+        const start = Dates.parseLocal(weekStartISO) || Dates.todayLocal();
+        start.setHours(0, 0, 0, 0);
+        const days = [];
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(start);
+            d.setDate(d.getDate() + i);
+            days.push(Dates.toLocalKey(d));
+        }
+        const rows = new Map();
+        this._data.timeLogs.forEach(l => {
+            const d = Dates.parseLocal(l.date) || new Date(l.date);
+            if (!d) return;
+            const key = Dates.toLocalKey(d);
+            const idx = days.indexOf(key);
+            if (idx === -1) return;
+            const task = this.getTask(l.taskId);
+            if (!task) return;
+            const project = task.projectId ? this.getProject(task.projectId) : null;
+            const client = project ? this.getClient(project.clientId) : (task.clientId ? this.getClient(task.clientId) : null);
+            const rowKey = project ? project.id : `__inbox_${client?.id || 'solo'}`;
+            if (!rows.has(rowKey)) {
+                rows.set(rowKey, {
+                    matterId: project?.id || null,
+                    clientId: client?.id || null,
+                    name: project?.name || (client ? `(${client.name})` : '(Inbox)'),
+                    clientName: client?.name || '',
+                    hoursByDay: [0, 0, 0, 0, 0, 0, 0],
+                    billableByDay: [0, 0, 0, 0, 0, 0, 0],
+                    total: 0,
+                    billable: 0,
+                });
+            }
+            const row = rows.get(rowKey);
+            const h = parseFloat(l.hours) || 0;
+            row.hoursByDay[idx] += h;
+            row.total += h;
+            if (l.billable !== false) {
+                row.billableByDay[idx] += h;
+                row.billable += h;
+            }
+        });
+        // Round everything to 2dp for display
+        const round = x => Math.round(x * 100) / 100;
+        const matters = Array.from(rows.values())
+            .map(r => ({
+                ...r,
+                hoursByDay: r.hoursByDay.map(round),
+                billableByDay: r.billableByDay.map(round),
+                total: round(r.total),
+                billable: round(r.billable),
+            }))
+            .sort((a, b) => (b.total - a.total) || a.name.localeCompare(b.name));
+        const dayTotals = [0, 0, 0, 0, 0, 0, 0];
+        const dayBillable = [0, 0, 0, 0, 0, 0, 0];
+        matters.forEach(r => r.hoursByDay.forEach((h, i) => {
+            dayTotals[i] += h;
+            dayBillable[i] += r.billableByDay[i];
+        }));
+        return {
+            days,
+            matters,
+            dayTotals: dayTotals.map(round),
+            dayBillable: dayBillable.map(round),
+            weekTotal: round(matters.reduce((s, r) => s + r.total, 0)),
+            weekBillable: round(matters.reduce((s, r) => s + r.billable, 0)),
+        };
     },
 
     // --- Stats ---
