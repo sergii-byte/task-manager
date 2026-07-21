@@ -1,12 +1,12 @@
 /* ordify · Google integrations
- * Gmail draft creation, Calendar event creation, Sheets export.
+ * Gmail draft creation, Calendar event creation.
  * Uses Google Identity Services (GIS) for OAuth implicit flow with PKCE-style
  * token client. No server. Token kept in memory for the session.
  *
  * SETUP REQUIRED (one-time, by the user):
  *   1. https://console.cloud.google.com → create project
  *   2. APIs & Services → Library → enable "Gmail API", "Google Calendar API",
- *      "Google Sheets API", "Google Drive API"
+ *      "Google Drive API"
  *   3. APIs & Services → OAuth consent screen → External, add your email as
  *      test user, scopes don't need to be added at consent screen
  *   4. APIs & Services → Credentials → Create Credentials → OAuth client ID
@@ -22,7 +22,6 @@ const Google = {
         'https://www.googleapis.com/auth/gmail.compose',
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/calendar.events',
-        'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive.file'
     ].join(' '),
 
@@ -344,53 +343,6 @@ const Google = {
         return evt;
     },
 
-    /* =====================================================================
-     * SHEETS — export time logs
-     * ===================================================================== */
-    async exportTimeLogs() {
-        const logs = liveLogs();
-        if (!logs.length) throw new Error('No time entries to export');
-        const sheet = await Google._api(
-            'https://sheets.googleapis.com/v4/spreadsheets',
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    properties: { title: `ordify time log ${todayISO()}` }
-                })
-            }
-        );
-        const sheetId = sheet.spreadsheetId;
-        const header = ['Date', 'Client', 'Matter', 'Notes', 'Minutes', 'Hours', 'Rate', 'Amount', 'Currency', 'Billed'];
-        const rows = logs.map(l => {
-            const c = clientById(l.clientId);
-            const m = matterById(l.matterId);
-            const rate = matterRate(m);
-            const hours = +(l.minutes / 60).toFixed(2);
-            return [
-                l.startedAt.slice(0,10),
-                c?.name || '',
-                m?.title || '',
-                l.notes || '',
-                l.minutes,
-                hours,
-                rate,
-                +(hours * rate).toFixed(2),
-                profileCurrency(),
-                l.invoiceId ? 'yes' : 'no'
-            ];
-        });
-        await Google._api(
-            `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:append?valueInputOption=RAW`,
-            {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ values: [header, ...rows] })
-            }
-        );
-        audit('sheetsExport', sheetId, `${rows.length} entries`);
-        return { sheetId, url: sheet.spreadsheetUrl, rows: rows.length };
-    },
 
     /* =====================================================================
      * Compose helpers (build draft from invoice / task)

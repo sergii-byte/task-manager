@@ -86,7 +86,6 @@ const defaultState = () => ({
         geminiKey: '',
         geminiModel: 'gemini-2.0-flash',
         dictationLang: 'auto',
-        snapshotIntervalHours: 4,
         googleClientId: ''
     },
     clients: [],
@@ -634,149 +633,6 @@ function audit(action, entityId = null, detail = '') {
         state.audits = state.audits.slice(-50);
     }
 }
-
-/* =========================================================================
- * 2c. SNAPSHOTS — IndexedDB
- * ========================================================================= */
-
-const Snapshots = {
-    DB: 'ordify-snapshots',
-    STORE: 'snaps',
-    _db: null,
-
-    async _open() {
-        if (Snapshots._db && Snapshots._db.objectStoreNames.contains(Snapshots.STORE)) {
-            return Snapshots._db;
-        }
-        // Open without forcing a version so we can detect missing stores even
-        // when the DB was created at version 1 without our object store.
-        const initial = await new Promise((resolve, reject) => {
-            const req = indexedDB.open(Snapshots.DB);
-            req.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(Snapshots.STORE)) {
-                    db.createObjectStore(Snapshots.STORE, { keyPath: 'id' });
-                }
-            };
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-        if (initial.objectStoreNames.contains(Snapshots.STORE)) {
-            Snapshots._db = initial;
-            return initial;
-        }
-        // Store missing — bump version to trigger an upgrade that creates it.
-        const nextVersion = initial.version + 1;
-        initial.close();
-        Snapshots._db = await new Promise((resolve, reject) => {
-            const req = indexedDB.open(Snapshots.DB, nextVersion);
-            req.onupgradeneeded = (e) => {
-                const db = e.target.result;
-                if (!db.objectStoreNames.contains(Snapshots.STORE)) {
-                    db.createObjectStore(Snapshots.STORE, { keyPath: 'id' });
-                }
-            };
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-        return Snapshots._db;
-    },
-
-    async create(label = 'manual') {
-        try {
-            const db = await Snapshots._open();
-            const snap = {
-                id: uuid(),
-                ts: new Date().toISOString(),
-                label,
-                stats: {
-                    clients: state.clients.length,
-                    matters: state.matters.length,
-                    tasks:   state.tasks.length,
-                    logs:    state.logs.length,
-                    invoices:state.invoices.length
-                },
-                state: JSON.stringify(state)
-            };
-            await new Promise((resolve, reject) => {
-                const tx = db.transaction(Snapshots.STORE, 'readwrite');
-                tx.objectStore(Snapshots.STORE).put(snap);
-                tx.oncomplete = resolve;
-                tx.onerror = () => reject(tx.error);
-            });
-            // prune to last 30
-            const all = await Snapshots.list();
-            if (all.length > 30) {
-                const toDelete = all.slice(30);
-                for (const s of toDelete) await Snapshots.delete(s.id);
-            }
-            return snap.id;
-        } catch (e) {
-            console.warn('Snapshot create failed', e);
-            return null;
-        }
-    },
-
-    async list() {
-        try {
-            const db = await Snapshots._open();
-            return await new Promise((resolve, reject) => {
-                const tx = db.transaction(Snapshots.STORE, 'readonly');
-                const req = tx.objectStore(Snapshots.STORE).getAll();
-                req.onsuccess = () => {
-                    const list = req.result || [];
-                    list.sort((a,b) => b.ts.localeCompare(a.ts));
-                    resolve(list);
-                };
-                req.onerror = () => reject(req.error);
-            });
-        } catch (e) { return []; }
-    },
-
-    async get(id) {
-        const db = await Snapshots._open();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(Snapshots.STORE, 'readonly');
-            const req = tx.objectStore(Snapshots.STORE).get(id);
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-    },
-
-    async delete(id) {
-        const db = await Snapshots._open();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(Snapshots.STORE, 'readwrite');
-            tx.objectStore(Snapshots.STORE).delete(id);
-            tx.oncomplete = resolve;
-            tx.onerror = () => reject(tx.error);
-        });
-    },
-
-    async restore(id) {
-        const snap = await Snapshots.get(id);
-        if (!snap) throw new Error('Snapshot not found');
-        const parsed = JSON.parse(snap.state);
-        state = Object.assign(defaultState(), parsed);
-        Store.save();
-        audit('restoreSnapshot', id, snap.label);
-        Store.save();
-    },
-
-    startAutoLoop() {
-        const tick = async () => {
-            const last = Number(localStorage.getItem('ordify-last-snap') || 0);
-            const intervalMs = (Number(state.profile.snapshotIntervalHours) || 4) * 3600000;
-            if (Date.now() - last > intervalMs) {
-                const id = await Snapshots.create('auto');
-                if (id) localStorage.setItem('ordify-last-snap', String(Date.now()));
-            }
-        };
-        // first tick after 30s grace, then hourly
-        setTimeout(tick, 30000);
-        setInterval(tick, 3600000);
-    }
-};
 
 /* =========================================================================
  * 3. SELECTORS / DERIVED
@@ -1862,87 +1718,6 @@ function viewInvoice(id) {
 }
 
 /* =========================================================================
- * 15b. VIEW: HISTORY
- * ========================================================================= */
-
-function viewHistory() {
-    const list = [...(state.audits||[])].reverse().slice(0, 500);
-    return `
-        <div class="view-head">
-            <h1>History</h1>
-            <div class="meta">${list.length} recent ${list.length===1?'event':'events'}</div>
-            <div class="actions">
-                ${list.length ? `<button class="btn danger" data-act="audit-clear">Clear history</button>` : ''}
-            </div>
-        </div>
-        ${list.length === 0 ? `
-            <div class="empty-state">
-                <h3>No history yet</h3>
-                <p>Every change you make is logged here automatically.</p>
-            </div>
-        ` : `
-            <ul class="audit-list">
-                ${list.map(a => `
-                    <li class="audit-row">
-                        <div class="audit-when">${new Date(a.ts).toLocaleString()}</div>
-                        <span class="audit-action">${esc(a.action)}</span>
-                        <span class="audit-detail">${esc(a.detail || '')}</span>
-                    </li>
-                `).join('')}
-            </ul>
-        `}
-    `;
-}
-
-/* =========================================================================
- * 15c. VIEW: TRASH
- * ========================================================================= */
-
-function viewTrash() {
-    const items = [
-        ...state.clients.filter(x=>x.deletedAt).map(x => ({...x, _kind:'client',  _label: x.name})),
-        ...state.matters.filter(x=>x.deletedAt).map(x => ({...x, _kind:'matter',  _label: x.title})),
-        ...state.tasks.filter(x=>x.deletedAt).map(x   => ({...x, _kind:'task',    _label: x.title})),
-        ...state.logs.filter(x=>x.deletedAt).map(x    => ({...x, _kind:'time',    _label: `${x.minutes}m on ${matterById(x.matterId)?.title || '?'}`})),
-        ...state.invoices.filter(x=>x.deletedAt).map(x=> ({...x, _kind:'invoice', _label: x.number}))
-    ];
-    items.sort((a,b) => (b.deletedAt||'').localeCompare(a.deletedAt||''));
-
-    return `
-        <div class="view-head">
-            <h1>Trash</h1>
-            <div class="meta">${items.length} item${items.length===1?'':'s'}</div>
-            <div class="actions">
-                ${items.length ? `<button class="btn danger" data-act="empty-trash">Empty trash</button>` : ''}
-            </div>
-        </div>
-        ${items.length === 0 ? `
-            <div class="empty-state">
-                <h3>Trash is empty</h3>
-                <p>Deleted items appear here. They stay until you empty the trash.</p>
-            </div>
-        ` : `
-            <table class="t">
-                <thead><tr>
-                    <th>Type</th><th>Item</th><th>Deleted</th><th></th>
-                </tr></thead>
-                <tbody>${items.map(it => `
-                    <tr class="trash-row">
-                        <td><span class="badge">${esc(it._kind)}</span></td>
-                        <td>${esc(it._label)}</td>
-                        <td class="muted">${fmtDate(it.deletedAt)}</td>
-                        <td><div class="trash-actions">
-                            <button class="btn sm" data-act="restore" data-id="${it.id}">Restore</button>
-                            <button class="btn sm danger" data-act="permadelete" data-id="${it.id}">Delete forever</button>
-                        </div></td>
-                    </tr>
-                `).join('')}</tbody>
-            </table>
-        `}
-    `;
-}
-
-/* =========================================================================
  * 16. VIEW: SETTINGS
  * ========================================================================= */
 
@@ -2021,7 +1796,7 @@ function viewSettings() {
             <h3>Google integrations</h3>
             <div class="settings-warn">
                 Setup at <a href="https://console.cloud.google.com" target="_blank">console.cloud.google.com</a>:
-                enable <strong>Gmail API</strong>, <strong>Calendar API</strong>, <strong>Sheets API</strong>;
+                enable <strong>Gmail API</strong> and <strong>Calendar API</strong>;
                 create OAuth Client ID (Web app); add origin <code>https://ordifyme.netlify.app</code>.
                 Paste the Client ID below.
             </div>
@@ -2029,7 +1804,7 @@ function viewSettings() {
                 <div class="field full">
                     <label>Google OAuth Client ID</label>
                     <input name="googleClientId" placeholder="123456789-abcdef.apps.googleusercontent.com" value="${esc(p.googleClientId || '')}" autocomplete="off">
-                    <small class="hint">Required for Gmail draft, Calendar sync, Sheets export.</small>
+                    <small class="hint">Required for Gmail drafts and Calendar sync.</small>
                 </div>
             </div>
             <div class="settings-data">
@@ -2185,24 +1960,6 @@ async function emailToTasksAI(em) {
         console.error('email AI failed', e);
         toast('AI failed: ' + (e.message || e), 'error');
     }
-}
-
-async function renderSnapshotsList() {
-    const host = $('#snap-list-host');
-    if (!host) return;
-    const list = await Snapshots.list();
-    if (!list.length) {
-        host.innerHTML = `<div class="empty">No snapshots yet.</div>`;
-        return;
-    }
-    host.innerHTML = `<ul class="snap-list">${list.map(s => `
-        <li class="snap-row">
-            <span class="when">${new Date(s.ts).toLocaleString()}</span>
-            <span class="badge ${s.label==='auto'?'':'todo'}">${esc(s.label)}</span>
-            <span class="stats">${s.stats?.clients||0}C · ${s.stats?.matters||0}M · ${s.stats?.tasks||0}T · ${s.stats?.logs||0}L · ${s.stats?.invoices||0}I</span>
-            <button class="btn sm" data-act="snapshot-restore" data-id="${esc(s.id)}">Restore</button>
-            <button class="btn sm danger" data-act="snapshot-delete" data-id="${esc(s.id)}">Delete</button>
-        </li>`).join('')}</ul>`;
 }
 
 /* =========================================================================
@@ -2638,65 +2395,6 @@ function bindGlobalActions() {
                 }
                 break;
             }
-            case 'restore': {
-                const id = act.dataset.id;
-                const item = state.clients.find(x=>x.id===id) || state.matters.find(x=>x.id===id) ||
-                             state.tasks.find(x=>x.id===id) || state.logs.find(x=>x.id===id) ||
-                             state.invoices.find(x=>x.id===id);
-                if (item) {
-                    delete item.deletedAt;
-                    audit('restore', id, item.name || item.title || item.number || '');
-                    Store.save(); render(); toast('Restored');
-                }
-                break;
-            }
-            case 'permadelete': {
-                if (!confirm('Permanently delete this item? This cannot be undone.')) break;
-                const id = act.dataset.id;
-                state.clients  = state.clients.filter(x => x.id !== id);
-                state.matters  = state.matters.filter(x => x.id !== id);
-                state.tasks    = state.tasks.filter(x => x.id !== id);
-                state.logs     = state.logs.filter(x => x.id !== id);
-                state.invoices = state.invoices.filter(x => x.id !== id);
-                audit('permadelete', id, '');
-                Store.save(); render(); toast('Permanently deleted');
-                break;
-            }
-            case 'empty-trash': {
-                if (!confirm('Permanently delete ALL trashed items? Cannot be undone.')) break;
-                state.clients  = state.clients.filter(x => !x.deletedAt);
-                state.matters  = state.matters.filter(x => !x.deletedAt);
-                state.tasks    = state.tasks.filter(x => !x.deletedAt);
-                state.logs     = state.logs.filter(x => !x.deletedAt);
-                state.invoices = state.invoices.filter(x => !x.deletedAt);
-                audit('emptyTrash', null, '');
-                Store.save(); render(); toast('Trash emptied');
-                break;
-            }
-            case 'snapshot-now': {
-                Snapshots.create('manual').then(id => {
-                    if (id) { toast('Snapshot saved'); render(); }
-                    else toast('Snapshot failed', 'error');
-                });
-                break;
-            }
-            case 'snapshot-restore': {
-                if (!confirm('Restore this snapshot? Current state will be replaced.')) break;
-                Snapshots.restore(act.dataset.id).then(() => {
-                    render(); toast('Restored from snapshot');
-                }).catch(e => toast('Restore failed: ' + e.message, 'error'));
-                break;
-            }
-            case 'snapshot-delete': {
-                Snapshots.delete(act.dataset.id).then(() => { render(); toast('Snapshot deleted'); });
-                break;
-            }
-            case 'audit-clear': {
-                if (!confirm('Clear all audit history? Cannot be undone.')) break;
-                state.audits = [];
-                Store.save(); render(); toast('History cleared');
-                break;
-            }
             case 'gmail-invoice': {
                 const inv = invoiceById(act.dataset.id);
                 if (!inv) break;
@@ -2716,15 +2414,6 @@ function bindGlobalActions() {
                     toast('Added to calendar');
                     render();
                 }).catch(e => toast('Calendar error: ' + e.message, 'error'));
-                break;
-            }
-            case 'sheets-export': {
-                if (!Google.configured()) { toast('Set Google Client ID in Settings first', 'error'); break; }
-                toast('Exporting to Sheets…');
-                Google.exportTimeLogs().then(({ url, rows }) => {
-                    toast(`Exported ${rows} entries`);
-                    if (url && confirm('Open the Sheet in a new tab?')) window.open(url, '_blank');
-                }).catch(e => toast('Sheets error: ' + e.message, 'error'));
                 break;
             }
             case 'google-signout': {
@@ -2791,7 +2480,7 @@ function bindGlobalActions() {
         if (e.target.id === 'settings-form') {
             e.preventDefault();
             const data = new FormData(e.target);
-            const numericFields = new Set(['rate', 'invoiceNumberCounter', 'snapshotIntervalHours']);
+            const numericFields = new Set(['rate', 'invoiceNumberCounter']);
             for (const [k, v] of data.entries()) {
                 if (numericFields.has(k)) state.profile[k] = Number(v) || 0;
                 else state.profile[k] = v;
