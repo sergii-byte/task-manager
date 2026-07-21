@@ -2065,3 +2065,19 @@ p.muted { font-size: var(--t-sm); }
     #omni-mic, #omni-ai, #omni-attach, #omni-inbox { width: 32px; height: 32px; font-size: var(--t-base); }
     #omni-input { padding: 8px 10px; }
 }
+
+/* ---- join button on schedule slots ---- */
+.t-slot-join {
+    display: inline-block;
+    margin-left: var(--s-2);
+    vertical-align: 1px;
+    font: 600 var(--t-xs) var(--font);
+    color: var(--accent);
+    border: 1px solid var(--accent-line);
+    background: var(--accent-soft);
+    padding: 2px var(--s-2);
+    border-radius: var(--radius-pill);
+    text-decoration: none;
+}
+.t-slot-join:hover { background: var(--accent); color: #fff; }
+.t-slot.now .t-slot-join { background: var(--accent); color: #fff; }

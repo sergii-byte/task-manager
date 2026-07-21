@@ -22,6 +22,9 @@ const Google = {
         'https://www.googleapis.com/auth/gmail.compose',
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/calendar.events',
+        // read the calendar LIST too, so the schedule can merge every
+        // calendar the user keeps ticked in Google Calendar, not just primary
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
         'https://www.googleapis.com/auth/drive.file'
     ].join(' '),
 
@@ -284,8 +287,29 @@ const Google = {
     },
 
     /* =====================================================================
-     * CALENDAR — list today's events
+     * CALENDAR — list today's events, across every ticked calendar
      * ===================================================================== */
+
+    /* The calendars the user keeps visible in Google Calendar (`selected`)
+     * are the ones that belong in the day plan. Falls back to primary if
+     * the list is unavailable (e.g. the scope was not granted yet). */
+    async listCalendars() {
+        try {
+            const data = await Google._api(
+                'https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=50');
+            const items = (data.items || []).filter(c => c.selected && !c.deleted);
+            return items.length ? items : [{ id: 'primary', primary: true }];
+        } catch (e) {
+            console.warn('calendarList unavailable — falling back to primary', e);
+            return [{ id: 'primary', primary: true }];
+        }
+    },
+
+    /* Join links live in three places depending on who created the meeting:
+     * Google's own hangoutLink, or a Meet/Zoom/Teams/Webex URL pasted into
+     * the location or description. */
+    JOIN_RE: /(https?:\/\/[^\s<>"']*(?:meet\.google\.com|zoom\.us\/(?:j|my)|teams\.microsoft\.com\/l\/meetup-join|teams\.live\.com\/meet|webex\.com\/(?:meet|join)|whereby\.com)[^\s<>"']*)/i,
+
     async listTodayEvents() {
         const start = new Date(); start.setHours(0, 0, 0, 0);
         const end   = new Date(); end.setHours(23, 59, 59, 999);
@@ -296,20 +320,35 @@ const Google = {
             orderBy: 'startTime',
             maxResults: '25'
         });
-        const data = await Google._api(
-            'https://www.googleapis.com/calendar/v3/calendars/primary/events?' + params.toString()
-        );
-        return (data.items || [])
-            .filter(e => e.status !== 'cancelled')
-            .map(e => ({
+        const cals = (await Google.listCalendars()).slice(0, 10);
+        const results = await Promise.all(cals.map(c =>
+            Google._api('https://www.googleapis.com/calendar/v3/calendars/'
+                    + encodeURIComponent(c.id) + '/events?' + params.toString())
+                .then(d => ({ cal: c, items: d.items || [] }))
+                .catch((e) => { console.warn('calendar skipped: ' + c.id, e); return { cal: c, items: [] }; })
+        ));
+
+        const seen = new Set();   // an invite can sit in several calendars — count it once
+        const out = [];
+        results.forEach(({ cal, items }) => items.forEach(e => {
+            if (e.status === 'cancelled' || seen.has(e.id)) return;
+            seen.add(e.id);
+            const hay = [e.hangoutLink, e.location, e.description].filter(Boolean).join(' ');
+            const m = hay.match(Google.JOIN_RE);
+            out.push({
                 id: e.id,
                 title: e.summary || '(no title)',
                 start: (e.start && (e.start.dateTime || e.start.date)) || null,
                 end:   (e.end && (e.end.dateTime || e.end.date)) || null,
                 allDay: !(e.start && e.start.dateTime),
                 location: e.location || '',
-                hangoutLink: e.hangoutLink || ''
-            }));
+                hangoutLink: e.hangoutLink || '',
+                joinLink: e.hangoutLink || (m ? m[1] : ''),
+                calendar: cal.primary ? '' : (cal.summaryOverride || cal.summary || '')
+            });
+        }));
+        out.sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+        return out;
     },
 
     /* =====================================================================

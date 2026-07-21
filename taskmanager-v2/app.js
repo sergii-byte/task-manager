@@ -1384,13 +1384,15 @@ function _scheduleSlot(ev, nowMs) {
         : `${fmt(ev.start)}<span class="end">→ ${fmt(ev.end)}</span>`;
     const isPast = !ev.allDay && new Date(ev.end).getTime() < nowMs;
     const isNow  = !ev.allDay && new Date(ev.start).getTime() <= nowMs && new Date(ev.end).getTime() >= nowMs;
-    const ctx = [ev.location, ev.hangoutLink ? 'video call' : ''].filter(Boolean).map(x=>esc(x)).join(' · ');
+    const ctx = [ev.calendar, ev.location].filter(Boolean).map(x=>esc(x)).join(' · ');
     return `
         <div class="t-slot ${isPast?'past':''} ${isNow?'now':''}">
             <div class="t-slot-when">${when}</div>
             <div class="t-slot-marker"></div>
             <div class="t-slot-body">
-                <div class="t-slot-what">${esc(ev.title)}</div>
+                <div class="t-slot-what">${esc(ev.title)}
+                    ${ev.joinLink && !isPast ? `<a class="t-slot-join" href="${esc(ev.joinLink)}" target="_blank" rel="noopener">join ↗</a>` : ''}
+                </div>
                 ${ctx ? `<div class="t-slot-ctx">${ctx}</div>` : ''}
             </div>
         </div>`;
