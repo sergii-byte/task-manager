@@ -40,10 +40,19 @@ service cloud.firestore {
     // the document, but listing the collection is forbidden — so the token
     // in the URL is the only way in. Only the hub can write.
     match /shares/{shareId} {
+      function isSignedInHuman() {
+        // A portal is published by a hub signed in with Google. The anonymous
+        // sessions minted for portal visitors must not be able to create
+        // documents here — without this, anyone holding any share link could
+        // seed unlimited junk into the collection and burn the project quota.
+        return request.auth != null
+               && request.auth.token.firebase.sign_in_provider != 'anonymous';
+      }
+
       allow get: if true;
       allow list: if false;
 
-      allow create: if request.auth != null
+      allow create: if isSignedInHuman()
         && request.resource.data.ownerId == request.auth.uid;
 
       allow update: if request.auth != null
