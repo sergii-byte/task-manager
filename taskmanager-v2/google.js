@@ -310,15 +310,20 @@ const Google = {
      * the location or description. */
     JOIN_RE: /(https?:\/\/[^\s<>"']*(?:meet\.google\.com|zoom\.us\/(?:j|my)|teams\.microsoft\.com\/l\/meetup-join|teams\.live\.com\/meet|webex\.com\/(?:meet|join)|whereby\.com)[^\s<>"']*)/i,
 
-    async listTodayEvents() {
+    /* Today only — the day plan and the NOW hero. */
+    listTodayEvents() { return Google.listEvents(0); },
+
+    /* `days` = how many days past today to include: 0 today, 6 the week,
+     * 30 the month ahead. Always starts at 00:00 today, never in the past. */
+    async listEvents(days = 0) {
         const start = new Date(); start.setHours(0, 0, 0, 0);
-        const end   = new Date(); end.setHours(23, 59, 59, 999);
+        const end   = new Date(); end.setDate(end.getDate() + days); end.setHours(23, 59, 59, 999);
         const params = new URLSearchParams({
             timeMin: start.toISOString(),
             timeMax: end.toISOString(),
             singleEvents: 'true',
             orderBy: 'startTime',
-            maxResults: '25'
+            maxResults: days > 7 ? '250' : (days > 0 ? '100' : '25')
         });
         const cals = (await Google.listCalendars()).slice(0, 10);
         const results = await Promise.all(cals.map(c =>

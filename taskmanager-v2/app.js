@@ -1306,7 +1306,11 @@ function viewToday() {
             <div class="t-sechdr">
                 <span class="sec-ic">${icon('calendar', 15)}</span>
                 <h2>schedule</h2>
-                <span class="count">today</span>
+                <span class="right t-ranges" role="group" aria-label="Schedule range">
+                    ${Object.keys(SCHEDULE_RANGES).map(r =>
+                        `<button class="chip ${scheduleRange === r ? 'on' : ''}" data-range="${r}"
+                            aria-pressed="${scheduleRange === r}">${r}</button>`).join('')}
+                </span>
             </div>
             <div id="t-schedule" class="t-schedule"><div class="t-sched-msg">Loading…</div></div>
         </section>
@@ -1360,6 +1364,11 @@ function _todayTaskRow(t) {
  * ========================================================================= */
 
 let todayEventsCache = [];
+
+/* How far ahead the schedule looks. Today is the default because the day
+ * plan is the daily ritual; week and month answer a planning question. */
+const SCHEDULE_RANGES = { today: 0, week: 6, month: 30 };
+let scheduleRange = 'today';
 
 function nowCardHtml() {
     const nowMs = Date.now();
@@ -1428,20 +1437,43 @@ async function populateTodaySchedule() {
     }
     host.innerHTML = `<div class="t-sched-msg">Loading calendar…</div>`;
     try {
-        const events = await Google.listTodayEvents();
-        todayEventsCache = events;
+        const days = SCHEDULE_RANGES[scheduleRange] ?? 0;
+        const events = await Google.listEvents(days);
+
+        // The NOW hero only ever concerns today, so it takes today's slice
+        // no matter how far ahead the schedule below is looking.
+        const todayISOstr = todayISO();
+        todayEventsCache = events.filter(e => (e.start || '').slice(0, 10) === todayISOstr);
         const nowHost = document.getElementById('t-now');
         if (nowHost) nowHost.innerHTML = nowCardHtml();
+
         if (!events.length) {
-            host.innerHTML = `<div class="t-sched-msg">No events on the calendar today.</div>`;
+            host.innerHTML = `<div class="t-sched-msg">${
+                scheduleRange === 'today' ? 'No events on the calendar today.'
+                : scheduleRange === 'week' ? 'Nothing scheduled in the next 7 days.'
+                : 'Nothing scheduled in the next 30 days.'}</div>`;
             return;
         }
+
         const nowMs = Date.now();
         let html = '';
         let nowLineInserted = false;
+        let lastDay = null;
         events.forEach(ev => {
+            const day = (ev.start || '').slice(0, 10);
+            // Day headers only make sense once the range spans more than a day
+            if (scheduleRange !== 'today' && day && day !== lastDay) {
+                lastDay = day;
+                const d = new Date(day + 'T00:00:00');
+                const label = day === todayISOstr
+                    ? 'today'
+                    : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }).toLowerCase();
+                const count = events.filter(e => (e.start || '').slice(0, 10) === day).length;
+                html += `<div class="t-dayhdr ${day === todayISOstr ? 'is-today' : ''}">
+                    <span>${esc(label)}</span><span class="n">${count}</span></div>`;
+            }
             const startMs = ev.start ? new Date(ev.start).getTime() : 0;
-            if (!nowLineInserted && !ev.allDay && startMs > nowMs) {
+            if (!nowLineInserted && !ev.allDay && startMs > nowMs && day === todayISOstr) {
                 html += `<div class="t-nowline"><span>now · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>`;
                 nowLineInserted = true;
             }
@@ -2860,6 +2892,13 @@ function bindGlobalActions() {
         const f = e.target.closest('[data-filter]');
         if (f) {
             todayFilter = f.dataset.filter;
+            render();
+        }
+        // schedule range — render() re-fetches the calendar itself on Today,
+        // so calling populateTodaySchedule() here too would double every request
+        const r = e.target.closest('[data-range]');
+        if (r && r.dataset.range !== scheduleRange) {
+            scheduleRange = r.dataset.range;
             render();
         }
     });
