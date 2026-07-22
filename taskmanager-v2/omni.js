@@ -44,9 +44,18 @@ const Omni = {
         });
         Omni.input.addEventListener('input', () => {
             if (Omni.input.value.trim().length >= 2) Omni._renderSearchHints();
-            else Omni.panel.hidden = true;
+            else Omni._hide();
         });
-        Omni.aiBtn.addEventListener('click', () => Omni.runAI());
+        // With drafts still pending, this button reopens them rather than
+        // re-parsing: closing the sheet must not be the same as losing them.
+        Omni.aiBtn.addEventListener('click', () => {
+            const pending = Omni.proposals.filter(p => !p.accepted).length;
+            if (pending && Omni.panel.hidden) {
+                Omni._renderProposals({ actions: Omni.proposals });
+                return;
+            }
+            Omni.runAI();
+        });
         Omni.micBtn.addEventListener('click', () => Recorder.toggle());
         if (Omni.attachBtn) Omni.attachBtn.addEventListener('click', () => Omni.attach());
 
@@ -59,19 +68,61 @@ const Omni = {
             }
         });
 
-        // close panel on outside click
+        // Clicking away closes search hints, but never discards proposals:
+        // they are unsaved work, and the only way back used to be retyping
+        // the whole sentence.
         document.addEventListener('click', (e) => {
-            if (!Omni.el.contains(e.target) && !Omni.panel.contains(e.target)) {
-                Omni.panel.hidden = true;
-            }
+            if (Omni.el.contains(e.target) || Omni.panel.contains(e.target)) return;
+            if (Omni.scrim && Omni.scrim.contains(e.target)) return;
+            if (Omni.proposals.length) return;
+            Omni._hide();
         });
+
+        // Escape closes the sheet whatever it is showing
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !Omni.panel.hidden) Omni._hide();
+        });
+
+        // Tapping the scrim dismisses the sheet, the way a sheet should.
+        Omni.scrim = $('#omni-scrim');
+        if (Omni.scrim) Omni.scrim.addEventListener('click', () => Omni._hide());
+
+        // An on-screen keyboard shrinks the visual viewport but not the
+        // layout viewport, so a bottom-anchored sheet ends up underneath it.
+        if (window.visualViewport) {
+            const sync = () => Omni._syncViewport();
+            window.visualViewport.addEventListener('resize', sync);
+            window.visualViewport.addEventListener('scroll', sync);
+        }
+    },
+
+    _syncViewport() {
+        const vv = window.visualViewport;
+        if (!vv || !Omni.panel) return;
+        const kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+        // --kb both shortens the sheet and lifts it clear of the keyboard
+        document.documentElement.style.setProperty('--kb', kb + 'px');
+    },
+
+    /* `sheet` marks the proposal UI, which on a phone is a modal bottom sheet
+     * and so earns a scrim. Search hints are a dropdown either way. */
+    _show({ sheet = false } = {}) {
+        Omni.panel.hidden = false;
+        if (Omni.scrim) Omni.scrim.hidden = !sheet;   // CSS hides it above 720px
+        Omni._syncViewport();
+    },
+
+    _hide() {
+        Omni.panel.hidden = true;
+        if (Omni.scrim) Omni.scrim.hidden = true;
+        document.documentElement.style.setProperty('--kb', '0px');
     },
 
     clear() {
         Omni.input.value = '';
         Omni.proposals = [];
-        Omni.panel.hidden = true;
         Omni.panel.innerHTML = '';
+        Omni._hide();
     },
 
     _looksLikeNL(s) {
@@ -121,7 +172,7 @@ const Omni = {
 
     _renderSearchHints() {
         const q = Omni.input.value.trim().toLowerCase();
-        if (!q) { Omni.panel.hidden = true; return; }
+        if (!q) { Omni._hide(); return; }
         const results = Omni._search(q);
         const isNL = Omni._looksLikeNL(Omni.input.value);
         Omni.panel.innerHTML = `
@@ -138,7 +189,7 @@ const Omni = {
                 </li>
             `).join('')}</ul>` : ''}
         `;
-        Omni.panel.hidden = false;
+        Omni._show();
         $$('.omni-row', Omni.panel).forEach(li => {
             li.addEventListener('click', () => {
                 Omni._go({ path: li.dataset.go, taskId: li.dataset.task || null });
@@ -204,12 +255,12 @@ const Omni = {
 
     _renderLoading() {
         Omni.panel.innerHTML = `<div class="omni-loading"><span class="spinner"></span> Asking Claude…</div>`;
-        Omni.panel.hidden = false;
+        Omni._show();
     },
 
     _renderError(msg) {
         Omni.panel.innerHTML = `<div class="omni-error">${msg}</div>`;
-        Omni.panel.hidden = false;
+        Omni._show();
     },
 
     _renderProposals(result) {
@@ -219,12 +270,12 @@ const Omni = {
                     <strong>Need clarification</strong>
                     <p>${esc(result.clarify)}</p>
                 </div>`;
-            Omni.panel.hidden = false;
+            Omni._show();
             return;
         }
         if (!Omni.proposals.length) {
             Omni.panel.innerHTML = `<div class="omni-error">Claude couldn't extract any actions. Try rephrasing.</div>`;
-            Omni.panel.hidden = false;
+            Omni._show();
             return;
         }
         Omni.panel.innerHTML = `
@@ -233,6 +284,7 @@ const Omni = {
                 <span class="grow"></span>
                 <button class="btn sm" data-omni="accept-all">Accept all</button>
                 <button class="btn sm ghost" data-omni="discard">Discard</button>
+                <button class="omni-close" data-omni="close" title="Close" aria-label="Close">×</button>
             </div>
             <ul class="omni-proposals">
                 ${Omni.proposals.map((p, i) => `
@@ -263,7 +315,7 @@ const Omni = {
             </div>
             ${result.transcript ? `<details class="omni-transcript"><summary>Source transcript</summary><div>${esc(result.transcript)}</div></details>` : ''}
         `;
-        Omni.panel.hidden = false;
+        Omni._show({ sheet: true });
         Omni.panel.querySelectorAll('[data-omni]').forEach(b => {
             b.addEventListener('click', () => Omni._handleProposalAction(b.dataset.omni, b.dataset.i));
         });
@@ -438,6 +490,7 @@ const Omni = {
     },
 
     _handleProposalAction(action, idx) {
+        if (action === 'close') { Omni._hide(); return; }
         if (action === 'discard') { Omni.clear(); return; }
         if (action === 'refine') { Omni._refine(); return; }
         if (action === 'refine-mic') {

@@ -248,7 +248,11 @@ body {
 }
 #omni-ai { font-size: var(--t-base); padding-right: 8px; }
 
-/* Omni dropdown panel */
+/* Omni panel — a dropdown on a desktop, a bottom sheet on a phone.
+   The panel itself never scrolls: it is a column of header / scrolling body /
+   pinned footer. Scrolling the whole thing is what buried the correction row
+   1794px down a 568px dropdown, which is the one control this panel exists
+   for. */
 #omni-panel {
     position: absolute;
     top: calc(var(--topbar-h) - 8px);
@@ -262,8 +266,80 @@ body {
     box-shadow: var(--shadow-lg);
     z-index: 50;
     max-height: 70vh;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
+/* the list is the only part that scrolls */
+#omni-panel .omni-proposals { overflow-y: auto; flex: 1 1 auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+#omni-panel .omni-head,
+#omni-panel .omni-refine,
+#omni-panel .omni-transcript { flex: none; }
+
+/* scrim: only ever shown behind the sheet on a phone */
+#omni-scrim {
+    position: fixed; inset: 0;
+    background: rgba(20, 26, 32, 0.34);
+    z-index: 65;
+    border: 0;
+    padding: 0;
+}
+#omni-scrim[hidden] { display: none; }
+@media (min-width: 721px) { #omni-scrim { display: none; } }
+
+/* ---- phone: the panel becomes a bottom sheet ----
+   Fixed elements anchor to the layout viewport, so an on-screen keyboard
+   would cover the sheet. --kb carries the keyboard height measured from
+   visualViewport (see Omni._syncViewport) and lifts the sheet clear of it. */
+@media (max-width: 720px) {
+    #omni-panel {
+        position: fixed;
+        top: auto;
+        left: 0; right: 0; bottom: 0;
+        max-width: none;
+        margin: 0;
+        z-index: 70;                       /* above the bottom tab bar (60) */
+        border-left: 0; border-right: 0; border-bottom: 0;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        /* --kb both shortens the sheet and lifts it, so the pinned correction
+           row stays above an open keyboard rather than under it. */
+        max-height: calc(88dvh - var(--kb, 0px));
+        bottom: var(--kb, 0px);
+        transition: bottom 0.16s ease-out;
+    }
+    #omni-panel .omni-refine {
+        padding-bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
+    }
+    #omni-panel .omni-proposals { overscroll-behavior: contain; }
+    /* a grab handle, so it reads as a sheet rather than a stuck dropdown */
+    #omni-panel .omni-head::before {
+        content: '';
+        position: absolute;
+        top: 6px; left: 50%; transform: translateX(-50%);
+        width: 34px; height: 4px; border-radius: var(--radius-pill);
+        background: var(--line);
+    }
+    #omni-panel .omni-head { position: relative; padding-top: var(--s-4); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #omni-panel { transition: none; }
+}
+
+/* the correction row is the point of the panel — give it the weight of a
+   footer, not of a trailing note */
+.omni-refine { position: relative; }
+.omni-refine::before {
+    content: '';
+    position: absolute; left: 0; right: 0; top: -1px; height: 1px;
+    background: var(--line);
+}
+.omni-head .omni-close {
+    border: 0; background: transparent; color: var(--fg-mute);
+    font-size: var(--t-lg); line-height: 1;
+    min-width: var(--tap); min-height: var(--tap);
+    border-radius: var(--radius); cursor: pointer;
+}
+.omni-head .omni-close:hover { background: var(--bg-hover); color: var(--ink); }
 #omni-panel[hidden] { display: none; }
 .omni-hint {
     padding: 10px 16px;
