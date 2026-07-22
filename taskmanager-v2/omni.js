@@ -890,15 +890,37 @@ const Recorder = {
         else Recorder.start();
     },
 
+    /* A phone hands the microphone to one consumer at a time. Running
+     * MediaRecorder and SpeechRecognition together — which is fine on
+     * desktop Chrome, where recognition is served out of band — starves
+     * recognition on mobile: it starts, hears nothing, ends empty, and the
+     * button looks broken. So on a phone we pick exactly one path. */
+    isMobile() {
+        return matchMedia('(pointer: coarse)').matches
+            || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+    },
+
     async start() {
         if (!Recorder.supported() && !Recorder.canRecordAudio()) {
             toast('Voice input not supported in this browser. Use Chrome or Edge.', 'error');
             return;
         }
 
+        const mobile = Recorder.isMobile();
+        // Record-and-transcribe beats live recognition on a phone, but it
+        // needs Gemini to read the audio afterwards.
+        Recorder.avMode = mobile && !!state.profile.geminiKey && Recorder.canRecordAudio();
+        const useRecognition = Recorder.supported() && !Recorder.avMode;
+        const useMediaRecorder = Recorder.canRecordAudio() && (!mobile || Recorder.avMode);
+
+        if (mobile && !Recorder.avMode && !Recorder.supported()) {
+            toast('Add a Gemini API key in Settings to dictate on this phone.', 'error');
+            return;
+        }
+
         // Acquire mic for both speech recognition AND raw audio recording
         let stream = null;
-        if (Recorder.canRecordAudio()) {
+        if (useMediaRecorder) {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 Recorder.stream = stream;
@@ -912,14 +934,31 @@ const Recorder = {
                     if (blob.size > 0) {
                         const ctx = Attach._currentContext();
                         const stamp = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+                        const fname = `dictation-${stamp}.webm`;
                         await Attach.add({
-                            blob,
-                            name: `dictation-${stamp}.webm`,
-                            mime: blob.type,
-                            kind: 'audio',
-                            ...ctx
+                            blob, name: fname, mime: blob.type, kind: 'audio', ...ctx
                         });
                         // do not toast here; the AI completion toast is more useful
+
+                        // On a phone nothing was transcribed live — the recording
+                        // itself is the input, so hand it to Gemini now.
+                        if (Recorder.avMode) {
+                            Omni.busy = true;
+                            Omni._renderLoading();
+                            try {
+                                const file = new File([blob], fname, { type: blob.type || 'audio/webm' });
+                                const result = await AI.parseFile(file);
+                                Omni.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
+                                Omni._renderProposals(result);
+                            } catch (e) {
+                                console.error('dictation parse failed', e);
+                                Omni._renderError('Could not read the recording: ' + esc(e.message || 'error'));
+                            } finally {
+                                Omni.busy = false;
+                            }
+                        }
+                    } else if (Recorder.avMode) {
+                        toast('Nothing recorded — check the microphone permission', 'error');
                     }
                 };
                 media.start();
@@ -930,11 +969,13 @@ const Recorder = {
         }
 
         // Speech recognition for live transcription
-        if (Recorder.supported()) {
+        if (useRecognition) {
             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
             const rec = new SR();
             rec.lang = Recorder.resolveLang();
-            rec.continuous = true;
+            // mobile engines ignore `continuous` and cut off at the first
+            // pause; asking for it there only makes the end event unreliable
+            rec.continuous = !mobile;
             rec.interimResults = true;
 
             Recorder.finalText = '';
@@ -966,6 +1007,12 @@ const Recorder = {
                 if (txt) {
                     Omni.input.value = txt;
                     Omni.runAI();
+                } else {
+                    // Silence here is what "the mic does nothing" feels like:
+                    // say so, and point at the fix that actually works.
+                    toast(mobile
+                        ? 'Heard nothing. Add a Gemini API key in Settings — dictation is far more reliable on phones.'
+                        : 'Heard nothing — try again, closer to the mic.', 'error');
                 }
             };
             try {
@@ -978,8 +1025,12 @@ const Recorder = {
         }
 
         Recorder._setListening(true);
-        Omni.input.focus();
-        toast(`Listening (${Recorder.resolveLang()})…`);
+        // Focusing the field on a phone raises the on-screen keyboard over the
+        // mic button you need to press again to stop.
+        if (!mobile) Omni.input.focus();
+        toast(Recorder.avMode
+            ? 'Recording — tap the mic again to stop'
+            : `Listening (${Recorder.resolveLang()})…`);
     },
 
     /** Resolve the dictation lang setting to a real BCP-47 tag. */
@@ -1015,6 +1066,10 @@ const Recorder = {
             Recorder.stream.getTracks().forEach(t => t.stop());
             Recorder.stream = null;
         }
+        // drop the instances so a stale recognizer can't fire onend into the
+        // next session
+        Recorder.rec = null;
+        Recorder.media = null;
         Recorder._setListening(false);
     },
 
