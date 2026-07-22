@@ -19,6 +19,7 @@ const Omni = {
     panel: null,
     busy: false,
     proposals: [],   // [{ op, data, summary, accepted }]
+    lastInput: '',   // what produced them — the refine call needs it for context
     listening: false,
 
     init() {
@@ -161,6 +162,7 @@ const Omni = {
             if (Omni.busy) return;
             Omni.busy = true;
             Omni.input.value = '📎 ' + f.name;
+            Omni.lastInput = 'attached file: ' + f.name;
             Omni._renderLoading();
             try {
                 const result = await AI.parseFile(f);
@@ -186,6 +188,7 @@ const Omni = {
         }
         if (Omni.busy) return;
         Omni.busy = true;
+        Omni.lastInput = text;
         Omni._renderLoading();
         try {
             const result = await AI.parseInput(text);
@@ -235,21 +238,45 @@ const Omni = {
                 ${Omni.proposals.map((p, i) => `
                     <li class="proposal" data-i="${i}">
                         <div class="op-tag op-${esc(p.op)}">${esc(Omni._opLabel(p.op))}</div>
-                        <div class="op-summary">${esc(p.summary || Omni._defaultSummary(p))}</div>
+                        <div class="op-summary" data-sum="${i}">${esc(p.summary || Omni._defaultSummary(p))}</div>
                         ${p.reason ? `<div class="op-reason">${esc(p.reason)}</div>` : ''}
                         ${Omni._gapPickerHtml(p, i)}
+                        ${Omni._editorHtml(p, i)}
                         <div class="op-actions">
                             <button class="btn sm primary" data-omni="accept" data-i="${i}">Accept</button>
+                            <button class="btn sm" data-omni="edit" data-i="${i}">Edit</button>
                             <button class="btn sm ghost" data-omni="skip" data-i="${i}">Skip</button>
                         </div>
                     </li>
                 `).join('')}
             </ul>
+            <div class="omni-refine">
+                <label for="omni-refine-input">Not right? Say what to change</label>
+                <div class="refine-row">
+                    <input id="omni-refine-input" type="text" autocomplete="off"
+                           placeholder="e.g. the client is Datavise, due Friday, drop the second one">
+                    <button type="button" class="btn sm icon" data-omni="refine-mic" title="Dictate the correction" aria-label="Dictate the correction">
+                        <svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+                    </button>
+                    <button type="button" class="btn sm primary" data-omni="refine">Redo</button>
+                </div>
+            </div>
             ${result.transcript ? `<details class="omni-transcript"><summary>Source transcript</summary><div>${esc(result.transcript)}</div></details>` : ''}
         `;
         Omni.panel.hidden = false;
         Omni.panel.querySelectorAll('[data-omni]').forEach(b => {
             b.addEventListener('click', () => Omni._handleProposalAction(b.dataset.omni, b.dataset.i));
+        });
+        // a correction is a sentence, so Enter sends it
+        const rin = Omni.panel.querySelector('#omni-refine-input');
+        if (rin) rin.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); Omni._handleProposalAction('refine'); }
+        });
+        // edits write straight through to the proposal, so Accept needs no
+        // separate "save" step and the summary can stay honest
+        Omni.panel.querySelectorAll('[data-edit]').forEach(el => {
+            el.addEventListener('change', () => Omni._applyEdit(el));
+            if (el.tagName === 'INPUT') el.addEventListener('input', () => Omni._applyEdit(el));
         });
         // matter picker → repopulate the dependent task picker
         Omni.panel.querySelectorAll('select[data-gap="matter"]').forEach(sel => {
@@ -267,8 +294,183 @@ const Omni = {
         });
     },
 
+    /* ---- inline correction of a single proposal ----
+     * The talk-to-it path handles most mistakes, but when exactly one field is
+     * wrong, changing it directly beats describing the change. */
+
+    _clientOpts() {
+        return [{ v: '', l: '— none —' }].concat(
+            state.clients.filter(c => !c.deletedAt).map(c => ({ v: c.id, l: c.name })));
+    },
+    _matterOpts() {
+        return [{ v: '', l: '— none —' }].concat(
+            state.matters.filter(m => !m.deletedAt).map(m => ({
+                v: m.id, l: `${clientById(m.clientId)?.name || '—'} · ${m.title}` })));
+    },
+    _openTaskOpts() {
+        return [{ v: '', l: '— none —' }].concat(
+            state.tasks.filter(t => !t.deletedAt && t.status !== 'done')
+                       .map(t => ({ v: t.id, l: t.title })));
+    },
+
+    /* Which fields are worth exposing per op — the ones that actually get
+     * misread, not every key in the payload. `alt` names the free-text twin
+     * the model uses when it could not resolve a record ("matterName"). */
+    _editFieldsFor(p) {
+        const PRIO = [{ v:'low', l:'Low' }, { v:'normal', l:'Normal' }, { v:'high', l:'High' }];
+        switch (p.op) {
+            case 'createTask':
+            case 'updateTask':
+                return [
+                    { k:'title',    l:'Title',    t:'text' },
+                    { k:'matterId', l:'Project',  t:'select', o: Omni._matterOpts(), alt:'matterName' },
+                    { k:'due',      l:'Due',      t:'date' },
+                    { k:'priority', l:'Priority', t:'select', o: PRIO }
+                ];
+            case 'createClient':
+            case 'updateClient':
+                return [
+                    { k:'name',  l:'Name',  t:'text' },
+                    { k:'email', l:'Email', t:'text' },
+                    { k:'phone', l:'Phone', t:'text' }
+                ];
+            case 'createMatter':
+            case 'updateMatter':
+                return [
+                    { k:'title',    l:'Title',  t:'text' },
+                    { k:'clientId', l:'Client', t:'select', o: Omni._clientOpts(), alt:'clientName' },
+                    { k:'status',   l:'Status', t:'select', o:[
+                        { v:'open', l:'Open' }, { v:'on-hold', l:'On hold' }, { v:'closed', l:'Closed' }] }
+                ];
+            case 'logTime':
+                return [
+                    { k:'minutes',  l:'Minutes', t:'number' },
+                    { k:'date',     l:'Date',    t:'date' },
+                    { k:'matterId', l:'Project', t:'select', o: Omni._matterOpts(), alt:'matterName' },
+                    { k:'notes',    l:'Notes',   t:'text' }
+                ];
+            case 'completeTask':
+                return [{ k:'taskId', l:'Task', t:'select', o: Omni._openTaskOpts() }];
+            case 'createInvoice':
+                return [
+                    { k:'matterId',   l:'Project', t:'select', o: Omni._matterOpts(), alt:'matterName' },
+                    { k:'dateIssued', l:'Issued',  t:'date' },
+                    { k:'dateDue',    l:'Due',     t:'date' }
+                ];
+            default:
+                return [];
+        }
+    },
+
+    /* A select shows the id when there is one; when the model only produced a
+     * name, try to match it so the user sees a resolved record rather than a
+     * blank dropdown next to the right-looking summary. */
+    _editValue(p, f) {
+        const d = p.data || {};
+        if (d[f.k] != null && d[f.k] !== '') return String(d[f.k]);
+        if (!f.alt || !d[f.alt]) return '';
+        const want = String(d[f.alt]).toLowerCase();
+        const hit = (f.o || []).find(o => o.l.toLowerCase().includes(want));
+        return hit ? hit.v : '';
+    },
+
+    _editorHtml(p, i) {
+        const fields = Omni._editFieldsFor(p);
+        if (!fields.length) return '';
+        return `
+            <div class="op-editor" data-editor="${i}" hidden>
+                ${fields.map(f => {
+                    const val = Omni._editValue(p, f);
+                    const id = `oe_${i}_${f.k}`;
+                    const input = f.t === 'select'
+                        ? `<select id="${id}" data-edit="${i}" data-k="${esc(f.k)}" ${f.alt?`data-alt="${esc(f.alt)}"`:''}>
+                               ${f.o.map(o => `<option value="${esc(o.v)}" ${o.v === val ? 'selected':''}>${esc(o.l)}</option>`).join('')}
+                           </select>`
+                        : `<input id="${id}" data-edit="${i}" data-k="${esc(f.k)}" type="${f.t}" value="${esc(val)}">`;
+                    return `<div class="oe-field"><label for="${id}">${esc(f.l)}</label>${input}</div>`;
+                }).join('')}
+                ${(p.data && (p.data.matterName || p.data.clientName))
+                    ? `<div class="oe-note">Claude wrote “${esc(p.data.matterName || p.data.clientName)}” — pick the record above to link it, or leave it to create a new one.</div>`
+                    : ''}
+            </div>`;
+    },
+
+    _applyEdit(el) {
+        const i = Number(el.dataset.edit);
+        const p = Omni.proposals[i];
+        if (!p) return;
+        p.data = p.data || {};
+        const k = el.dataset.k;
+        const v = el.value;
+        if (el.type === 'number') p.data[k] = v === '' ? null : Number(v);
+        else p.data[k] = v === '' ? null : v;
+        // choosing a real record retires the free-text twin, so the applier
+        // links instead of creating a duplicate
+        if (el.dataset.alt && v) delete p.data[el.dataset.alt];
+        p.edited = true;
+        const sum = Omni.panel.querySelector(`[data-sum="${i}"]`);
+        if (sum) sum.textContent = Omni._defaultSummary(p);
+    },
+
+    async _refine() {
+        const inp = Omni.panel.querySelector('#omni-refine-input');
+        const correction = inp ? inp.value.trim() : '';
+        if (!correction) { if (inp) inp.focus(); return; }
+        if (Omni.busy) return;
+        // only the untouched proposals are worth re-deriving; anything already
+        // applied stays applied
+        const pending = Omni.proposals.filter(p => !p.accepted);
+        Omni.busy = true;
+        Omni._renderLoading();
+        try {
+            const result = await AI.refine(Omni.lastInput, pending, correction);
+            const applied = Omni.proposals.filter(p => p.accepted);
+            Omni.proposals = applied.concat(
+                (result.actions || []).map(a => ({ ...a, accepted: false })));
+            Omni._renderProposals(result);
+            if (!result.clarify) toast('Reworked');
+        } catch (e) {
+            console.error('refine failed', e);
+            Omni._renderError('Could not rework that: ' + esc(e.message || 'error'));
+        } finally {
+            Omni.busy = false;
+        }
+    },
+
     _handleProposalAction(action, idx) {
         if (action === 'discard') { Omni.clear(); return; }
+        if (action === 'refine') { Omni._refine(); return; }
+        if (action === 'refine-mic') {
+            const el = Omni.panel.querySelector('#omni-refine-input');
+            Recorder.toggle({
+                el,
+                btn: Omni.panel.querySelector('[data-omni="refine-mic"]'),
+                onFinal: () => Omni._refine(),
+                onAudio: async (file) => {
+                    // phone path: the recording is the correction, so read it
+                    // back to text first rather than parsing it as new input
+                    try {
+                        const r = await Gemini.transcribe(file);
+                        if (el) el.value = r;
+                        Omni._refine();
+                    } catch (e) {
+                        toast('Could not read the recording: ' + (e.message || 'error'), 'error');
+                    }
+                }
+            });
+            return;
+        }
+        if (action === 'edit') {
+            const ed = Omni.panel.querySelector(`[data-editor="${idx}"]`);
+            if (ed) {
+                ed.hidden = !ed.hidden;
+                if (!ed.hidden) {
+                    const first = ed.querySelector('input, select');
+                    if (first) first.focus();
+                }
+            }
+            return;
+        }
         if (action === 'accept-all') {
             let ok = 0;
             Omni.proposals.forEach((p, i) => { if (Omni._applyProposal(i)) ok++; });
@@ -433,24 +635,105 @@ const AI = {
      * dropdown offering a dead one turns a 404 into a hunt for a bug that
      * isn't there. Returns [] on any failure so Settings falls back quietly. */
     async listModels() {
-        if (!state.profile.anthropicKey) return [];
+        return (await AI.checkKey()).models || [];
+    },
+
+    /* Does this key work? The model list doubles as the cheapest possible
+     * probe: it needs no tokens, and a key that can list models can call them.
+     * Returns a reason rather than a boolean so Settings can say what is wrong
+     * instead of just going red. */
+    async checkKey(key) {
+        key = key || state.profile.anthropicKey;
+        if (!key) return { ok: false, reason: 'missing' };
         try {
             const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
                 headers: {
-                    'x-api-key': state.profile.anthropicKey,
+                    'x-api-key': key,
                     'anthropic-version': '2023-06-01',
                     'anthropic-dangerous-direct-browser-access': 'true'
                 }
             });
-            if (!res.ok) return [];
+            if (res.status === 401 || res.status === 403) return { ok: false, reason: 'rejected' };
+            if (!res.ok) return { ok: false, reason: 'http', status: res.status };
             const data = await res.json();
-            return (data.data || [])
+            const models = (data.data || [])
                 .map(m => ({ id: m.id, name: m.display_name || m.id }))
                 .filter(m => m.id);
+            return { ok: true, models };
         } catch (e) {
-            console.warn('Anthropic model list unavailable', e);
-            return [];
+            console.warn('Anthropic unreachable', e);
+            return { ok: false, reason: 'network' };
         }
+    },
+
+    /* Rank models so the app can choose for the user. Scoring by shape rather
+     * than by name means it keeps working as Anthropic ships and retires
+     * models — no list to maintain, nothing to go stale. */
+    _score(id) {
+        const s = id.toLowerCase();
+        let score = 0;
+        if (s.includes('opus')) score += 100;
+        else if (s.includes('sonnet')) score += 60;
+        else if (s.includes('haiku')) score += 30;
+        // restricted or preview tiers a normal key usually cannot call
+        if (/preview|mythos/.test(s)) score -= 500;
+        const v = s.match(/(\d+)[-.](\d+)/);          // "opus-4-8" -> 4.8
+        if (v) score += Number(v[1]) * 10 + Number(v[2]);
+        else {
+            const n = s.match(/(\d+)/);
+            if (n) score += Number(n[1]) * 10;
+        }
+        return score;
+    },
+
+    /* The model the app will actually use: the saved one if it is still real,
+     * otherwise the best available — saved back so the choice sticks. */
+    async ensureModel({ force = false } = {}) {
+        const saved = state.profile.anthropicModel;
+        if (saved && !force) return saved;
+        const models = await AI.listModels();
+        if (!models.length) return saved || 'claude-opus-4-8';
+        const best = models.map(m => m.id).sort((a, b) => AI._score(b) - AI._score(a))[0];
+        state.profile.anthropicModel = best;
+        Store.save();
+        return best;
+    },
+
+    /* One place that talks to Anthropic. Picks the model, and if that model
+     * has been retired since it was saved, re-picks and retries once instead
+     * of handing the user a 404 to solve. */
+    async _send({ system, messages, max_tokens }) {
+        const call = async (model) => {
+            const res = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'x-api-key': state.profile.anthropicKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                },
+                body: JSON.stringify({ model, max_tokens, system, messages })
+            });
+            return res;
+        };
+
+        let model = await AI.ensureModel();
+        let res = await call(model);
+
+        if (res.status === 404) {
+            const fresh = await AI.ensureModel({ force: true });
+            if (fresh && fresh !== model) {
+                console.warn(`model ${model} is gone — switched to ${fresh}`);
+                toast(`Switched to ${fresh} — the previous model was retired`);
+                model = fresh;
+                res = await call(model);
+            }
+        }
+        if (!res.ok) {
+            const err = await res.text().catch(() => '');
+            throw AI._httpError(res.status, err, model);
+        }
+        return res.json();
     },
 
     /* Turn an HTTP failure into something the user can act on. A retired
@@ -514,27 +797,11 @@ ${ctx}
 USER INPUT:
 ${text}`;
 
-        const model = state.profile.anthropicModel || 'claude-opus-4-8';
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                'x-api-key': state.profile.anthropicKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model,
-                max_tokens: 1500,
-                system: AI.SYSTEM_PROMPT,
-                messages: [{ role: 'user', content: userMsg }]
-            })
+        const json = await AI._send({
+            system: AI.SYSTEM_PROMPT,
+            messages: [{ role: 'user', content: userMsg }],
+            max_tokens: 1500
         });
-        if (!res.ok) {
-            const err = await res.text().catch(()=>'');
-            throw AI._httpError(res.status, err, model);
-        }
-        const json = await res.json();
         const content = json.content?.[0]?.text || '';
         let parsed;
         try {
@@ -581,31 +848,113 @@ ${text}`;
         } else {
             throw new Error('Unsupported file. Use .docx, PDF, image, .txt, audio or video.');
         }
-        const model = state.profile.anthropicModel || 'claude-opus-4-8';
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                'x-api-key': state.profile.anthropicKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model,
-                max_tokens: 1500,
-                system: AI.SYSTEM_PROMPT,
-                messages: [{ role: 'user', content }]
-            })
+        const json = await AI._send({
+            system: AI.SYSTEM_PROMPT,
+            messages: [{ role: 'user', content }],
+            max_tokens: 1500
         });
-        if (!res.ok) {
-            const err = await res.text().catch(() => '');
-            throw AI._httpError(res.status, err, model);
-        }
-        const json = await res.json();
         const txt = (json.content && json.content[0] && json.content[0].text) || '';
         const cleaned = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
         try { return JSON.parse(cleaned); }
         catch (e) { throw new Error('AI returned a non-JSON response'); }
+    },
+
+    /* Every call here asks for raw JSON and every model occasionally wraps it
+     * in a code fence anyway. One place to unwrap it. */
+    _json(json) {
+        const txt = (json.content && json.content[0] && json.content[0].text) || '';
+        const cleaned = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+        try { return JSON.parse(cleaned); }
+        catch (e) { throw new Error('AI returned a non-JSON response'); }
+    },
+
+    /* Correct a set of proposals by talking, instead of by filling in fields.
+     * The model gets what it proposed last time plus what the user says is
+     * wrong, and returns the whole corrected list — so a correction can add,
+     * drop or merge actions, not just patch one. */
+    async refine(originalText, proposals, correction) {
+        const sys = AI.SYSTEM_PROMPT + `
+
+REFINEMENT MODE
+You already proposed a list of actions. The user is telling you what you got wrong.
+Return the COMPLETE corrected list in the same JSON shape — not just the changed entries.
+- Keep every action the user did not object to, byte for byte.
+- The correction may add actions, remove them, split one into two, or merge two into one.
+- The correction wins over your earlier reading and over the original input.
+- If the correction is genuinely ambiguous, use "clarify" instead of guessing.`;
+        const userMsg = `TODAY: ${todayISO()}
+
+CONTEXT:
+${AI._buildContext()}
+
+ORIGINAL USER INPUT:
+${originalText || '(not available)'}
+
+ACTIONS YOU PROPOSED:
+${JSON.stringify(proposals.map(p => ({ op: p.op, data: p.data })), null, 1)}
+
+THE USER'S CORRECTION:
+${correction}`;
+        const json = await AI._send({
+            system: sys,
+            messages: [{ role: 'user', content: userMsg }],
+            max_tokens: 1500
+        });
+        return AI._json(json);
+    },
+
+    /* Fill a form from a sentence. The caller passes its own field list, so
+     * this works for any modal without knowing what a task or a client is —
+     * the point being that the user describes the thing once, in their own
+     * words, instead of tabbing through seven inputs. */
+    async fillForm({ fields, values, text, title }) {
+        const spec = fields.map(f => {
+            const bits = [`- "${f.name}" (${f.type || 'text'}): ${f.label}`];
+            if (f.options) {
+                bits.push(`    allowed values: ${f.options
+                    .filter(o => o.value !== '')
+                    .map(o => `"${o.value}" = ${o.label}`).join(' | ')}`);
+            }
+            if (f.hint) bits.push(`    note: ${f.hint}`);
+            return bits.join('\n');
+        }).join('\n');
+
+        const sys = `You fill in one form in "ordify", a practice manager for a solo lawyer.
+The user describes what they want in English, Russian or Ukrainian — often tersely, sloppily, or dictated with speech-recognition errors. Turn that into field values.
+
+Return ONLY raw JSON, no markdown fences:
+{ "values": { "<fieldName>": <value>, ... }, "note"?: "one short line if something could not be filled" }
+
+Rules:
+- Only include fields you are actually confident about. Omit the rest — an omitted field keeps its current value.
+- For "select" fields the value MUST be one of the allowed values, exactly. Match by meaning, not by spelling.
+- For "date" fields output ISO YYYY-MM-DD. Resolve relative dates ("Friday", "в пятницу", "через неделю") against TODAY.
+- Reference fields (project, client) hold an id from CONTEXT. Match by name, case-insensitively and across languages. If no record matches, omit the field and say so in "note".
+- Write the title as a short actionable phrase, cleaned up — fix dictation garble, drop filler. Keep names, case numbers and references exactly as given.
+- Never invent a deadline, an amount or a person that the user did not state.`;
+
+        const userMsg = `TODAY: ${todayISO()}
+
+CONTEXT (existing records — use these ids for reference fields):
+${AI._buildContext()}
+
+FORM: ${title || 'form'}
+FIELDS:
+${spec}
+
+CURRENT VALUES:
+${JSON.stringify(values || {}, null, 1)}
+
+WHAT THE USER SAID:
+${text}`;
+
+        const json = await AI._send({
+            system: sys,
+            messages: [{ role: 'user', content: userMsg }],
+            max_tokens: 1200
+        });
+        const parsed = AI._json(json);
+        return { values: parsed.values || {}, note: parsed.note || '' };
     },
 
     /* Read one email's body and extract the lawyer's action items. */
@@ -622,27 +971,11 @@ Rules:
 - If the email needs no action (newsletter, receipt, FYI, automated notice), return { "tasks": [] }.
 - At most 4 tasks. Output raw JSON only.`;
         const userMsg = `TODAY: ${todayISO()}\n\nSUBJECT: ${subject}\n\nBODY:\n${body}`;
-        const model = state.profile.anthropicModel || 'claude-opus-4-8';
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-                'content-type': 'application/json',
-                'x-api-key': state.profile.anthropicKey,
-                'anthropic-version': '2023-06-01',
-                'anthropic-dangerous-direct-browser-access': 'true'
-            },
-            body: JSON.stringify({
-                model,
-                max_tokens: 1024,
-                system: sys,
-                messages: [{ role: 'user', content: userMsg }]
-            })
+        const json = await AI._send({
+            system: sys,
+            messages: [{ role: 'user', content: userMsg }],
+            max_tokens: 1024
         });
-        if (!res.ok) {
-            const err = await res.text().catch(() => '');
-            throw AI._httpError(res.status, err, model);
-        }
-        const json = await res.json();
         const content = (json.content && json.content[0] && json.content[0].text) || '';
         const cleaned = content.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
         let parsed;
@@ -856,25 +1189,66 @@ const Gemini = {
      * offering a dead one sends the user hunting for a bug that is really a
      * 404. Returns [] on any failure so Settings can fall back quietly. */
     async listModels() {
-        if (!state.profile.geminiKey) return [];
+        return (await Gemini.checkKey()).models || [];
+    },
+
+    /* Same probe as AI.checkKey — listing models costs nothing and proves the
+     * key is live. */
+    async checkKey(key) {
+        key = key || state.profile.geminiKey;
+        if (!key) return { ok: false, reason: 'missing' };
         try {
             const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
-                headers: { 'x-goog-api-key': state.profile.geminiKey }
+                headers: { 'x-goog-api-key': key }
             });
-            if (!res.ok) return [];
+            if (res.status === 400 || res.status === 401 || res.status === 403) {
+                return { ok: false, reason: 'rejected' };
+            }
+            if (!res.ok) return { ok: false, reason: 'http', status: res.status };
             const data = await res.json();
-            return (data.models || [])
+            const models = (data.models || [])
                 .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
                 .map(m => (m.name || '').replace(/^models\//, ''))
                 .filter(n => n && !/embedding|aqa|imagen|veo/i.test(n))
                 .sort();
+            return { ok: true, models };
         } catch (e) {
-            console.warn('Gemini model list unavailable', e);
-            return [];
+            console.warn('Gemini unreachable', e);
+            return { ok: false, reason: 'network' };
         }
     },
 
-    async parseAV(file) {
+    /* Google lists dozens of models; the user should never have to rank them.
+     * Score by shape — favour current stable flash tiers, which are the fast,
+     * cheap ones with a free-tier allowance, and avoid experimental builds. */
+    _score(id) {
+        const s = id.toLowerCase();
+        let score = 0;
+        if (s.includes('flash')) score += 100;      // fast + free tier: right for dictation
+        else if (s.includes('pro')) score += 40;
+        if (/exp|preview|thinking|tuning/.test(s)) score -= 500;   // unstable
+        if (s.includes('lite')) score -= 20;
+        if (/gemma|learnlm/.test(s)) score -= 300;  // not general-purpose here
+        const v = s.match(/(\d+)\.(\d+)/);          // "gemini-2.5-flash" -> 2.5
+        if (v) score += Number(v[1]) * 10 + Number(v[2]);
+        return score;
+    },
+
+    /* The model the app will actually use. `exclude` lets a failed call ask for
+     * the next best one instead of the same dead or exhausted model. */
+    async ensureModel({ force = false, exclude = [] } = {}) {
+        const saved = state.profile.geminiModel;
+        if (saved && !force && !exclude.includes(saved)) return saved;
+        const models = (await Gemini.listModels()).filter(m => !exclude.includes(m));
+        if (!models.length) return exclude.includes(saved) ? null : (saved || 'gemini-2.0-flash');
+        const best = [...models].sort((a, b) => Gemini._score(b) - Gemini._score(a))[0];
+        state.profile.geminiModel = best;
+        Store.save();
+        return best;
+    },
+
+    /* Guard rails shared by everything that sends a file to Gemini. */
+    async _prepare(file) {
         if (!state.profile.geminiKey) {
             throw new Error('Add your Gemini API key in Settings to upload audio or video.');
         }
@@ -882,32 +1256,14 @@ const Gemini = {
         if (sizeMB > 18) {
             throw new Error(`File is ${sizeMB.toFixed(1)} MB — Gemini inline limit is ~20 MB. Trim it down or split it.`);
         }
-        const b64 = await DocImport._b64(file);
-        const model = state.profile.geminiModel || 'gemini-2.0-flash';
-        const kind = (file.type || '').startsWith('video/') ? 'video' : 'audio';
-        const sys = AI.SYSTEM_PROMPT;
-        const userText = `TODAY: ${todayISO()}
+        return await DocImport._b64(file);
+    },
 
-CONTEXT:
-${AI._buildContext()}
-
-USER INPUT — listen to / watch the attached ${kind} (file: ${file.name}) and extract the user's intended actions per the system rules above. Respond with the same JSON shape: { "actions": [...], "transcript"?: "...", "clarify"?: "..." }.`;
-        const payload = {
-            contents: [{
-                role: 'user',
-                parts: [
-                    { text: sys + '\n\n---\n\n' + userText },
-                    { inline_data: { mime_type: file.type, data: b64 } }
-                ]
-            }],
-            generationConfig: {
-                responseMimeType: 'application/json',
-                temperature: 0.2,
-                maxOutputTokens: 1500
-            }
-        };
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    /* One request, with the model chosen for the user and re-chosen if the
+     * first pick turns out to be retired or out of quota. Returns raw text. */
+    async _run(payload) {
+        const call = (m) => fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent`,
             {
                 method: 'POST',
                 headers: {
@@ -917,33 +1273,90 @@ USER INPUT — listen to / watch the attached ${kind} (file: ${file.name}) and e
                 body: JSON.stringify(payload)
             }
         );
+
+        let used = await Gemini.ensureModel();
+        let res = await call(used);
+
+        // 404 = the model was retired; 429 = this model has no allowance left.
+        // Both are fixed by using a different model, and the user should not
+        // have to know that — try the next best one automatically.
+        if (res.status === 404 || res.status === 429) {
+            const next = await Gemini.ensureModel({ force: true, exclude: [used] });
+            if (next && next !== used) {
+                console.warn(`gemini ${used} → ${next} (HTTP ${res.status})`);
+                toast(`Switched to ${next}`);
+                used = next;
+                res = await call(used);
+            }
+        }
+
         if (!res.ok) {
             const err = await res.text().catch(() => '');
-            // A raw 429 body is a wall of JSON that says nothing about what to
-            // do. The usual cause is not "you used it all up" but a model with
-            // no free-tier allowance at all, which is fixable in Settings.
             if (res.status === 429) {
-                throw new Error(`${model} is out of quota. Pick another model in Settings — `
-                    + `free-tier allowances differ per model — or check `
-                    + `aistudio.google.com/usage.`);
+                throw new Error(`Google's free quota for this key is used up (${used}). `
+                    + `It resets daily — see aistudio.google.com/usage.`);
             }
             if (res.status === 403 || res.status === 401) {
                 throw new Error('Gemini rejected the API key. Check it in Settings.');
             }
-            if (res.status === 404) {
-                throw new Error(`Model "${model}" does not exist any more. Pick another in Settings.`);
-            }
             throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 200)}`);
         }
         const json = await res.json();
-        const txt = (json.candidates && json.candidates[0]
-                     && json.candidates[0].content
-                     && json.candidates[0].content.parts
-                     && json.candidates[0].content.parts[0]
-                     && json.candidates[0].content.parts[0].text) || '';
+        return (json.candidates && json.candidates[0]
+                && json.candidates[0].content
+                && json.candidates[0].content.parts
+                && json.candidates[0].content.parts[0]
+                && json.candidates[0].content.parts[0].text) || '';
+    },
+
+    async parseAV(file) {
+        const b64 = await Gemini._prepare(file);
+        const kind = (file.type || '').startsWith('video/') ? 'video' : 'audio';
+        const userText = `TODAY: ${todayISO()}
+
+CONTEXT:
+${AI._buildContext()}
+
+USER INPUT — listen to / watch the attached ${kind} (file: ${file.name}) and extract the user's intended actions per the system rules above. Respond with the same JSON shape: { "actions": [...], "transcript"?: "...", "clarify"?: "..." }.`;
+        const txt = await Gemini._run({
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: AI.SYSTEM_PROMPT + '\n\n---\n\n' + userText },
+                    { inline_data: { mime_type: file.type, data: b64 } }
+                ]
+            }],
+            generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.2,
+                maxOutputTokens: 1500
+            }
+        });
         const cleaned = txt.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
         try { return JSON.parse(cleaned); }
         catch (e) { throw new Error('Gemini returned a non-JSON response'); }
+    },
+
+    /* Words only — no action extraction. Used where the recording is meant to
+     * fill a field or correct a proposal, not to become new instructions. */
+    async transcribe(file) {
+        const b64 = await Gemini._prepare(file);
+        const txt = await Gemini._run({
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: 'Transcribe the attached recording verbatim. '
+                          + 'Keep the speaker\'s language — do not translate. '
+                          + 'Fix obvious mis-hearings of names only where the correction is certain. '
+                          + 'Output the transcript as plain text and nothing else — no preamble, no quotes, no formatting.' },
+                    { inline_data: { mime_type: file.type, data: b64 } }
+                ]
+            }],
+            generationConfig: { temperature: 0, maxOutputTokens: 900 }
+        });
+        const out = txt.trim();
+        if (!out) throw new Error('Nothing recognisable in the recording');
+        return out;
     }
 };
 
@@ -969,9 +1382,44 @@ const Recorder = {
         return !!(navigator.mediaDevices && window.MediaRecorder);
     },
 
-    toggle() {
-        if (Recorder.listening) Recorder.stop();
-        else Recorder.start();
+    /* Where dictation lands. Null means the omni bar; a modal or the refine
+     * box passes its own, so the same microphone serves every input in the
+     * app instead of only the one at the top. */
+    target: null,
+
+    _tgt() {
+        return Recorder.target || {
+            el: Omni.input,
+            onFinal: () => Omni.runAI(),
+            onAudio: async (file) => {
+                Omni.busy = true;
+                Omni._renderLoading();
+                try {
+                    const result = await AI.parseFile(file);
+                    Omni.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
+                    Omni.lastInput = result.transcript || Omni.lastInput;
+                    Omni._renderProposals(result);
+                } catch (e) {
+                    console.error('dictation parse failed', e);
+                    Omni._renderError('Could not read the recording: ' + esc(e.message || 'error'));
+                } finally {
+                    Omni.busy = false;
+                }
+            }
+        };
+    },
+
+    _write(text) {
+        const el = Recorder._tgt().el;
+        if (!el) return;
+        el.value = text;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    },
+
+    toggle(target = null) {
+        if (Recorder.listening) { Recorder.stop(); return; }
+        Recorder.target = target;
+        Recorder.start();
     },
 
     /* A phone hands the microphone to one consumer at a time. Running
@@ -1025,21 +1473,11 @@ const Recorder = {
                         // do not toast here; the AI completion toast is more useful
 
                         // On a phone nothing was transcribed live — the recording
-                        // itself is the input, so hand it to Gemini now.
+                        // itself is the input, so hand it to whoever asked for
+                        // the microphone.
                         if (Recorder.avMode) {
-                            Omni.busy = true;
-                            Omni._renderLoading();
-                            try {
-                                const file = new File([blob], fname, { type: blob.type || 'audio/webm' });
-                                const result = await AI.parseFile(file);
-                                Omni.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
-                                Omni._renderProposals(result);
-                            } catch (e) {
-                                console.error('dictation parse failed', e);
-                                Omni._renderError('Could not read the recording: ' + esc(e.message || 'error'));
-                            } finally {
-                                Omni.busy = false;
-                            }
+                            const file = new File([blob], fname, { type: blob.type || 'audio/webm' });
+                            await Recorder._tgt().onAudio(file);
                         }
                     } else if (Recorder.avMode) {
                         toast('Nothing recorded — check the microphone permission', 'error');
@@ -1076,7 +1514,7 @@ const Recorder = {
                 if (final) Recorder.finalText += final;
                 Recorder.interimText = interim;
                 const combined = (Recorder.finalText + Recorder.interimText).trim();
-                Omni.input.value = combined;
+                Recorder._write(combined);
             };
             rec.onerror = (e) => {
                 console.warn('Speech recognition error', e);
@@ -1089,8 +1527,8 @@ const Recorder = {
                 Recorder._setListening(false);
                 const txt = (Recorder.finalText + Recorder.interimText).trim();
                 if (txt) {
-                    Omni.input.value = txt;
-                    Omni.runAI();
+                    Recorder._write(txt);
+                    Recorder._tgt().onFinal(txt);
                 } else {
                     // Silence here is what "the mic does nothing" feels like:
                     // say so, and point at the fix that actually works.
@@ -1111,7 +1549,10 @@ const Recorder = {
         Recorder._setListening(true);
         // Focusing the field on a phone raises the on-screen keyboard over the
         // mic button you need to press again to stop.
-        if (!mobile) Omni.input.focus();
+        if (!mobile) {
+            const el = Recorder._tgt().el;
+            if (el) el.focus();
+        }
         toast(Recorder.avMode
             ? 'Recording — tap the mic again to stop'
             : `Listening (${Recorder.resolveLang()})…`);
@@ -1157,9 +1598,16 @@ const Recorder = {
         Recorder._setListening(false);
     },
 
+    /* Light whichever mic was actually pressed — a listening indicator on a
+     * different button than the one you tapped reads as a bug. */
     _setListening(v) {
         Recorder.listening = v;
-        if (Omni.micBtn) Omni.micBtn.classList.toggle('on', v);
+        const own = Recorder.target && Recorder.target.btn;
+        if (own) own.classList.toggle('listening', v);
+        if (Omni.micBtn) Omni.micBtn.classList.toggle('on', v && !own);
+        // the target is deliberately NOT cleared here: onend calls this before
+        // delivering the transcript, and clearing would send it to the omni bar
+        // instead of whoever asked for the microphone. toggle() sets it anew.
     }
 };
 

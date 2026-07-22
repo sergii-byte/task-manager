@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#6a1b9a">
+<meta name="theme-color" content="#2f5d3f">
 <title>ordify · status</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,18 +12,18 @@
 <link rel="icon" type="image/svg+xml" href="icon.svg">
 <style>
 :root {
-    --bg:        #fafaf7;
-    --ink:       #0a0a0a;
+    --bg:        #f4f6f8;
+    --ink:       #141a20;
     /* kept in step with the app's tokens — both clear WCAG AA on --bg, so
        nothing the client needs to read is set in unreadable grey */
-    --fg-mute:   #6e6b64;
-    --fg-faint:  #757269;
-    --line:      #e8e6df;
-    --accent:    #6a1b9a;
-    --accent-soft: #f3e8fb;
-    --ok:        #15803d;
-    --warn:      #8a6000;
-    --danger:    #b3341a;
+    --fg-mute:   #5e6975;
+    --fg-faint:  #656f7a;
+    --line:      #dce2e8;
+    --accent:    #2f5d3f;
+    --accent-soft: #e5ede7;
+    --ok:        #3c556e;
+    --warn:      #8a5a00;
+    --danger:    #a32135;
     --radius: 6px;
     --radius-lg: 10px;
     --font: 'Inter', system-ui, sans-serif;
@@ -105,14 +105,14 @@ td.date.overdue { color: var(--danger); font-weight: 700; }
     padding: 3px 7px; border-radius: 999px; border: 1px solid var(--line);
     color: var(--fg-mute); background: #fff; white-space: nowrap;
 }
-.badge.high    { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
-.badge.normal  { color: var(--accent); border-color: #ddd6fe; background: var(--accent-soft); }
+.badge.high    { color: var(--danger); border-color: #edc3ca; background: #fbecee; }
+.badge.normal  { color: var(--accent); border-color: #c4d8c9; background: var(--accent-soft); }
 .badge.low     { color: var(--fg-mute); }
-.badge.open    { color: var(--accent); border-color: #ddd6fe; background: var(--accent-soft); }
+.badge.open    { color: var(--accent); border-color: #c4d8c9; background: var(--accent-soft); }
 .badge.on-hold { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
 .badge.closed  { color: var(--fg-mute); }
-.badge.done    { color: var(--ok); border-color: #bbf7d0; background: #f0fdf4; }
-.badge.overdue { color: var(--danger); border-color: #fecaca; background: #fef2f2; }
+.badge.done    { color: var(--ok); border-color: #cbd8e4; background: #edf1f5; }
+.badge.overdue { color: var(--danger); border-color: #edc3ca; background: #fbecee; }
 .badge.stuck   { color: var(--warn); border-color: #fde68a; background: #fffbeb; }
 
 /* ---- conversation ---- */
@@ -179,7 +179,7 @@ td.date.overdue { color: var(--danger); font-weight: 700; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-init.js?v=42"></script>
-<script src="share.js?v=42"></script>
+<script src="firebase-init.js?v=46"></script>
+<script src="share.js?v=46"></script>
 </body>
 </html>

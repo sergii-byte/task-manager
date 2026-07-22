@@ -944,17 +944,25 @@ const Modal = {
         });
     },
 
-    open({ title, fields, onSave, onDelete = null, saveLabel = 'Save' }) {
+    open({ title, fields, onSave, onDelete = null, saveLabel = 'Save', ai = false }) {
         $('#modal-title').textContent = title;
         $('#modal-save').textContent = saveLabel;
         $('#modal-delete').style.display = onDelete ? '' : 'none';
         Modal.onSave = onSave;
         Modal.onDelete = onDelete;
-        $('#modal-body').innerHTML = fields.map(f => Modal._renderField(f)).join('');
+        Modal.fields = fields;
+        Modal.title = title;
+        Modal.aiHint = ai ? (ai.hint || 'Describe it in a sentence — I\'ll fill the fields') : null;
+        $('#modal-body').innerHTML =
+            (Modal.aiHint ? Modal._aiBarHtml() : '') +
+            fields.map(f => Modal._renderField(f)).join('');
+        if (Modal.aiHint) Modal._bindAiBar();
         Modal.el.showModal();
-        // focus first input
+        // focus the AI bar when there is one — describing beats tabbing
         setTimeout(() => {
-            const first = $('#modal-body input, #modal-body textarea, #modal-body select');
+            const first = Modal.aiHint
+                ? $('#modal-ai-input')
+                : $('#modal-body input, #modal-body textarea, #modal-body select');
             if (first && !first.disabled) first.focus();
         }, 30);
     },
@@ -962,7 +970,125 @@ const Modal = {
     close() {
         Modal.onSave = null;
         Modal.onDelete = null;
+        Modal.fields = null;
+        Modal.aiHint = null;
+        if (Recorder.listening && Recorder.target && Recorder.target.inModal) Recorder.stop();
         if (Modal.el.open) Modal.el.close();
+        // drop the markup too: a form that bails out before opening would
+        // otherwise leave the previous form's fields on screen
+        $('#modal-body').innerHTML = '';
+    },
+
+    /* ---- describe-it-once bar ----
+     * Filling seven fields by hand is the tax this app exists to remove, so
+     * every form that has one offers the same escape hatch: say it in a
+     * sentence, let Claude place the values, then correct what it got wrong. */
+    _aiBarHtml() {
+        return `
+            <div class="modal-ai" id="modal-ai">
+                <div class="mai-row">
+                    <input id="modal-ai-input" type="text" autocomplete="off"
+                           placeholder="${esc(Modal.aiHint)}">
+                    <button type="button" class="btn sm icon" id="modal-ai-mic"
+                            title="Dictate" aria-label="Dictate">
+                        <svg class="ic-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>
+                    </button>
+                    <button type="button" class="btn sm primary" id="modal-ai-go">Fill</button>
+                </div>
+                <div class="mai-status" id="modal-ai-status" hidden></div>
+            </div>`;
+    },
+
+    _bindAiBar() {
+        const inp = $('#modal-ai-input');
+        const go  = $('#modal-ai-go');
+        const mic = $('#modal-ai-mic');
+        if (go)  go.addEventListener('click', () => Modal._aiFill());
+        if (inp) inp.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); Modal._aiFill(); }
+        });
+        if (mic) mic.addEventListener('click', () => {
+            Recorder.toggle({
+                el: inp,
+                btn: mic,
+                inModal: true,
+                onFinal: () => Modal._aiFill(),
+                onAudio: async (file) => {
+                    // on a phone the mic produces a recording, not text
+                    Modal._aiStatus('Reading the recording…');
+                    try {
+                        inp.value = await Gemini.transcribe(file);
+                        Modal._aiFill();
+                    } catch (e) {
+                        Modal._aiStatus('Could not read that: ' + (e.message || 'error'), 'bad');
+                    }
+                }
+            });
+        });
+    },
+
+    _aiStatus(msg, kind = '') {
+        const el = $('#modal-ai-status');
+        if (!el) return;
+        el.hidden = !msg;
+        el.textContent = msg || '';
+        el.dataset.kind = kind;
+    },
+
+    async _aiFill() {
+        const inp = $('#modal-ai-input');
+        const text = inp ? inp.value.trim() : '';
+        if (!text) { if (inp) inp.focus(); return; }
+        if (!state.profile.anthropicKey) {
+            Modal._aiStatus('Add an Anthropic API key in Settings to use this.', 'bad');
+            return;
+        }
+        if (Modal.aiBusy) return;
+        Modal.aiBusy = true;
+        Modal._aiStatus('Reading…');
+        try {
+            const { values, note } = await AI.fillForm({
+                fields: Modal.fields,
+                values: Modal._collect(),
+                text,
+                title: Modal.title
+            });
+            const filled = Modal._applyValues(values);
+            if (!filled.length) {
+                Modal._aiStatus(note || 'Nothing in that matched a field — try naming what you want set.', 'bad');
+            } else {
+                Modal._aiStatus(
+                    `Filled ${filled.join(', ')}${note ? ' · ' + note : ''} — check it before saving.`, 'ok');
+                if (inp) inp.value = '';
+            }
+        } catch (e) {
+            console.error('form fill failed', e);
+            Modal._aiStatus('Could not fill that: ' + (e.message || 'error'), 'bad');
+        } finally {
+            Modal.aiBusy = false;
+        }
+    },
+
+    /* Write values into the live inputs rather than re-rendering, so anything
+     * the user already typed by hand survives untouched. */
+    _applyValues(values) {
+        const done = [];
+        Object.entries(values || {}).forEach(([name, val]) => {
+            if (val == null || val === '') return;
+            const el = $(`#modal-body [name="${CSS.escape(name)}"]`);
+            if (!el) return;
+            const spec = (Modal.fields || []).find(f => f.name === name);
+            if (el.tagName === 'SELECT') {
+                const ok = [...el.options].some(o => o.value == val);
+                if (!ok) return;   // never leave a select on a value it can't hold
+            }
+            if (el.type === 'checkbox') el.checked = !!val;
+            else el.value = val;
+            el.classList.add('ai-filled');
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            done.push(spec ? spec.label.toLowerCase() : name);
+        });
+        return done;
     },
 
     _renderField(f) {
@@ -2143,21 +2269,24 @@ function viewSettings() {
 
             <h3>AI &amp; voice input</h3>
             <div class="settings-warn">
-                <strong>Heads up:</strong> your Anthropic API key is stored in this browser's localStorage in plaintext.
-                Anyone with access to this device can read it. Use a key with limited spend, and revoke it if the device is compromised.
+                <strong>Heads up:</strong> these API keys are stored in this browser's localStorage in plaintext.
+                Anyone with access to this device can read them. Use keys with limited spend, and revoke them if the device is compromised.
             </div>
             <div class="grid2">
                 <div class="field full">
                     <label>Anthropic API key</label>
-                    <input name="anthropicKey" type="password" placeholder="sk-ant-..." value="${esc(p.anthropicKey)}" autocomplete="off">
-                    <small class="hint">Get one at console.anthropic.com → API Keys. Without this, omni-input AI parsing is disabled.</small>
+                    <input name="anthropicKey" type="password" placeholder="sk-ant-..." value="${esc(p.anthropicKey)}" autocomplete="off" data-check="anthropic">
+                    <div class="key-status" id="anthropic-status" data-state="idle"></div>
+                    <small class="hint">Get one at <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com → API keys</a>.
+                    Runs typing, documents and images. Without it, AI parsing is off.</small>
                 </div>
-                <div class="field"><label>Claude model</label>
-                    <select name="anthropicModel" id="anthropic-model">
-                        <option selected>${esc(p.anthropicModel || 'claude-opus-4-8')}</option>
-                    </select>
-                    <small class="hint" id="anthropic-model-hint">Opus = most capable. Sonnet = balanced. Haiku = fastest and cheapest.
-                    The list is read from your key, so it only ever offers models you can actually call.</small>
+                <div class="field full">
+                    <label>Gemini API key (audio / video)</label>
+                    <input name="geminiKey" type="password" placeholder="AIza..." value="${esc(p.geminiKey||'')}" autocomplete="off" data-check="gemini">
+                    <div class="key-status" id="gemini-status" data-state="idle"></div>
+                    <small class="hint">Free at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>.
+                    Needed for attached audio and video, and for <strong>dictation on a phone</strong> — a phone gives the
+                    microphone to one app at a time, so ordify records there and has Gemini read it back.</small>
                 </div>
                 <div class="field"><label>Dictation language</label>
                     <select name="dictationLang">
@@ -2169,22 +2298,27 @@ function viewSettings() {
                     </select>
                     <small class="hint">Auto reads your browser locale (uk / ru / en / pl). Web Speech API can only listen to one language at a time — pick explicitly if auto guesses wrong.</small>
                 </div>
-                <div class="field full">
-                    <label>Gemini API key (audio / video)</label>
-                    <input name="geminiKey" type="password" placeholder="AIza..." value="${esc(p.geminiKey||'')}" autocomplete="off">
-                    <small class="hint">Get one free at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>.
-                    Needed for attached audio and video, and for <strong>dictation on a phone</strong> — a phone gives the
-                    microphone to one app at a time, so ordify records there and has Gemini read it back. Claude handles
-                    documents and images without this.</small>
-                </div>
-                <div class="field"><label>Gemini model</label>
-                    <select name="geminiModel" id="gemini-model">
-                        <option selected>${esc(p.geminiModel || 'gemini-2.0-flash')}</option>
-                    </select>
-                    <small class="hint" id="gemini-model-hint">Flash = fast/cheap, Pro = more careful with long video.
-                    Free-tier quota differs per model — a 429 usually means this one has none, not that you ran out.</small>
-                </div>
             </div>
+
+            <details class="advanced">
+                <summary>Advanced — choose the models yourself</summary>
+                <p class="muted" style="font-size:12px;margin:0 0 12px">ordify picks a model from each key on its own,
+                and re-picks automatically when one is retired or out of quota. Override only if you have a reason to.</p>
+                <div class="grid2">
+                    <div class="field"><label>Claude model</label>
+                        <select name="anthropicModel" id="anthropic-model">
+                            <option selected>${esc(p.anthropicModel || 'claude-opus-4-8')}</option>
+                        </select>
+                        <small class="hint" id="anthropic-model-hint">Opus = most capable, Sonnet = balanced, Haiku = fastest.</small>
+                    </div>
+                    <div class="field"><label>Gemini model</label>
+                        <select name="geminiModel" id="gemini-model">
+                            <option selected>${esc(p.geminiModel || 'gemini-2.0-flash')}</option>
+                        </select>
+                        <small class="hint" id="gemini-model-hint">Flash = fast and has a free tier; Pro is more careful with long video.</small>
+                    </div>
+                </div>
+            </details>
 
             <h3>Google integrations</h3>
             <div class="settings-warn">
@@ -2243,6 +2377,60 @@ function viewSettings() {
  * ========================================================================= */
 
 let inboxEmails = [];
+
+/* A key is either working or it isn't, and the only honest way to know is to
+ * ask the provider. Settings says so in one line — no "save and find out later
+ * when a parse fails with a 404". */
+const KEY_PROVIDERS = {
+    anthropic: {
+        label: 'Claude',
+        does: 'typing, documents, images',
+        client: () => (typeof AI !== 'undefined' ? AI : null),
+        saved: () => state.profile.anthropicModel,
+        ids: (models) => models.map(m => m.id)
+    },
+    gemini: {
+        label: 'Gemini',
+        does: 'audio, video, phone dictation',
+        client: () => (typeof Gemini !== 'undefined' ? Gemini : null),
+        saved: () => state.profile.geminiModel,
+        ids: (models) => models
+    }
+};
+
+const keyCheckTimers = {};
+
+async function refreshKeyStatus(which, key) {
+    const cfg = KEY_PROVIDERS[which];
+    const box = $('#' + which + '-status');
+    const client = cfg && cfg.client();
+    if (!box || !client) return;
+
+    const set = (stateName, html) => { box.dataset.state = stateName; box.innerHTML = html; };
+
+    if (!key) { box.dataset.token = ''; set('idle', 'No key yet — ' + esc(cfg.does) + ' stay off.'); return; }
+
+    set('checking', 'Checking…');
+    box.dataset.token = key;
+    const r = await client.checkKey(key);
+    // a slower earlier check must not overwrite a newer verdict
+    if (box.dataset.token !== key) return;
+
+    if (!r.ok) {
+        const why = r.reason === 'rejected' ? cfg.label + ' rejected this key.'
+                  : r.reason === 'network'  ? 'Could not reach ' + cfg.label + ' — check the connection.'
+                  : cfg.label + ' answered HTTP ' + esc(String(r.status || '?')) + '.';
+        set('bad', why);
+        return;
+    }
+    const ids = cfg.ids(r.models || []);
+    const saved = cfg.saved();
+    const use = saved && ids.includes(saved)
+        ? saved
+        : [...ids].sort((a, b) => client._score(b) - client._score(a))[0];
+    set('ok', 'Working — ' + esc(cfg.does) + '. Using <code>' + esc(use || '—') + '</code>'
+        + (saved && ids.includes(saved) ? '' : ' (picked automatically)') + '.');
+}
 
 /* Same treatment for Claude: the hardcoded list had shipped with models that
  * Anthropic has since retired — including the one used by default, which made
@@ -2436,6 +2624,7 @@ function openClientForm(id = null) {
     const c = id ? clientById(id) : null;
     Modal.open({
         title: c ? 'Edit client' : 'New client',
+        ai: { hint: 'Paste a signature block or describe the client' },
         fields: [
             { name: 'name', label: 'Name', value: c?.name || '', required: true, full: true },
             { name: 'email', label: 'Email', type: 'email', value: c?.email || '' },
@@ -2480,6 +2669,7 @@ function openMatterForm(id = null, defaultClientId = null) {
     }
     Modal.open({
         title: m ? 'Edit project' : 'New project',
+        ai: { hint: 'Describe the project — “MiCA licence application for Datalink, 220/h”' },
         fields: [
             { name: 'title', label: 'Title', value: m?.title || '', required: true, full: true },
             { name: 'clientId', label: 'Client', type: 'select', required: true,
@@ -2526,6 +2716,7 @@ function openTaskForm(id = null, defaultMatterId = null) {
     const t = id ? taskById(id) : null;
     Modal.open({
         title: t ? 'Edit task' : 'New task',
+        ai: { hint: 'Say it in a sentence — “draft the escrow review for Fligen, high, by Friday”' },
         fields: [
             { name: 'title', label: 'Title', value: t?.title || '', required: true, full: true },
             { name: 'matterId', label: 'Project', type: 'select',
@@ -2595,6 +2786,7 @@ function openLogForm(id = null) {
     const l = id ? state.logs.find(x => x.id === id) : null;
     Modal.open({
         title: l ? 'Edit time entry' : 'Manual time entry',
+        ai: { hint: 'e.g. “1h40 yesterday on the Datavise bylaws”' },
         fields: [
             { name: 'matterId', label: 'Project', type: 'select', required: true,
                 value: l?.matterId || '',
@@ -2962,6 +3154,15 @@ function bindGlobalActions() {
         }
     });
 
+    // paste a key → it verifies itself, without waiting for Save
+    document.body.addEventListener('input', (e) => {
+        const which = e.target.dataset && e.target.dataset.check;
+        if (!which) return;
+        const key = e.target.value.trim();
+        clearTimeout(keyCheckTimers[which]);
+        keyCheckTimers[which] = setTimeout(() => refreshKeyStatus(which, key), 600);
+    });
+
     // settings form
     document.body.addEventListener('submit', (e) => {
         if (e.target.id === 'settings-form') {
@@ -3045,7 +3246,11 @@ function render() {
     root.scrollTop = 0;
     if (view === 'today') populateTodaySchedule();
     if (view === 'inbox') populateInbox();
-    if (view === 'settings') { populateGeminiModels(); populateAnthropicModels(); }
+    if (view === 'settings') {
+        populateGeminiModels(); populateAnthropicModels();
+        refreshKeyStatus('anthropic', state.profile.anthropicKey);
+        refreshKeyStatus('gemini', state.profile.geminiKey);
+    }
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);

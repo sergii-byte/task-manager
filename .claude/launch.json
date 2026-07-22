@@ -12,6 +12,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "3457", "-d", "taskmanager"],
       "port": 3457
+    },
+    {
+      "name": "ordify-static",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8770", "-d", "taskmanager-v2"],
+      "port": 8770
     }
   ]
 }

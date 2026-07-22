@@ -1,40 +1,54 @@
-/* ordify · minimal/editorial direction
-   Warm paper palette, Inter / Inter Tight / JetBrains Mono, plum accent.
+/* ordify · Slate + Moss
+   Cool grey ground, deep forest-green accent, Inter / Inter Tight / JetBrains Mono.
+
+   The ground is tinted, never pure white: white at full brightness is what
+   makes a screen tiring after an hour. The accent is dark rather than bright
+   for the same reason — over a long session what fatigues is the jump in
+   luminance, not the hue.
+
+   Each colour carries exactly one meaning:
+     accent  = brand and action        (never "success")
+     danger  = a date that has passed  (never brand)
+     ok      = finished, and quiet     (slate, so it does not compete)
+   Because green is spent on the brand, a completed task reads by form —
+   strike-through and muting — not by turning green. See `.is-done`.
 */
 
 :root {
     /* ---- surfaces ---- */
-    --bg:        #fafaf7;
-    --bg-soft:   #f4f2ec;
-    --bg-hover:  #efece4;
+    --bg:        #f4f6f8;
+    --bg-soft:   #eceff3;
+    --bg-hover:  #e4e9ef;
     --surface:   #ffffff;
-    --line:      #e8e6df;
-    --line-soft: #f0eee7;
+    --line:      #dce2e8;
+    --line-soft: #edf1f4;
 
     /* ---- text ----
        Every value below clears WCAG AA (4.5:1) on --bg, so hierarchy comes
        from size and weight rather than from text fading out of legibility.
-       Measured: ink 19.4, fg 11.7, mute 5.1, faint 4.6. */
-    --ink:       #0a0a0a;
-    --fg:        #2c2c2a;
-    --fg-mute:   #6e6b64;
-    --fg-faint:  #757269;
+       Measured on #f4f6f8: ink 16.4, fg 9.5, mute 5.2, faint 4.7. */
+    --ink:       #141a20;
+    --fg:        #3a434c;
+    --fg-mute:   #5e6975;
+    --fg-faint:  #656f7a;
 
-    /* ---- accent ---- */
-    --accent:      #6a1b9a;
-    --accent-soft: #f1e9f6;
-    --accent-line: #ddd6fe;
+    /* ---- accent: moss, 70° off the ground so action reads as its own
+       category rather than as a darker grey. 7.0:1 — safe as body text. ---- */
+    --accent:      #2f5d3f;
+    --accent-soft: #e5ede7;
+    --accent-line: #c4d8c9;
 
     /* ---- status: text / surface / border, so badges stop hardcoding ---- */
-    --danger:      #b3341a;
-    --danger-bg:   #fef2f2;
-    --danger-line: #fecaca;
-    --warn:        #8a6000;
-    --warn-bg:     #fffbeb;
-    --warn-line:   #fde68a;
-    --ok:          #4a6000;
-    --ok-bg:       #f0fdf4;
-    --ok-line:     #bbf7d0;
+    --danger:      #a32135;
+    --danger-bg:   #fbecee;
+    --danger-line: #edc3ca;
+    --warn:        #8a5a00;
+    --warn-bg:     #fbf4e4;
+    --warn-line:   #ebd9ae;
+    /* deliberately slate, not green: green already means "action" */
+    --ok:          #3c556e;
+    --ok-bg:       #edf1f5;
+    --ok-line:     #cbd8e4;
 
     /* ---- type scale (was 10 ad-hoc sizes) ---- */
     --t-xs:      11px;
@@ -604,9 +618,12 @@ table.t td.empty {
     transition: all 0.1s;
 }
 .check:hover { border-color: var(--accent); }
+/* A ticked box is neutral ink, not brand green. Green means "this is the
+   action" everywhere else; letting it also mean "finished" would make the
+   most common colour on screen ambiguous. */
 .check.done {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--ink);
+    border-color: var(--ink);
 }
 .check.done::after {
     content: '';
@@ -1293,6 +1310,178 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
 .settings-warn a { color: var(--accent); text-decoration: none; }
 .settings-warn a:hover { text-decoration: underline; }
 
+/* === TALK-BACK: correcting the AI instead of retyping after it ===
+   Two surfaces, same idea — the model's first answer is a draft, and saying
+   what is wrong must be cheaper than filling the form by hand. */
+
+/* ---- correcting a proposal in the omni panel ---- */
+.op-editor {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--s-2) var(--s-3);
+    margin: var(--s-2) 0;
+    padding: var(--s-3);
+    background: var(--bg-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+.oe-field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.oe-field label {
+    font-size: var(--t-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-mute);
+}
+.oe-field input, .oe-field select {
+    min-height: var(--tap);
+    padding: 4px var(--s-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--fg);
+    font-size: var(--t-sm);
+    max-width: 100%;
+}
+.oe-field input:focus, .oe-field select:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.oe-note {
+    grid-column: 1 / -1;
+    font-size: var(--t-xs);
+    color: var(--fg-mute);
+    line-height: 1.4;
+}
+
+.omni-refine {
+    display: flex; flex-direction: column; gap: var(--s-1);
+    padding: var(--s-3);
+    border-top: 1px solid var(--line);
+    background: var(--bg-soft);
+}
+.omni-refine > label {
+    font-size: var(--t-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-mute);
+}
+.refine-row { display: flex; gap: var(--s-2); align-items: center; }
+.refine-row input {
+    flex: 1; min-width: 0;
+    min-height: var(--tap);
+    padding: 4px var(--s-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--fg);
+    font-size: var(--t-sm);
+}
+.refine-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---- describe-it-once bar at the top of a form ---- */
+.modal-ai {
+    grid-column: 1 / -1;
+    display: flex; flex-direction: column; gap: var(--s-2);
+    padding: var(--s-3);
+    margin-bottom: var(--s-2);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    border-radius: var(--radius-lg);
+}
+.mai-row { display: flex; gap: var(--s-2); align-items: center; }
+.mai-row input {
+    flex: 1; min-width: 0;
+    min-height: var(--tap);
+    padding: 4px var(--s-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--fg);
+    font-size: var(--t-sm);
+}
+.mai-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.mai-status { font-size: var(--t-sm); color: var(--fg-mute); line-height: 1.4; }
+.mai-status[data-kind="ok"]  { color: var(--ok); }
+.mai-status[data-kind="bad"] { color: var(--danger); }
+
+/* a field the AI just wrote into, so it is obvious what to check */
+.ai-filled {
+    border-color: var(--accent) !important;
+    background: var(--accent-soft);
+    animation: ai-land 0.9s ease-out;
+}
+@keyframes ai-land {
+    from { background: var(--accent-line); }
+    to   { background: var(--accent-soft); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .ai-filled { animation: none; }
+}
+
+/* the mic is a toggle — say so while it listens */
+.btn.icon.listening {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: var(--danger-bg);
+}
+
+@media (max-width: 720px) {
+    .op-editor { grid-template-columns: 1fr; }
+    .refine-row, .mai-row { flex-wrap: wrap; }
+    .refine-row input, .mai-row input { flex-basis: 100%; }
+}
+
+/* A key's verdict, right under the key. The dot carries the state; the words
+   carry the reason — colour alone is never the message. */
+.key-status {
+    display: flex; align-items: baseline; gap: 7px;
+    margin-top: 6px;
+    font-size: var(--t-sm);
+    color: var(--fg-mute);
+}
+.key-status::before {
+    content: '';
+    flex: none;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--line);
+    transform: translateY(-1px);
+}
+.key-status[data-state="checking"]::before { background: var(--fg-faint); animation: key-pulse 1s ease-in-out infinite; }
+.key-status[data-state="ok"]::before       { background: var(--ok); }
+.key-status[data-state="ok"]               { color: var(--ok); }
+.key-status[data-state="bad"]::before      { background: var(--danger); }
+.key-status[data-state="bad"]              { color: var(--danger); }
+.key-status code {
+    font-family: var(--font-mono); font-size: var(--t-xs);
+    background: var(--bg); border: 1px solid var(--line);
+    padding: 1px 5px; border-radius: 3px; color: var(--fg);
+}
+@keyframes key-pulse { 50% { opacity: 0.25; } }
+
+details.advanced { margin: 4px 0 16px; }
+details.advanced > summary {
+    cursor: pointer; list-style: none;
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: var(--tap);
+    font-size: var(--t-sm); font-weight: 600; color: var(--fg-mute);
+}
+details.advanced > summary::-webkit-details-marker { display: none; }
+details.advanced > summary::before {
+    content: '›'; font-size: 15px; line-height: 1;
+    transition: transform 0.15s ease;
+}
+details.advanced[open] > summary::before { transform: rotate(90deg); }
+details.advanced > summary:hover { color: var(--accent); }
+
 /* === ATTACHMENTS === */
 .att-list {
     list-style: none; padding: 0; margin: 0 0 12px;
@@ -1480,14 +1669,14 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
  * TODAY · editorial (min-today design direction)
  * ========================================================================= */
 .today-v3 {
-    --t-ink: #0a0a0a;
+    --t-ink: var(--ink);
     --t-paper: var(--surface);
     --t-line: var(--line);
     --t-line-soft: var(--line-soft);
     --t-muted: var(--fg-mute);
     --t-faint: var(--fg-faint);
-    --t-accent: #6a1b9a;
-    --t-warn: #c33c1d;
+    --t-accent: var(--accent);
+    --t-warn: var(--danger);
     --t-sans: "Inter Tight", system-ui, sans-serif;
     --t-text: "Inter", system-ui, sans-serif;
     --t-mono: "JetBrains Mono", ui-monospace, monospace;
@@ -1575,7 +1764,7 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
 }
 .today-v3 .t-slot.now .t-slot-marker {
     background: var(--t-accent); width: 11px; height: 11px;
-    box-shadow: 0 0 0 4px rgba(106,27,154,0.15);
+    box-shadow: 0 0 0 4px var(--accent-line);
 }
 .today-v3 .t-slot.past .t-slot-marker { background: transparent; border: 1.5px solid var(--t-faint); }
 .today-v3 .t-slot-what {
@@ -1639,13 +1828,13 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
  * INVOICE DOCUMENT · editorial (min-invoice design direction)
  * ========================================================================= */
 .inv-doc {
-    --t-ink: #0a0a0a;
+    --t-ink: var(--ink);
     --t-paper: var(--surface);
     --t-line: var(--line);
     --t-line-soft: var(--line-soft);
     --t-muted: var(--fg-mute);
     --t-faint: var(--fg-faint);
-    --t-accent: #6a1b9a;
+    --t-accent: var(--accent);
     --t-sans: "Inter Tight", system-ui, sans-serif;
     --t-text: "Inter", system-ui, sans-serif;
     --t-mono: "JetBrains Mono", ui-monospace, monospace;
