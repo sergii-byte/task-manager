@@ -115,7 +115,7 @@ const defaultState = () => ({
         iban: '', paymentTerms: '',
         bankAccounts: [],   // [{ id, currency, iban, swift, bankName, holder }]
         anthropicKey: '',
-        anthropicModel: 'claude-3-5-haiku-latest',
+        anthropicModel: 'claude-opus-4-8',
         geminiKey: '',
         geminiModel: 'gemini-2.0-flash',
         dictationLang: 'auto',
@@ -2153,11 +2153,11 @@ function viewSettings() {
                     <small class="hint">Get one at console.anthropic.com → API Keys. Without this, omni-input AI parsing is disabled.</small>
                 </div>
                 <div class="field"><label>Claude model</label>
-                    <select name="anthropicModel">
-                        ${['claude-3-5-haiku-latest','claude-3-5-sonnet-latest','claude-sonnet-4-5','claude-opus-4-1'].map(m =>
-                            `<option ${p.anthropicModel===m?'selected':''}>${m}</option>`).join('')}
+                    <select name="anthropicModel" id="anthropic-model">
+                        <option selected>${esc(p.anthropicModel || 'claude-opus-4-8')}</option>
                     </select>
-                    <small class="hint">Haiku = cheapest &amp; fastest. Sonnet = better at ambiguous input.</small>
+                    <small class="hint" id="anthropic-model-hint">Opus = most capable. Sonnet = balanced. Haiku = fastest and cheapest.
+                    The list is read from your key, so it only ever offers models you can actually call.</small>
                 </div>
                 <div class="field"><label>Dictation language</label>
                     <select name="dictationLang">
@@ -2243,6 +2243,36 @@ function viewSettings() {
  * ========================================================================= */
 
 let inboxEmails = [];
+
+/* Same treatment for Claude: the hardcoded list had shipped with models that
+ * Anthropic has since retired — including the one used by default, which made
+ * every AI parse fail with a 404 that named nothing useful. */
+async function populateAnthropicModels() {
+    const sel = $('#anthropic-model');
+    const hint = $('#anthropic-model-hint');
+    if (!sel || typeof AI === 'undefined') return;
+    if (!state.profile.anthropicKey) return;
+
+    const current = state.profile.anthropicModel || '';
+    const models = await AI.listModels();
+    if (!models.length) {
+        if (hint) hint.innerHTML = 'Could not read the model list — check the API key. '
+            + 'Keeping <code>' + esc(current || '—') + '</code>.';
+        return;
+    }
+    const ids = models.map(m => m.id);
+    // a saved-but-retired model stays visible and flagged rather than being
+    // swapped out from under the user
+    const opts = ids.includes(current) || !current
+        ? models
+        : [{ id: current, name: current }, ...models];
+    sel.innerHTML = opts.map(m =>
+        `<option value="${esc(m.id)}" ${m.id === current ? 'selected' : ''}>${esc(m.name)}</option>`).join('');
+    if (hint && current && !ids.includes(current)) {
+        hint.innerHTML = '<strong>' + esc(current) + '</strong> is retired and will fail with a 404 — '
+            + 'pick one of the live models above.';
+    }
+}
 
 /* Fill the Gemini model dropdown from the API rather than from a list baked
  * into the code, which goes stale every time Google retires a model. */
@@ -3015,7 +3045,7 @@ function render() {
     root.scrollTop = 0;
     if (view === 'today') populateTodaySchedule();
     if (view === 'inbox') populateInbox();
-    if (view === 'settings') populateGeminiModels();
+    if (view === 'settings') { populateGeminiModels(); populateAnthropicModels(); }
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);

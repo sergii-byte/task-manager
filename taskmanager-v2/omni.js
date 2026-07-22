@@ -428,6 +428,50 @@ const Omni = {
  * ========================================================================= */
 
 const AI = {
+    /* Ask Anthropic which models this key can use, rather than shipping a
+     * hardcoded list that rots — models retire on Anthropic's schedule and a
+     * dropdown offering a dead one turns a 404 into a hunt for a bug that
+     * isn't there. Returns [] on any failure so Settings falls back quietly. */
+    async listModels() {
+        if (!state.profile.anthropicKey) return [];
+        try {
+            const res = await fetch('https://api.anthropic.com/v1/models?limit=100', {
+                headers: {
+                    'x-api-key': state.profile.anthropicKey,
+                    'anthropic-version': '2023-06-01',
+                    'anthropic-dangerous-direct-browser-access': 'true'
+                }
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (data.data || [])
+                .map(m => ({ id: m.id, name: m.display_name || m.id }))
+                .filter(m => m.id);
+        } catch (e) {
+            console.warn('Anthropic model list unavailable', e);
+            return [];
+        }
+    },
+
+    /* Turn an HTTP failure into something the user can act on. A retired
+     * model is the likeliest cause of a 404 here and the fix is one dropdown
+     * away. */
+    _httpError(status, body, model) {
+        if (status === 404) {
+            return new Error(`Model "${model}" no longer exists. Pick another in Settings.`);
+        }
+        if (status === 401 || status === 403) {
+            return new Error('Anthropic rejected the API key. Check it in Settings.');
+        }
+        if (status === 429) {
+            return new Error('Rate limited by Anthropic — try again in a moment.');
+        }
+        if (status >= 500) {
+            return new Error(`Anthropic is having trouble (HTTP ${status}) — try again shortly.`);
+        }
+        return new Error(`HTTP ${status}: ${String(body).slice(0, 200)}`);
+    },
+
     SYSTEM_PROMPT: `You are an action-extraction assistant for "ordify", a practice manager for solo lawyers.
 
 The user types or dictates in English, Russian, or Ukrainian. Your job is to read their input and output a JSON list of structured actions to perform on the data model.
@@ -470,6 +514,7 @@ ${ctx}
 USER INPUT:
 ${text}`;
 
+        const model = state.profile.anthropicModel || 'claude-opus-4-8';
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -479,7 +524,7 @@ ${text}`;
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: state.profile.anthropicModel || 'claude-3-5-haiku-latest',
+                model,
                 max_tokens: 1500,
                 system: AI.SYSTEM_PROMPT,
                 messages: [{ role: 'user', content: userMsg }]
@@ -487,7 +532,7 @@ ${text}`;
         });
         if (!res.ok) {
             const err = await res.text().catch(()=>'');
-            throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+            throw AI._httpError(res.status, err, model);
         }
         const json = await res.json();
         const content = json.content?.[0]?.text || '';
@@ -536,6 +581,7 @@ ${text}`;
         } else {
             throw new Error('Unsupported file. Use .docx, PDF, image, .txt, audio or video.');
         }
+        const model = state.profile.anthropicModel || 'claude-opus-4-8';
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -545,7 +591,7 @@ ${text}`;
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: state.profile.anthropicModel || 'claude-3-5-haiku-latest',
+                model,
                 max_tokens: 1500,
                 system: AI.SYSTEM_PROMPT,
                 messages: [{ role: 'user', content }]
@@ -553,7 +599,7 @@ ${text}`;
         });
         if (!res.ok) {
             const err = await res.text().catch(() => '');
-            throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+            throw AI._httpError(res.status, err, model);
         }
         const json = await res.json();
         const txt = (json.content && json.content[0] && json.content[0].text) || '';
@@ -576,6 +622,7 @@ Rules:
 - If the email needs no action (newsletter, receipt, FYI, automated notice), return { "tasks": [] }.
 - At most 4 tasks. Output raw JSON only.`;
         const userMsg = `TODAY: ${todayISO()}\n\nSUBJECT: ${subject}\n\nBODY:\n${body}`;
+        const model = state.profile.anthropicModel || 'claude-opus-4-8';
         const res = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
             headers: {
@@ -585,7 +632,7 @@ Rules:
                 'anthropic-dangerous-direct-browser-access': 'true'
             },
             body: JSON.stringify({
-                model: state.profile.anthropicModel || 'claude-3-5-haiku-latest',
+                model,
                 max_tokens: 1024,
                 system: sys,
                 messages: [{ role: 'user', content: userMsg }]
@@ -593,7 +640,7 @@ Rules:
         });
         if (!res.ok) {
             const err = await res.text().catch(() => '');
-            throw new Error(`HTTP ${res.status}: ${err.slice(0, 200)}`);
+            throw AI._httpError(res.status, err, model);
         }
         const json = await res.json();
         const content = (json.content && json.content[0] && json.content[0].text) || '';
