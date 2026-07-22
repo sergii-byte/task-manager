@@ -2178,11 +2178,11 @@ function viewSettings() {
                     documents and images without this.</small>
                 </div>
                 <div class="field"><label>Gemini model</label>
-                    <select name="geminiModel">
-                        ${['gemini-2.0-flash','gemini-2.5-flash','gemini-1.5-flash','gemini-1.5-pro'].map(m =>
-                            `<option ${p.geminiModel===m?'selected':''}>${m}</option>`).join('')}
+                    <select name="geminiModel" id="gemini-model">
+                        <option selected>${esc(p.geminiModel || 'gemini-2.0-flash')}</option>
                     </select>
-                    <small class="hint">Flash = fast/cheap, Pro = more careful with long video.</small>
+                    <small class="hint" id="gemini-model-hint">Flash = fast/cheap, Pro = more careful with long video.
+                    Free-tier quota differs per model — a 429 usually means this one has none, not that you ran out.</small>
                 </div>
             </div>
 
@@ -2243,6 +2243,32 @@ function viewSettings() {
  * ========================================================================= */
 
 let inboxEmails = [];
+
+/* Fill the Gemini model dropdown from the API rather than from a list baked
+ * into the code, which goes stale every time Google retires a model. */
+async function populateGeminiModels() {
+    const sel = $('#gemini-model');
+    const hint = $('#gemini-model-hint');
+    if (!sel || typeof Gemini === 'undefined') return;
+    if (!state.profile.geminiKey) return;    // nothing to ask with
+
+    const current = state.profile.geminiModel || '';
+    const models = await Gemini.listModels();
+    if (!models.length) {
+        if (hint) hint.innerHTML = 'Could not read the model list — check the API key. '
+            + 'Keeping <code>' + esc(current || '—') + '</code>.';
+        return;
+    }
+    // keep the saved choice even if the API no longer lists it, so saving the
+    // form does not silently switch models behind the user's back
+    const opts = models.includes(current) || !current ? models : [current, ...models];
+    sel.innerHTML = opts.map(m =>
+        `<option ${m === current ? 'selected' : ''}>${esc(m)}</option>`).join('');
+    if (hint && current && !models.includes(current)) {
+        hint.innerHTML = '<strong>' + esc(current) + '</strong> is no longer offered for this key — '
+            + 'pick one of the live models above.';
+    }
+}
 
 /* Pending-intake count, cached by populateInbox. */
 function inboxPending() {
@@ -2989,6 +3015,7 @@ function render() {
     root.scrollTop = 0;
     if (view === 'today') populateTodaySchedule();
     if (view === 'inbox') populateInbox();
+    if (view === 'settings') populateGeminiModels();
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);

@@ -804,6 +804,29 @@ Rules:
  * ========================================================================= */
 
 const Gemini = {
+    /* Ask Google which models this key can actually use. Hardcoding a list
+     * ages badly — Google retires models on its own schedule, and a dropdown
+     * offering a dead one sends the user hunting for a bug that is really a
+     * 404. Returns [] on any failure so Settings can fall back quietly. */
+    async listModels() {
+        if (!state.profile.geminiKey) return [];
+        try {
+            const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+                headers: { 'x-goog-api-key': state.profile.geminiKey }
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (data.models || [])
+                .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+                .map(m => (m.name || '').replace(/^models\//, ''))
+                .filter(n => n && !/embedding|aqa|imagen|veo/i.test(n))
+                .sort();
+        } catch (e) {
+            console.warn('Gemini model list unavailable', e);
+            return [];
+        }
+    },
+
     async parseAV(file) {
         if (!state.profile.geminiKey) {
             throw new Error('Add your Gemini API key in Settings to upload audio or video.');
@@ -849,6 +872,20 @@ USER INPUT — listen to / watch the attached ${kind} (file: ${file.name}) and e
         );
         if (!res.ok) {
             const err = await res.text().catch(() => '');
+            // A raw 429 body is a wall of JSON that says nothing about what to
+            // do. The usual cause is not "you used it all up" but a model with
+            // no free-tier allowance at all, which is fixable in Settings.
+            if (res.status === 429) {
+                throw new Error(`${model} is out of quota. Pick another model in Settings — `
+                    + `free-tier allowances differ per model — or check `
+                    + `aistudio.google.com/usage.`);
+            }
+            if (res.status === 403 || res.status === 401) {
+                throw new Error('Gemini rejected the API key. Check it in Settings.');
+            }
+            if (res.status === 404) {
+                throw new Error(`Model "${model}" does not exist any more. Pick another in Settings.`);
+            }
             throw new Error(`Gemini HTTP ${res.status}: ${err.slice(0, 200)}`);
         }
         const json = await res.json();
