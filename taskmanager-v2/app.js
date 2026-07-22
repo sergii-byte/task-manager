@@ -2172,7 +2172,10 @@ function viewSettings() {
                 <div class="field full">
                     <label>Gemini API key (audio / video)</label>
                     <input name="geminiKey" type="password" placeholder="AIza..." value="${esc(p.geminiKey||'')}" autocomplete="off">
-                    <small class="hint">Get one free at <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a>. Required only to attach audio or video files via 📎 — Claude handles documents and images.</small>
+                    <small class="hint">Get one free at <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com/apikey</a>.
+                    Needed for attached audio and video, and for <strong>dictation on a phone</strong> — a phone gives the
+                    microphone to one app at a time, so ordify records there and has Gemini read it back. Claude handles
+                    documents and images without this.</small>
                 </div>
                 <div class="field"><label>Gemini model</label>
                     <select name="geminiModel">
