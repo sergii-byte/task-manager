@@ -1485,6 +1485,26 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
 }
+/* the collapsed tail of an AI form — hidden until revealed, per-field by the
+   AI or all at once by the toggle */
+#modal-body.modal-has-ai .field[data-minor] { display: none; }
+#modal-body.modal-has-ai.reveal-minor .field[data-minor] { display: flex; }
+
+.more-fields {
+    justify-self: start;
+    display: inline-flex; align-items: center; gap: 6px;
+    min-height: var(--tap);
+    padding: 4px 4px;
+    border: 0; background: transparent; cursor: pointer;
+    font: inherit; font-size: var(--t-sm); font-weight: 600;
+    color: var(--fg-mute);
+}
+.more-fields:hover { color: var(--accent); }
+.more-fields[hidden] { display: none; }
+.more-fields .chev { font-size: 15px; line-height: 1; transition: transform 0.15s ease; }
+.more-fields.open .chev { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .more-fields .chev { transition: none; } }
+
 .mai-status { font-size: var(--t-sm); color: var(--fg-mute); line-height: 1.4; }
 .mai-status[data-kind="ok"]  { color: var(--ok); }
 .mai-status[data-kind="bad"] { color: var(--danger); }

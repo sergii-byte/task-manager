@@ -953,10 +953,23 @@ const Modal = {
         Modal.fields = fields;
         Modal.title = title;
         Modal.aiHint = ai ? (ai.hint || 'Describe it in a sentence — I\'ll fill the fields') : null;
-        $('#modal-body').innerHTML =
+        // onDelete is present only for an existing record, so it is the honest
+        // signal for "editing vs creating".
+        const editing = !!onDelete;
+
+        const body = $('#modal-body');
+        body.classList.toggle('modal-has-ai', !!Modal.aiHint);
+        body.classList.remove('reveal-minor');
+        // When describing from scratch, only the essentials show; the long tail
+        // of fields sits behind one disclosure so the form isn't the wall of
+        // empty inputs the AI bar exists to spare you. When editing, every
+        // field that already holds a value shows — you came to change them.
+        body.innerHTML =
             (Modal.aiHint ? Modal._aiBarHtml() : '') +
-            fields.map(f => Modal._renderField(f)).join('');
-        if (Modal.aiHint) Modal._bindAiBar();
+            fields.map(f => Modal._renderField(f, Modal.aiHint ? !Modal._isPrimary(f, editing) : false)).join('') +
+            (Modal.aiHint ? Modal._moreToggleHtml() : '');
+
+        if (Modal.aiHint) { Modal._bindAiBar(); Modal._bindMoreToggle(); Modal._syncMoreToggle(); }
         Modal.el.showModal();
         // focus the AI bar when there is one — describing beats tabbing
         setTimeout(() => {
@@ -965,6 +978,16 @@ const Modal = {
                 : $('#modal-body input, #modal-body textarea, #modal-body select');
             if (first && !first.disabled) first.focus();
         }, 30);
+    },
+
+    /* A field earns a place above the "more fields" fold if it is required, or
+     * (when editing) it already carries a value worth seeing. Everything else
+     * starts collapsed and pops up the moment the AI fills it. */
+    _isPrimary(f, editing) {
+        if (f.required) return true;
+        if (!editing) return false;
+        if (f.type === 'checkbox') return !!f.value;
+        return f.value != null && f.value !== '';
     },
 
     close() {
@@ -1085,13 +1108,18 @@ const Modal = {
             if (el.type === 'checkbox') el.checked = !!val;
             else el.value = val;
             el.classList.add('ai-filled');
+            // a field the AI just filled must be visible to be checked, even if
+            // it started life in the collapsed tail
+            const field = el.closest('.field');
+            if (field) field.removeAttribute('data-minor');
             el.dispatchEvent(new Event('change', { bubbles: true }));
             done.push(spec ? spec.label.toLowerCase() : name);
         });
+        if (done.length) Modal._syncMoreToggle();
         return done;
     },
 
-    _renderField(f) {
+    _renderField(f, minor = false) {
         const id = 'mf_' + f.name;
         const val = f.value ?? '';
         const req = f.required ? 'required' : '';
@@ -1109,12 +1137,45 @@ const Modal = {
             input = `<input id="${id}" name="${f.name}" type="${f.type || 'text'}" value="${esc(val)}" ${req} ${ph} ${f.step?`step="${f.step}"`:''} ${f.min!=null?`min="${f.min}"`:''}>`;
         }
         return `
-            <div class="field ${f.full ? 'full':''}">
+            <div class="field ${f.full ? 'full':''}" ${minor ? 'data-minor' : ''}>
                 ${f.type === 'checkbox' ? '' : `<label for="${id}">${esc(f.label)}${f.required?' *':''}</label>`}
                 ${input}
                 ${f.hint ? `<small class="hint">${esc(f.hint)}</small>` : ''}
             </div>
         `;
+    },
+
+    /* ---- "more fields" disclosure ----
+     * One button reveals the collapsed tail. AI-filling a field also reveals
+     * just that field, so accepting the AI's work never means hunting through
+     * a disclosure to confirm it. */
+    _moreToggleHtml() {
+        return `<button type="button" class="more-fields" id="modal-more" hidden>
+            <span class="chev" aria-hidden="true">›</span><span class="more-label"></span>
+        </button>`;
+    },
+
+    _bindMoreToggle() {
+        const btn = $('#modal-more');
+        if (btn) btn.addEventListener('click', () => {
+            $('#modal-body').classList.toggle('reveal-minor');
+            Modal._syncMoreToggle();
+        });
+    },
+
+    /* Keep the button's label and visibility honest as fields get revealed. */
+    _syncMoreToggle() {
+        const btn = $('#modal-more');
+        const body = $('#modal-body');
+        if (!btn || !body) return;
+        const hidden = $$('.field[data-minor]', body).length;
+        if (!hidden) { btn.hidden = true; return; }
+        btn.hidden = false;
+        const open = body.classList.contains('reveal-minor');
+        btn.classList.toggle('open', open);
+        $('.more-label', btn).textContent = open
+            ? 'Fewer fields'
+            : `${hidden} more field${hidden === 1 ? '' : 's'}`;
     },
 
     _collect() {
