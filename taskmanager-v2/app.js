@@ -1920,9 +1920,14 @@ function viewClient(id) {
             return keys.map(k => {
                 const ts = groups.get(k);
                 const title = k === '_none' ? 'No project' : matterById(k).title;
+                const due = k !== '_none' && matterById(k)?.due ? matterById(k).due : null;
                 return `
                     <div class="task-group">
-                        <div class="task-group-head">${esc(title)} <span class="n">${ts.length}</span></div>
+                        <div class="task-group-head">
+                            ${k === '_none' ? `<span>${esc(title)}</span>` : `<a href="#/matters/${k}">${esc(title)}</a>`}
+                            <span class="n">${ts.length}</span>
+                            ${due ? `<span class="badge sm ${due < todayISO() ? 'overdue' : ''}">${esc(fmtDate(due))}</span>` : ''}
+                        </div>
                         <table class="t"><tbody>${ts.map(t => {
                             const overdue = t.due && t.due < todayISO();
                             return `<tr class="row" data-task="${t.id}">
@@ -2046,6 +2051,7 @@ function viewMatters() {
                         </div>
                         <div class="e-flags">
                             ${m.status && m.status !== 'open' ? `<span class="badge ${esc(m.status)}">${esc(m.status)}</span>` : ''}
+                            ${m.due ? `<span class="badge ${m.due < todayISO() && m.status !== 'closed' ? 'overdue' : ''}">${esc(fmtDate(m.due))}</span>` : ''}
                         </div>
                     </div>`;
                 }).join('')}
@@ -2071,7 +2077,8 @@ function viewMatter(id) {
         </div>
         <div class="view-head">
             <h1>${esc(m.title)}</h1>
-            <div class="meta"><span class="badge ${m.status||'open'}">${esc(m.status||'open')}</span></div>
+            <div class="meta"><span class="badge ${m.status||'open'}">${esc(m.status||'open')}</span>${
+                m.due ? ` <span class="badge ${m.due < todayISO() && m.status !== 'closed' ? 'overdue' : ''}">due ${esc(fmtDate(m.due))}</span>` : ''}</div>
             <div class="actions">
                 <button class="btn" data-act="edit-matter" data-id="${m.id}">Edit</button>
                 <button class="btn" data-act="new-task" data-matter="${m.id}">＋ Task</button>
@@ -2845,6 +2852,8 @@ function openMatterForm(id = null, defaultClientId = null) {
                     { value: 'on-hold', label: 'On hold' },
                     { value: 'closed', label: 'Closed' }
                 ]},
+            { name: 'due', label: 'Deadline', type: 'date', value: fmtDateInput(m?.due),
+                hint: 'When the whole project is due. Shown on the project and the client page.' },
             { name: 'rate', label: `Hourly rate (${profileCurrency()})`, type: 'number', min: 0, step: 1,
                 value: m?.rate ?? '', hint: `Leave blank to use default ${state.profile.rate}/h` },
             { name: 'website', label: 'Link', type: 'url', value: m?.website || '', placeholder: 'https://',
