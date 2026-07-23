@@ -1505,6 +1505,16 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
 .more-fields.open .chev { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .more-fields .chev { transition: none; } }
 
+/* the correction label — same words and weight as omni's refine row, so the
+   "say what to change" gesture reads identically in both places */
+.mai-label {
+    font-size: var(--t-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--fg-mute);
+}
+.mai-label[hidden] { display: none; }
+
 .mai-status { font-size: var(--t-sm); color: var(--fg-mute); line-height: 1.4; }
 .mai-status[data-kind="ok"]  { color: var(--ok); }
 .mai-status[data-kind="bad"] { color: var(--danger); }

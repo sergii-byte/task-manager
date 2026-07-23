@@ -1009,6 +1009,7 @@ const Modal = {
     _aiBarHtml() {
         return `
             <div class="modal-ai" id="modal-ai">
+                <div class="mai-label" id="modal-ai-label" hidden>Not right? Say what to change</div>
                 <div class="mai-row">
                     <input id="modal-ai-input" type="text" autocomplete="off"
                            placeholder="${esc(Modal.aiHint)}">
@@ -1020,6 +1021,19 @@ const Modal = {
                 </div>
                 <div class="mai-status" id="modal-ai-status" hidden></div>
             </div>`;
+    },
+
+    /* After the first fill the bar is no longer "describe it" — it is the same
+     * "say what to change" correction channel omni offers, so the gesture for
+     * fixing the AI is identical whether you started here or from the top bar.
+     * The fields are this form's proposal cards; this is its refine row. */
+    _enterCorrectionMode() {
+        const label = $('#modal-ai-label');
+        const inp   = $('#modal-ai-input');
+        const go     = $('#modal-ai-go');
+        if (label) label.hidden = false;
+        if (inp) inp.placeholder = 'e.g. the client is Datavise, due Friday';
+        if (go) go.textContent = 'Redo';
     },
 
     _bindAiBar() {
@@ -1083,6 +1097,7 @@ const Modal = {
                 Modal._aiStatus(
                     `Filled ${filled.join(', ')}${note ? ' · ' + note : ''} — check it before saving.`, 'ok');
                 if (inp) inp.value = '';
+                Modal._enterCorrectionMode();
             }
         } catch (e) {
             console.error('form fill failed', e);
