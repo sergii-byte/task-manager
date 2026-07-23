@@ -200,7 +200,10 @@ const Omni = {
         });
     },
 
-    /* ---- attach a file (document / image) → AI extracts actions ---- */
+    /* ---- attach one or more files (document / image / A-V) → AI extracts
+     * actions from each, merged into one proposal sheet. Read sequentially so
+     * a stack of files can't fire a burst of parallel API calls into a rate
+     * limit; a file that fails is reported and the rest still land. ---- */
     attach() {
         if (!state.profile.anthropicKey) {
             Omni._renderError('Add your Anthropic API key in Settings to use file attachments. <a href="#/settings">Open settings →</a>');
@@ -208,26 +211,49 @@ const Omni = {
         }
         const inp = document.createElement('input');
         inp.type = 'file';
+        inp.multiple = true;
         inp.accept = '.docx,application/pdf,image/*,text/plain,audio/*,video/*';
         inp.onchange = async () => {
-            const f = inp.files && inp.files[0];
-            if (!f) return;
+            const files = Array.from(inp.files || []);
+            if (!files.length) return;
             if (Omni.busy) return;
             Omni.busy = true;
-            Omni.input.value = '📎 ' + f.name;
             Omni.sourceEmail = null;
-            Omni.lastInput = 'attached file: ' + f.name;
-            Omni._renderLoading();
-            try {
-                const result = await AI.parseFile(f);
-                Omni.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
-                Omni._renderProposals(result);
-            } catch (e) {
-                console.error('attach parse failed', e);
-                Omni._renderError('AI request failed: ' + esc(e.message || 'error'));
-            } finally {
-                Omni.busy = false;
+            // Text the user already typed is their instruction for the files —
+            // NOT something to overwrite with a filename. Keep it in the box and
+            // pass it to the parser so "log time for each of these" works.
+            const note = Omni.input.value.trim();
+            Omni.lastInput = (note ? note + ' — ' : '') + 'attached: ' + files.map(f => f.name).join(', ');
+
+            const actions = [];
+            const transcripts = [];
+            const failed = [];
+            for (let i = 0; i < files.length; i++) {
+                Omni._renderLoading(files.length > 1
+                    ? `Reading ${i + 1} of ${files.length}: ${files[i].name}…`
+                    : undefined);
+                try {
+                    const result = await AI.parseFile(files[i], note);
+                    (result.actions || []).forEach(a => actions.push(a));
+                    if (result.transcript) transcripts.push(result.transcript);
+                } catch (e) {
+                    console.error('attach parse failed', files[i].name, e);
+                    failed.push(`${files[i].name}: ${e.message || 'error'}`);
+                }
             }
+
+            Omni.busy = false;
+            if (!actions.length) {
+                Omni._renderError(failed.length
+                    ? 'Could not read ' + esc(failed.join('; '))
+                    : 'Nothing actionable found in ' + (files.length === 1 ? 'that file' : 'those files') + '.');
+                return;
+            }
+            Omni.proposals = actions.map(a => ({ ...a, accepted: false }));
+            const result = { actions };
+            if (transcripts.length) result.transcript = transcripts.join('\n\n———\n\n');
+            Omni._renderProposals(result);
+            if (failed.length) toast(`Couldn't read ${failed.length} file${failed.length === 1 ? '' : 's'}`, 'error');
         };
         inp.click();
     },
@@ -257,8 +283,8 @@ const Omni = {
         }
     },
 
-    _renderLoading() {
-        Omni.panel.innerHTML = `<div class="omni-loading"><span class="spinner"></span> Asking Claude…</div>`;
+    _renderLoading(message) {
+        Omni.panel.innerHTML = `<div class="omni-loading"><span class="spinner"></span> ${esc(message || 'Asking Claude…')}</div>`;
         Omni._show();
     },
 
@@ -879,12 +905,15 @@ ${text}`;
     },
 
     /* Send a file (docx / PDF / image / txt) to Claude and return the same
-     * { actions, transcript?, clarify? } shape as parseInput. */
-    async parseFile(file) {
+     * { actions, transcript?, clarify? } shape as parseInput. `note` is any
+     * text the user typed alongside the file — their instruction about it
+     * ("log time for each receipt", "these are all for the Acme matter"). */
+    async parseFile(file, note = '') {
         const today = todayISO();
         const ctx = AI._buildContext();
         const name = (file.name || '').toLowerCase();
-        const intro = `TODAY: ${today}\n\nCONTEXT:\n${ctx}\n\nUSER INPUT (from file ${file.name}):`;
+        const noteLine = note ? `\n\nUSER NOTE (their own instruction about this file — follow it): ${note}` : '';
+        const intro = `TODAY: ${today}\n\nCONTEXT:\n${ctx}${noteLine}\n\nUSER INPUT (from file ${file.name}):`;
         let content;
         if (name.endsWith('.docx')) {
             if (typeof DocImport === 'undefined') throw new Error('docx reader not loaded');
@@ -908,7 +937,7 @@ ${text}`;
             content = intro + '\n\n' + text.slice(0, 14000);
         } else if ((file.type || '').startsWith('audio/') || (file.type || '').startsWith('video/')) {
             // Claude can't read audio/video — route to Gemini, which can.
-            return await Gemini.parseAV(file);
+            return await Gemini.parseAV(file, note);
         } else {
             throw new Error('Unsupported file. Use .docx, PDF, image, .txt, audio or video.');
         }
@@ -1392,13 +1421,14 @@ const Gemini = {
                 && json.candidates[0].content.parts[0].text) || '';
     },
 
-    async parseAV(file) {
+    async parseAV(file, note = '') {
         const b64 = await Gemini._prepare(file);
         const kind = (file.type || '').startsWith('video/') ? 'video' : 'audio';
+        const noteLine = note ? `\n\nUSER NOTE (their own instruction about this recording — follow it): ${note}` : '';
         const userText = `TODAY: ${todayISO()}
 
 CONTEXT:
-${AI._buildContext()}
+${AI._buildContext()}${noteLine}
 
 USER INPUT — listen to / watch the attached ${kind} (file: ${file.name}) and extract the user's intended actions per the system rules above. Respond with the same JSON shape: { "actions": [...], "transcript"?: "...", "clarify"?: "..." }.`;
         const txt = await Gemini._run({

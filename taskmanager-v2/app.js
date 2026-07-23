@@ -1833,6 +1833,7 @@ function viewClient(id) {
         <div class="info-grid">
             ${c.email ? `<div><span class="lbl">Email</span><a href="mailto:${esc(c.email)}">${esc(c.email)}</a></div>` : ''}
             ${c.phone ? `<div><span class="lbl">Phone</span>${esc(c.phone)}</div>` : ''}
+            ${c.website ? `<div><span class="lbl">Website</span><a href="${esc(c.website)}" target="_blank" rel="noopener">${esc(c.website.replace(/^https?:\/\//, ''))}</a></div>` : ''}
             ${c.taxId ? `<div><span class="lbl">Tax ID</span>${esc(c.taxId)}</div>` : ''}
             ${c.address ? `<div><span class="lbl">Address</span>${esc(c.address)}</div>` : ''}
         </div>
@@ -2790,6 +2791,7 @@ function openClientForm(id = null) {
             { name: 'name', label: 'Name', value: c?.name || '', required: true, full: true },
             { name: 'email', label: 'Email', type: 'email', value: c?.email || '' },
             { name: 'phone', label: 'Phone', value: c?.phone || '' },
+            { name: 'website', label: 'Website', type: 'url', value: c?.website || '', placeholder: 'https://' },
             { name: 'taxId', label: 'Tax / VAT ID', value: c?.taxId || '' },
             { name: 'address', label: 'Address', type: 'textarea', value: c?.address || '', rows: 2, full: true },
             { name: 'notes', label: 'Notes', type: 'textarea', value: c?.notes || '', rows: 3, full: true }
@@ -2845,6 +2847,8 @@ function openMatterForm(id = null, defaultClientId = null) {
                 ]},
             { name: 'rate', label: `Hourly rate (${profileCurrency()})`, type: 'number', min: 0, step: 1,
                 value: m?.rate ?? '', hint: `Leave blank to use default ${state.profile.rate}/h` },
+            { name: 'website', label: 'Link', type: 'url', value: m?.website || '', placeholder: 'https://',
+                hint: 'Deal room, repo, data room — whatever this project lives behind.' },
             { name: 'description', label: 'Description', type: 'textarea', value: m?.description || '', rows: 4, full: true }
         ],
         onSave: (data) => {
