@@ -20,6 +20,7 @@ const Omni = {
     busy: false,
     proposals: [],   // [{ op, data, summary, accepted }]
     lastInput: '',   // what produced them — the refine call needs it for context
+    sourceEmail: null, // set when proposals came from an inbox email
     listening: false,
 
     init() {
@@ -121,6 +122,7 @@ const Omni = {
     clear() {
         Omni.input.value = '';
         Omni.proposals = [];
+        Omni.sourceEmail = null;
         Omni.panel.innerHTML = '';
         Omni._hide();
     },
@@ -213,6 +215,7 @@ const Omni = {
             if (Omni.busy) return;
             Omni.busy = true;
             Omni.input.value = '📎 ' + f.name;
+            Omni.sourceEmail = null;
             Omni.lastInput = 'attached file: ' + f.name;
             Omni._renderLoading();
             try {
@@ -239,6 +242,7 @@ const Omni = {
         }
         if (Omni.busy) return;
         Omni.busy = true;
+        Omni.sourceEmail = null;
         Omni.lastInput = text;
         Omni._renderLoading();
         try {
@@ -585,6 +589,13 @@ const Omni = {
         try {
             AI.applyAction(p);
             p.accepted = true;
+            // proposals that came from an email leave the source in the inbox
+            // until at least one of them is accepted — kept on Omni, not the
+            // proposal, so it survives a refine that restructures the list
+            if (Omni.sourceEmail && typeof markEmailProcessed === 'function') {
+                markEmailProcessed(Omni.sourceEmail);
+                Omni.sourceEmail = null;
+            }
             return true;
         } catch (e) {
             console.error('apply failed', e);
@@ -1010,20 +1021,39 @@ ${text}`;
         return { values: parsed.values || {}, note: parsed.note || '' };
     },
 
-    /* Read one email's body and extract the lawyer's action items. */
+    /* Read one email's body and extract the lawyer's action items — and, unlike
+     * before, place them under the right project. The extractor used to get no
+     * context at all, so every email task landed unlinked; two items about the
+     * same matter (a reply and a review of the same contract) came out as two
+     * orphans. Now it sees the client/matter list and links against it, so
+     * both land under, say, StellarsTech — which is the grouping, without
+     * inventing a "related tasks" concept. */
     async extractEmailTasks(subject, body) {
-        const sys = `This email was received by a solo lawyer. Read it and extract the concrete action items the lawyer must do.
+        const sys = `This email was received by a solo lawyer. Read it and extract the concrete action items the lawyer must do, and link each to an existing project where one clearly fits.
 
 Return ONLY raw JSON, no markdown fences:
-{ "tasks": [ { "title": "", "due": null, "priority": "normal", "notes": "" } ] }
+{ "tasks": [ { "title": "", "due": null, "priority": "normal", "matterId": null, "matterName": null, "clientName": null, "notes": "" } ] }
 Rules:
 - "title": a short, actionable task in English (keep case numbers, names and references as-is). NOT the email subject verbatim — the actual thing to do.
 - "due": ISO date YYYY-MM-DD if a deadline is stated or clearly implied; otherwise null. Resolve relative dates against TODAY.
 - "priority": "high" if urgent or deadline-driven, otherwise "normal".
+- LINKING — use the CONTEXT below (existing clients and matters):
+  · if the email clearly concerns an existing matter, set "matterId" to that matter's id and leave the name fields null.
+  · else if it clearly concerns an existing client but no specific matter, set "clientName" to that client's name.
+  · else leave all three null — never guess a link that isn't supported by the email.
+  · when several action items in this one email concern the SAME matter, give them all the same matterId. Keep them as SEPARATE tasks — do not merge distinct actions (e.g. "reply to X" and "review the draft") into one.
 - "notes": one short line of context.
 - If the email needs no action (newsletter, receipt, FYI, automated notice), return { "tasks": [] }.
 - At most 4 tasks. Output raw JSON only.`;
-        const userMsg = `TODAY: ${todayISO()}\n\nSUBJECT: ${subject}\n\nBODY:\n${body}`;
+        const userMsg = `TODAY: ${todayISO()}
+
+CONTEXT (existing records — link tasks to these when the email fits):
+${AI._buildContext()}
+
+SUBJECT: ${subject}
+
+BODY:
+${body}`;
         const json = await AI._send({
             system: sys,
             messages: [{ role: 'user', content: userMsg }],

@@ -1899,6 +1899,42 @@ function viewClient(id) {
             </table>
         ` : '<div class="empty">No projects yet.</div>'}
 
+        <h2 class="section-h">Tasks</h2>
+        ${(() => {
+            const open = tasks.filter(t => t.status !== 'done');
+            const doneCount = tasks.length - open.length;
+            if (!open.length) {
+                return `<div class="empty">No open tasks for this client.${doneCount ? ` ${doneCount} done.` : ''}</div>`;
+            }
+            // Group by project — the client's tasks read as workstreams, not one
+            // flat pile. Tasks with no project fall under "No project".
+            const groups = new Map();
+            open.forEach(t => {
+                const key = t.matterId && matterById(t.matterId) ? t.matterId : '_none';
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(t);
+            });
+            const order = (k) => k === '_none' ? '￿' : (matterById(k)?.title || '');
+            const keys = [...groups.keys()].sort((a, b) => order(a).localeCompare(order(b)));
+            return keys.map(k => {
+                const ts = groups.get(k);
+                const title = k === '_none' ? 'No project' : matterById(k).title;
+                return `
+                    <div class="task-group">
+                        <div class="task-group-head">${esc(title)} <span class="n">${ts.length}</span></div>
+                        <table class="t"><tbody>${ts.map(t => {
+                            const overdue = t.due && t.due < todayISO();
+                            return `<tr class="row" data-task="${t.id}">
+                                <td><strong>${esc(t.title)}</strong>${
+                                    t.blockedReason ? ` <span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span>` : ''}</td>
+                                <td class="date ${overdue ? 'overdue' : ''}">${t.due ? esc(fmtDate(t.due)) : ''}</td>
+                                <td><span class="badge ${esc(t.priority || 'normal')}">${esc(t.priority || 'normal')}</span></td>
+                            </tr>`;
+                        }).join('')}</tbody></table>
+                    </div>`;
+            }).join('') + (doneCount ? `<div class="task-group-done">${doneCount} done, hidden</div>` : '');
+        })()}
+
         ${invoices.length ? `
             <h2 class="section-h">Invoices</h2>
             <table class="t">
@@ -2632,7 +2668,12 @@ async function populateInbox() {
             </div>`;
             return;
         }
-        host.innerHTML = `<div class="inbox-list">${inboxEmails.map(_inboxRow).join('')}</div>`;
+        host.innerHTML = `
+            <div class="inbox-bar">
+                <span class="inbox-count">${inboxEmails.length} waiting to become tasks</span>
+                <button class="btn sm ghost" data-act="email-dismiss-all">Dismiss all</button>
+            </div>
+            <div class="inbox-list">${inboxEmails.map(_inboxRow).join('')}</div>`;
     } catch (e) {
         console.error('inbox load failed', e);
         host.innerHTML = `<div class="t-sched-msg">Inbox unavailable: ${esc(e.message || 'error')}</div>`;
@@ -2658,34 +2699,78 @@ function _inboxRow(e) {
         </div>`;
 }
 
-/* Read an email's body, let Claude extract action items, create the tasks. */
+/* Mark emails handled — the single mechanism behind Dismiss, Dismiss all, and
+   "a task from this email was accepted". Returns the ids it actually changed,
+   so an undo can put them back. */
+function dismissEmails(ids, { refresh = true } = {}) {
+    state.emailHandled = state.emailHandled || [];
+    const seen = new Set(state.emailHandled);
+    const added = ids.filter(id => id && !seen.has(id));
+    if (!added.length) return [];
+    state.emailHandled.push(...added);
+    if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
+    Store.save();
+    if (refresh) { populateInbox(); updateInboxBadge(); }
+    return added;
+}
+
+function restoreEmails(ids) {
+    const back = new Set(ids);
+    state.emailHandled = (state.emailHandled || []).filter(id => !back.has(id));
+    Store.save();
+    populateInbox(); updateInboxBadge();
+}
+
+/* Called from the proposal sheet when a task extracted from an email is
+   accepted — only then does the email leave the inbox. */
+function markEmailProcessed(id) {
+    dismissEmails([id]);
+}
+
+/* Read an email's body, let Claude extract action items, and show them in the
+   same proposal sheet the omni bar uses — so email tasks are reviewed, edited
+   and (now) linked to a project before they exist, instead of being created
+   blind behind a toast. The email stays in the inbox until one is accepted. */
 async function emailToTasksAI(em) {
     toast('Reading the email…');
     try {
         const body = await Google.getMessageText(em.id);
         const extracted = await AI.extractEmailTasks(em.subject, body);
         if (!extracted.length) {
-            toast('No action items found in that email');
+            // nothing to do with it — clear it out so the inbox trends to empty
+            dismissEmails([em.id]);
+            toast('No action items found — email dismissed');
             return;
         }
         const link = `https://mail.google.com/mail/u/0/#inbox/${em.threadId}`;
-        extracted.forEach(td => {
-            const t = {
-                id: uuid(), status: 'todo', createdAt: new Date().toISOString(),
-                matterId: null, clientId: null, assigneeEmail: null,
+        // show the linked project in the summary so the grouping is visible
+        const projLabel = (mId) => {
+            const m = matterById(mId);
+            if (!m) return null;
+            const cn = clientById(m.clientId)?.name;
+            return (cn ? cn + ' · ' : '') + m.title;
+        };
+        Omni.sourceEmail = em.id;
+        Omni.lastInput = `Email — ${em.subject}`;
+        Omni.proposals = extracted.map(td => {
+            const data = {
                 title: td.title || em.subject,
                 due: td.due || null,
                 priority: td.priority || 'normal',
                 notes: (td.notes ? td.notes + '\n\n' : '') + `From email: ${em.subject}\n${link}`
             };
-            Tasks.put(t);
+            if (td.matterId && matterById(td.matterId)) data.matterId = td.matterId;
+            else if (td.matterName) data.matterName = td.matterName;
+            else if (td.clientName) data.clientName = td.clientName;
+            const proj = data.matterId ? projLabel(data.matterId) : (data.matterName || null);
+            return {
+                op: 'createTask',
+                data,
+                summary: `${data.title}${proj ? ' · ' + proj : ''}${data.due ? ' · due ' + data.due : ''}`,
+                accepted: false
+            };
         });
-        state.emailHandled = state.emailHandled || [];
-        state.emailHandled.push(em.id);
-        if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
-        Store.save();
-        populateInbox();
-        toast(`Created ${extracted.length} task${extracted.length === 1 ? '' : 's'} from the email`);
+        Omni._renderProposals({ actions: Omni.proposals });
     } catch (e) {
         console.error('email AI failed', e);
         toast('AI failed: ' + (e.message || e), 'error');
@@ -3169,11 +3254,16 @@ function bindGlobalActions() {
                 break;
             }
             case 'email-dismiss': {
-                state.emailHandled = state.emailHandled || [];
-                state.emailHandled.push(act.dataset.id);
-                if (state.emailHandled.length > 500) state.emailHandled = state.emailHandled.slice(-500);
-                Store.save();
-                populateInbox();
+                dismissEmails([act.dataset.id]);
+                break;
+            }
+            case 'email-dismiss-all': {
+                const ids = inboxEmails.map(e => e.id);
+                const done = dismissEmails(ids);
+                if (done.length) {
+                    toast(`Dismissed ${done.length} email${done.length === 1 ? '' : 's'}`, 'ok',
+                        () => restoreEmails(done));
+                }
                 break;
             }
             case 'email-ai': {
