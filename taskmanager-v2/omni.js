@@ -35,7 +35,7 @@ const Omni = {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (e.metaKey || e.ctrlKey || Omni._looksLikeNL(Omni.input.value)) {
-                    Omni.runAI();
+                    Capture.submit(Omni.input.value);
                 } else {
                     Omni.runSearch();
                 }
@@ -55,9 +55,9 @@ const Omni = {
                 Omni._renderProposals({ actions: Omni.proposals });
                 return;
             }
-            Omni.runAI();
+            Capture.submit(Omni.input.value);
         });
-        Omni.micBtn.addEventListener('click', () => Recorder.toggle());
+        Omni.micBtn.addEventListener('click', () => Capture.listen({ el: Omni.input, btn: Omni.micBtn }));
         if (Omni.attachBtn) Omni.attachBtn.addEventListener('click', () => Omni.attach());
 
         // global ⌘K / Ctrl+K
@@ -259,8 +259,8 @@ const Omni = {
     },
 
     /* ---- AI parse ---- */
-    async runAI() {
-        const text = Omni.input.value.trim();
+    async runAI(spoken) {
+        const text = (spoken != null ? spoken : Omni.input.value).trim();
         if (!text) return;
         if (!state.profile.anthropicKey) {
             Omni._renderError(`Add your Anthropic API key in Settings to use AI parsing. <a href="#/settings">Open settings →</a>`);
@@ -352,7 +352,7 @@ const Omni = {
         // a correction is a sentence, so Enter sends it
         const rin = Omni.panel.querySelector('#omni-refine-input');
         if (rin) rin.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); Omni._handleProposalAction('refine'); }
+            if (e.key === 'Enter') { e.preventDefault(); Capture.submit(rin.value, { mode: 'refine' }); }
         });
         // edits write straight through to the proposal, so Accept needs no
         // separate "save" step and the summary can stay honest
@@ -494,9 +494,9 @@ const Omni = {
         if (sum) sum.textContent = Omni._defaultSummary(p);
     },
 
-    async _refine() {
+    async _refine(spoken) {
         const inp = Omni.panel.querySelector('#omni-refine-input');
-        const correction = inp ? inp.value.trim() : '';
+        const correction = (spoken != null ? spoken : (inp ? inp.value : '')).trim();
         if (!correction) { if (inp) inp.focus(); return; }
         if (Omni.busy) return;
         // only the untouched proposals are worth re-deriving; anything already
@@ -522,11 +522,16 @@ const Omni = {
     _handleProposalAction(action, idx) {
         if (action === 'close') { Omni._hide(); return; }
         if (action === 'discard') { Omni.clear(); return; }
-        if (action === 'refine') { Omni._refine(); return; }
+        if (action === 'refine') {
+            const box = Omni.panel.querySelector('#omni-refine-input');
+            Capture.submit(box ? box.value : '', { mode: 'refine' });
+            return;
+        }
         if (action === 'refine-mic') {
             const el = Omni.panel.querySelector('#omni-refine-input');
-            Recorder.toggle({
+            Capture.listen({
                 el,
+                mode: 'refine',
                 btn: Omni.panel.querySelector('[data-omni="refine-mic"]'),
                 onFinal: () => Omni._refine(),
                 onAudio: async (file) => {
@@ -712,6 +717,70 @@ const Omni = {
                 </label>
                 ${!client ? `<div class="op-gap-note">New client “${esc(d.clientName || '?')}” will be created.</div>` : ''}
             </div>`;
+    }
+};
+
+/* =========================================================================
+ * 1b. CAPTURE — one thing that hears you, wherever you are.
+ *
+ * There used to be three separate "talk to the AI" boxes, each with its own
+ * microphone and its own idea of what a sentence meant: the top bar, the bar
+ * inside a form, and the correction row on the proposal sheet. Three surfaces
+ * is three things to learn and three places for a bug to hide.
+ *
+ * The boxes still look different where they must — the top one doubles as
+ * search, the one in a form sits above its fields — but there is now a single
+ * router deciding what your words mean, chosen from where you are standing:
+ *
+ *   a form is open      → fill that form's fields
+ *   proposals on screen → correct those proposals
+ *   otherwise           → work out what to create
+ *
+ * One consequence worth having: the top bar now does the right thing while a
+ * form is open, instead of talking past it.
+ * ========================================================================= */
+
+const Capture = {
+    /* Where you are decides what you meant. */
+    contextNow() {
+        if (typeof Modal !== 'undefined' && Modal.el && Modal.el.open && Modal.aiHint) return 'fill';
+        if (Omni.proposals.length && Omni.panel && !Omni.panel.hidden) return 'refine';
+        return 'create';
+    },
+
+    /* The single entry point. Every surface — typed, dictated, or a button —
+     * ends up here, and only here is it decided what happens next. */
+    async submit(text, { mode } = {}) {
+        const words = (text || '').trim();
+        if (!words) return;
+        switch (mode || Capture.contextNow()) {
+            case 'fill':   return Modal._aiFill(words);
+            case 'refine': return Omni._refine(words);
+            default:       return Omni.runAI(words);
+        }
+    },
+
+    /* The one microphone. It writes into whichever box asked for it, and hands
+     * the finished words to submit — so dictating and typing are the same act.
+     * On a phone the recording is transcribed first; the words then travel the
+     * identical path. */
+    listen({ el, btn, mode } = {}) {
+        Recorder.toggle({
+            el: el || Omni.input,
+            btn,
+            inModal: mode === 'fill',
+            onFinal: (text) => Capture.submit(text != null ? text : (el ? el.value : ''), { mode }),
+            onAudio: async (file) => {
+                try {
+                    const heard = await Gemini.transcribe(file);
+                    if (el) el.value = heard;
+                    await Capture.submit(heard, { mode });
+                } catch (e) {
+                    console.error('dictation failed', e);
+                    toast('Could not read the recording: ' + (e.message || 'error'), 'error');
+                }
+            }
+        });
     }
 };
 

@@ -1203,28 +1203,13 @@ const Modal = {
         const inp = $('#modal-ai-input');
         const go  = $('#modal-ai-go');
         const mic = $('#modal-ai-mic');
-        if (go)  go.addEventListener('click', () => Modal._aiFill());
+        if (go)  go.addEventListener('click', () => Capture.submit(inp ? inp.value : '', { mode: 'fill' }));
         if (inp) inp.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') { e.preventDefault(); Modal._aiFill(); }
+            if (e.key === 'Enter') { e.preventDefault(); Capture.submit(inp.value, { mode: 'fill' }); }
         });
-        if (mic) mic.addEventListener('click', () => {
-            Recorder.toggle({
-                el: inp,
-                btn: mic,
-                inModal: true,
-                onFinal: () => Modal._aiFill(),
-                onAudio: async (file) => {
-                    // on a phone the mic produces a recording, not text
-                    Modal._aiStatus('Reading the recording…');
-                    try {
-                        inp.value = await Gemini.transcribe(file);
-                        Modal._aiFill();
-                    } catch (e) {
-                        Modal._aiStatus('Could not read that: ' + (e.message || 'error'), 'bad');
-                    }
-                }
-            });
-        });
+        // the one microphone, told which box it is serving
+        if (mic) mic.addEventListener('click', () =>
+            Capture.listen({ el: inp, btn: mic, mode: 'fill' }));
     },
 
     _aiStatus(msg, kind = '') {
@@ -1235,9 +1220,9 @@ const Modal = {
         el.dataset.kind = kind;
     },
 
-    async _aiFill() {
+    async _aiFill(spoken) {
         const inp = $('#modal-ai-input');
-        const text = inp ? inp.value.trim() : '';
+        const text = (spoken != null ? spoken : (inp ? inp.value : '')).trim();
         if (!text) { if (inp) inp.focus(); return; }
         if (!state.profile.anthropicKey) {
             Modal._aiStatus('Add an Anthropic API key in Settings to use this.', 'bad');
