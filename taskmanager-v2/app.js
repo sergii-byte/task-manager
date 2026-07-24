@@ -2099,71 +2099,8 @@ function viewClient(id) {
         <h2 class="section-h">Attachments</h2>
         <div id="att-host-client"></div>
 
-        <h2 class="section-h">Projects</h2>
-        ${matters.length ? `
-            <table class="t">
-                <thead><tr><th>Title</th><th>Status</th><th class="num">Tasks</th><th class="num">Time</th><th>Rate</th></tr></thead>
-                <tbody>${matters.map(m => {
-                    const mTasks = tasksForMatter(m.id);
-                    const mLogs = logsForMatter(m.id);
-                    const mins = mLogs.reduce((s,l)=>s+l.minutes,0);
-                    return `<tr class="row" data-go="matters/${m.id}">
-                        <td><strong>${esc(m.title)}</strong></td>
-                        <td><span class="badge ${m.status||'open'}">${esc(m.status||'open')}</span></td>
-                        <td class="num">${mTasks.length}</td>
-                        <td class="num">${fmtMinutes(mins)}</td>
-                        <td>${fmtMoney(matterRate(m), profileCurrency())}/h</td>
-                    </tr>`;
-                }).join('')}</tbody>
-            </table>
-        ` : '<div class="empty">No projects yet.</div>'}
-
-        <h2 class="section-h">Tasks</h2>
-        ${(() => {
-            const open = tasks.filter(t => t.status !== 'done');
-            const doneCount = tasks.length - open.length;
-            if (!open.length) {
-                return `<div class="empty">No open tasks for this client.${doneCount ? ` ${doneCount} done.` : ''}</div>`;
-            }
-            // Group by project — the client's tasks read as workstreams, not one
-            // flat pile. Tasks with no project fall under "No project".
-            const groups = new Map();
-            open.forEach(t => {
-                const key = t.matterId && matterById(t.matterId) ? t.matterId : '_none';
-                if (!groups.has(key)) groups.set(key, []);
-                groups.get(key).push(t);
-            });
-            const order = (k) => k === '_none' ? '￿' : (matterById(k)?.title || '');
-            const keys = [...groups.keys()].sort((a, b) => order(a).localeCompare(order(b)));
-            return keys.map(k => {
-                const ts = groups.get(k);
-                const m = k === '_none' ? null : matterById(k);
-                const title = m ? m.title : 'No project';
-                const due = m?.due || null;
-                return `
-                    <div class="task-group">
-                        <div class="task-group-head">
-                            ${m ? `<a href="#/matters/${k}">${esc(title)}</a>` : `<span>${esc(title)}</span>`}
-                            <span class="n">${ts.length}</span>
-                            ${due ? `<span class="badge sm ${due < todayISO() ? 'overdue' : ''}">${esc(fmtDate(due))}</span>` : ''}
-                            ${m ? driveLink(m.website, 'Drive') : ''}
-                        </div>
-                        <table class="t"><tbody>${ts.map(t => {
-                            const overdue = t.due && t.due < todayISO();
-                            return `<tr class="row" data-task="${t.id}">
-                                <td><strong>${esc(t.title)}</strong>${
-                                    t.blockedReason ? ` <span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span>` : ''}${
-                                    t.link ? ' ' + driveLink(t.link, '') : ''}</td>
-                                <td class="date ${overdue ? 'overdue' : ''}">${t.due ? esc(fmtDate(t.due)) : ''}</td>
-                                <td><span class="badge ${esc(t.priority || 'normal')}">${esc(t.priority || 'normal')}</span></td>
-                                <td class="row-log"><button class="btn xs" data-log="${esc(t.id)}" title="Log time on this task">${
-                                    icon('clock', 13)}</button></td>
-                            </tr>`;
-                        }).join('')}</tbody></table>
-                    </div>`;
-            }).join('') + (doneCount ? `<div class="task-group-done">${doneCount} done, hidden</div>` : '');
-        })()}
-
+        <h2 class="section-h">Work</h2>
+        ${renderClientTree(c.id)}
         ${invoices.length ? `
             <h2 class="section-h">Invoices</h2>
             <table class="t">
@@ -2179,6 +2116,95 @@ function viewClient(id) {
             </table>
         `: ''}
     `;
+}
+
+/* =========================================================================
+ * TREE — a client's work as folders, not as separate lists.
+ *
+ * Projects nest through parentId, tasks hang off any project or off the
+ * client itself. Every node carries its own "+ task" and "+ subproject", so
+ * you add things where you are looking instead of going to a corner of the
+ * screen. Expanded nodes live in UI, so they survive a re-render.
+ * ========================================================================= */
+
+function treeTaskRow(t) {
+    const overdue = t.due && t.due < todayISO() && t.status !== 'done';
+    return `
+        <li class="tr-task ${t.status === 'done' ? 'is-done' : ''}" data-task="${esc(t.id)}">
+            <span class="tr-check" data-toggle="${esc(t.id)}" role="checkbox"
+                  aria-checked="${t.status === 'done'}" tabindex="0"></span>
+            <span class="tr-title">${esc(t.title)}</span>
+            ${t.blockedReason ? `<span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span>` : ''}
+            ${t.due ? `<span class="tr-due ${overdue ? 'overdue' : ''}">${esc(fmtDate(t.due))}</span>` : ''}
+            ${t.link ? driveLink(t.link, '') : ''}
+            <button class="btn xs tr-log" data-log="${esc(t.id)}" title="Log time">${icon('clock', 13)}</button>
+        </li>`;
+}
+
+function treeNode(m, depth = 0) {
+    const kids = childMatters(m.id);
+    const tasks = tasksForMatter(m.id).filter(t => t.status !== 'done');
+    const doneN = tasksForMatter(m.id).length - tasks.length;
+    const open = UI.isOpen(m.id);
+    const bill = matterBillingType(m);
+    const overdue = m.due && m.due < todayISO() && m.status !== 'closed';
+    const count = tasks.length + kids.length;
+
+    return `
+        <li class="tr-node" data-node="${esc(m.id)}" style="--depth:${depth}">
+            <div class="tr-head">
+                <button class="tr-twist ${open ? 'open' : ''}" data-tree-toggle="${esc(m.id)}"
+                        aria-expanded="${open}" ${count ? '' : 'data-empty'}
+                        title="${open ? 'Collapse' : 'Expand'}">›</button>
+                <a class="tr-name" href="#/matters/${esc(m.id)}">${esc(m.title)}</a>
+                ${count ? `<span class="tr-n">${count}</span>` : ''}
+                ${bill !== 'hourly' ? `<span class="badge sm bill-${esc(bill)}">${esc(BILLING_LABEL[bill])}</span>` : ''}
+                ${m.due ? `<span class="badge sm ${overdue ? 'overdue' : ''}">${esc(fmtDate(m.due))}</span>` : ''}
+                ${driveLink(m.website, '')}
+                <span class="tr-actions">
+                    <button class="btn xs" data-add-task="${esc(m.id)}" title="Add a task here">＋ task</button>
+                    <button class="btn xs" data-add-sub="${esc(m.id)}" title="Add a subproject here">＋ sub</button>
+                </span>
+            </div>
+            ${open ? `
+                <ul class="tr-children">
+                    ${kids.map(k => treeNode(k, depth + 1)).join('')}
+                    ${tasks.map(treeTaskRow).join('')}
+                    ${!kids.length && !tasks.length
+                        ? `<li class="tr-empty">Nothing here yet${doneN ? ` · ${doneN} done` : ''}</li>` : ''}
+                    ${doneN && (kids.length || tasks.length) ? `<li class="tr-empty">${doneN} done, hidden</li>` : ''}
+                </ul>` : ''}
+        </li>`;
+}
+
+function renderClientTree(cid) {
+    const tops = topMattersForClient(cid);
+    const loose = standaloneTasksForClient(cid).filter(t => t.status !== 'done');
+    if (!tops.length && !loose.length) {
+        return `<div class="empty-state">
+            <h3>Nothing here yet</h3>
+            <p>Projects hold the work; a task can also sit straight under the client.</p>
+            <button class="btn primary" data-add-sub="" data-client="${esc(cid)}">＋ New project</button>
+            <button class="btn" data-add-task="" data-client="${esc(cid)}">＋ Task</button>
+        </div>`;
+    }
+    return `
+        <ul class="tree">
+            ${tops.map(m => treeNode(m, 0)).join('')}
+            ${loose.length ? `
+                <li class="tr-node" style="--depth:0">
+                    <div class="tr-head">
+                        <span class="tr-twist" data-empty></span>
+                        <span class="tr-name tr-loose">Not in a project</span>
+                        <span class="tr-n">${loose.length}</span>
+                    </div>
+                    <ul class="tr-children">${loose.map(treeTaskRow).join('')}</ul>
+                </li>` : ''}
+        </ul>
+        <div class="tree-foot">
+            <button class="btn" data-add-sub="" data-client="${esc(cid)}">＋ Project</button>
+            <button class="btn" data-add-task="" data-client="${esc(cid)}">＋ Task without a project</button>
+        </div>`;
 }
 
 /* The provenance panel: what happened to this thing, newest first, with a
@@ -3106,7 +3132,7 @@ function openClientForm(id = null) {
     });
 }
 
-function openMatterForm(id = null, defaultClientId = null) {
+function openMatterForm(id = null, defaultClientId = null, parentId = null) {
     const m = id ? matterById(id) : null;
     if (!state.clients.length) {
         toast('Add a client first', 'error');
@@ -3128,6 +3154,16 @@ function openMatterForm(id = null, defaultClientId = null) {
                     { value: 'on-hold', label: 'On hold' },
                     { value: 'closed', label: 'Closed' }
                 ]},
+            { name: 'billingType', label: 'Billing', type: 'select',
+                value: m?.billingType || (m?.parentId ? '' : 'hourly'),
+                options: [
+                    ...(m?.parentId ? [{ value: '', label: 'Same as parent project' }] : []),
+                    { value: 'hourly', label: 'Hourly' },
+                    { value: 'fixed', label: 'Fixed fee' },
+                    { value: 'probono', label: 'Pro bono' },
+                    { value: 'partnership', label: 'Partnership' }
+                ],
+                hint: 'Pro bono and partnership still log time — it just never becomes money owed.' },
             { name: 'due', label: 'Deadline', type: 'date', value: fmtDateInput(m?.due),
                 hint: 'When the whole project is due. Shown on the project and the client page.' },
             { name: 'rate', label: `Hourly rate (${profileCurrency()})`, type: 'number', min: 0, step: 1,
@@ -3143,6 +3179,8 @@ function openMatterForm(id = null, defaultClientId = null) {
                 History.record('matterUpdated', 'matter', m.id, data.title);
             } else {
                 const nm = { id: uuid(), openedAt: new Date().toISOString(), ...data };
+                // nesting comes from where you pressed "+ sub"
+                if (parentId) nm.parentId = parentId;
                 state.matters.push(nm);
                 History.record('matterCreated', 'matter', nm.id, data.title);
             }
@@ -3164,7 +3202,7 @@ function openMatterForm(id = null, defaultClientId = null) {
     });
 }
 
-function openTaskForm(id = null, defaultMatterId = null) {
+function openTaskForm(id = null, defaultMatterId = null, defaultClientId = null) {
     const t = id ? taskById(id) : null;
     Modal.open({
         title: t ? 'Edit task' : 'New task',
@@ -3200,7 +3238,8 @@ function openTaskForm(id = null, defaultMatterId = null) {
             const payload = {
                 title: data.title,
                 matterId: data.matterId || null,
-                clientId: mat?.clientId || null,
+                // a task with no project still belongs to its client
+                clientId: mat?.clientId || data.clientId || defaultClientId || t?.clientId || null,
                 due: data.due || null,
                 priority: data.priority,
                 assigneeEmail: (data.assigneeEmail || '').trim().toLowerCase() || null,
@@ -3445,6 +3484,32 @@ function bindGlobalActions() {
         const goRow = e.target.closest('[data-go]');
         if (goRow && !e.target.closest('[data-act], [data-toggle], [data-start], button, a')) {
             navigate(goRow.dataset.go);
+            return;
+        }
+
+        // expand / collapse a branch — UI state, so it survives re-renders
+        const twist = e.target.closest('[data-tree-toggle]');
+        if (twist) {
+            UI.toggleOpen(twist.dataset.treeToggle);
+            render();
+            return;
+        }
+
+        // "+ task" / "+ sub" on a node — create where you are looking
+        const addTask = e.target.closest('[data-add-task]');
+        if (addTask) {
+            const mid = addTask.dataset.addTask || null;
+            if (mid) UI.open(mid);
+            openTaskForm(null, mid, addTask.dataset.client || null);
+            return;
+        }
+        const addSub = e.target.closest('[data-add-sub]');
+        if (addSub) {
+            const parentId = addSub.dataset.addSub || null;
+            const cid = addSub.dataset.client
+                || (parentId ? matterById(parentId)?.clientId : null);
+            if (parentId) UI.open(parentId);
+            openMatterForm(null, cid, parentId);
             return;
         }
 

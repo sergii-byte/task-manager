@@ -76,6 +76,9 @@
     --shadow-lg: 0 12px 32px rgba(40,38,30,0.12);
 
     /* smallest comfortable hit area for anything clickable */
+    /* Smallest comfortable hit area. A mouse can hit 32px; a fingertip needs
+       44px, which is the floor Apple and Material both set — raised for touch
+       widths below, so every control in the app grows at once. */
     --tap: 32px;
 
     --sidebar-w: 220px;
@@ -2103,6 +2106,80 @@ dialog header h2 { font-family: var(--font-display); letter-spacing: -0.02em; }
 table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spacing: 0.08em; }
 
 /* === INBOX — Gmail triage === */
+/* === TREE — a client's work as folders === */
+.tree, .tr-children { list-style: none; margin: 0; padding: 0; }
+.tr-node { --pad: calc(var(--depth, 0) * 18px); }
+.tr-head {
+    display: flex; align-items: center; gap: var(--s-2);
+    padding: 7px var(--s-3) 7px calc(var(--s-2) + var(--pad));
+    border-radius: var(--radius);
+    min-height: var(--tap);
+}
+.tr-head:hover { background: var(--bg-soft); }
+.tr-twist {
+    flex: none; width: 22px; height: 22px;
+    border: 0; background: transparent; cursor: pointer;
+    color: var(--fg-mute); font-size: 15px; line-height: 1;
+    display: grid; place-items: center;
+    transition: transform 0.15s ease;
+}
+.tr-twist.open { transform: rotate(90deg); }
+.tr-twist[data-empty] { visibility: hidden; cursor: default; }
+.tr-name { font-weight: 600; color: var(--ink); text-decoration: none; }
+.tr-name:hover { color: var(--accent); text-decoration: underline; }
+.tr-loose { color: var(--fg-mute); font-weight: 500; }
+.tr-n {
+    font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-mute);
+    background: var(--bg-soft); border: 1px solid var(--line);
+    border-radius: var(--radius-pill); padding: 1px 7px;
+}
+.tr-actions { margin-left: auto; display: flex; gap: var(--s-1); opacity: 0; transition: opacity 0.12s; }
+.tr-head:hover .tr-actions, .tr-head:focus-within .tr-actions { opacity: 1; }
+/* On a phone there is no hover to reveal them, so they are always out —
+   keyed to width as well as pointer, since some touch devices claim hover. */
+@media (hover: none), (max-width: 720px) {
+    .tr-actions { opacity: 1; }
+    /* .btn.xs sets its own min-height, so match its specificity to win */
+    .tr-head .tr-twist,
+    .tr-actions .btn.btn.xs,
+    .tr-task .btn.btn.xs.tr-log { min-height: var(--tap); min-width: var(--tap); }
+}
+
+/* Fingertips, not cursors: every control sized from --tap grows at once. */
+@media (max-width: 720px) {
+    :root { --tap: 44px; }
+}
+
+.tr-task {
+    display: flex; align-items: center; gap: var(--s-2);
+    padding: 6px var(--s-3) 6px calc(var(--s-5) + var(--pad, 0px));
+    min-height: var(--tap);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.tr-task:hover { background: var(--bg-soft); }
+.tr-check {
+    flex: none; width: 16px; height: 16px; border-radius: 5px;
+    border: 1.5px solid var(--line); background: var(--bg); cursor: pointer;
+}
+.tr-task.is-done .tr-check { background: var(--ink); border-color: var(--ink); }
+.tr-title { min-width: 0; overflow-wrap: anywhere; }
+.tr-task.is-done .tr-title { color: var(--fg-mute); text-decoration: line-through; }
+.tr-due { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-mute); }
+.tr-due.overdue { color: var(--danger); font-weight: 700; }
+.tr-log { margin-left: auto; }
+.tr-empty {
+    padding: 5px var(--s-3) 5px calc(var(--s-5) + var(--pad, 0px));
+    font-size: var(--t-sm); color: var(--fg-faint);
+}
+.tree-foot { display: flex; gap: var(--s-2); flex-wrap: wrap; margin-top: var(--s-3); }
+
+.badge.bill-fixed       { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.badge.bill-probono,
+.badge.bill-partnership { color: var(--fg-mute); border-color: var(--line); background: var(--bg-soft); }
+
+@media (prefers-reduced-motion: reduce) { .tr-twist, .tr-actions { transition: none; } }
+
 /* === HISTORY — the provenance chain === */
 .hist-verdict {
     font-family: var(--font-mono); font-size: var(--t-xs); font-weight: 600;
