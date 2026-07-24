@@ -935,8 +935,17 @@ ${text}`;
         } else if (file.type === 'text/plain' || name.endsWith('.txt')) {
             const text = await file.text();
             content = intro + '\n\n' + text.slice(0, 14000);
-        } else if ((file.type || '').startsWith('audio/') || (file.type || '').startsWith('video/')) {
-            // Claude can't read audio/video — route to Gemini, which can.
+        } else if ((file.type || '').startsWith('audio/')) {
+            // Gemini has the ears, Claude has the head: transcribe first, then
+            // read the words the same way typed input is read, so a recording
+            // and a sentence reach identical conclusions.
+            const heard = await Gemini.transcribe(file);
+            const parsed = await AI.parseInput((note ? note + '\n\n' : '') + heard);
+            parsed.transcript = parsed.transcript || heard;
+            return parsed;
+        } else if ((file.type || '').startsWith('video/')) {
+            // Video is the exception — ears alone would throw away everything
+            // on screen, so Gemini reads it whole.
             return await Gemini.parseAV(file, note);
         } else {
             throw new Error('Unsupported file. Use .docx, PDF, image, .txt, audio or video.');
@@ -1504,20 +1513,27 @@ const Recorder = {
         return Recorder.target || {
             el: Omni.input,
             onFinal: () => Omni.runAI(),
+            /* Two steps on purpose: Gemini turns the recording into words, then
+             * Claude reads those words exactly as if they had been typed. It
+             * used to be one Gemini call doing both, handed Claude's
+             * action-extraction prompt — which is why dictation drew different
+             * (and worse) conclusions than typing the same sentence. */
             onAudio: async (file) => {
                 Omni.busy = true;
-                Omni._renderLoading();
+                Omni._renderLoading('Transcribing…');
+                let text = '';
                 try {
-                    const result = await AI.parseFile(file);
-                    Omni.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
-                    Omni.lastInput = result.transcript || Omni.lastInput;
-                    Omni._renderProposals(result);
+                    text = await Gemini.transcribe(file);
                 } catch (e) {
-                    console.error('dictation parse failed', e);
-                    Omni._renderError('Could not read the recording: ' + esc(e.message || 'error'));
-                } finally {
+                    console.error('transcription failed', e);
                     Omni.busy = false;
+                    Omni._renderError('Could not read the recording: ' + esc(e.message || 'error'));
+                    return;
                 }
+                // show what was heard, so a mis-hearing is visible and editable
+                Omni.input.value = text;
+                Omni.busy = false;
+                await Omni.runAI();
             }
         };
     },
