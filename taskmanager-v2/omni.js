@@ -1554,7 +1554,13 @@ const Recorder = {
         const mobile = Recorder.isMobile();
         // Record-and-transcribe beats live recognition on a phone, but it
         // needs Gemini to read the audio afterwards.
-        Recorder.avMode = mobile && !!state.profile.geminiKey && Recorder.canRecordAudio();
+        // Record-and-transcribe wherever there's a Gemini key — not just on a
+        // phone. The browser's own SpeechRecognition is poor at Ukrainian and
+        // Russian (and worse when they're mixed with English legal terms),
+        // which is what made dictation feel unusable; Gemini reads the whole
+        // recording with context and gets names and jargon right far more often.
+        // Web Speech stays as the fallback when there's no key.
+        Recorder.avMode = !!state.profile.geminiKey && Recorder.canRecordAudio();
         const useRecognition = Recorder.supported() && !Recorder.avMode;
         const useMediaRecorder = Recorder.canRecordAudio() && (!mobile || Recorder.avMode);
 

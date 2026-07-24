@@ -674,6 +674,42 @@ const logsForMatter = (mid) => state.logs.filter(l => l.matterId === mid && !l.d
 const logsForTask = (tid) => state.logs.filter(l => l.taskId === tid && !l.deletedAt);
 const logsForClient = (cid) => state.logs.filter(l => l.clientId === cid && !l.deletedAt);
 
+/* ---- project tree ----
+   A project with no parentId is top-level under its client; with one, it is a
+   subproject. The field is optional, so every existing project reads as
+   top-level — no migration. */
+const matterParent = (m) => (m && m.parentId ? matterById(m.parentId) : null);
+const childMatters = (mid) => state.matters.filter(m => m.parentId === mid && !m.deletedAt);
+const topMattersForClient = (cid) =>
+    state.matters.filter(m => m.clientId === cid && !m.parentId && !m.deletedAt);
+/* Tasks that hang directly off the client, not under any project — the
+   standalone tasks the client page needs a home for. */
+const standaloneTasksForClient = (cid) =>
+    state.tasks.filter(t => t.clientId === cid && !t.matterId && !t.deletedAt);
+/* Guard against a cycle a bad edit could introduce (A parent of B, B parent
+   of A) so tree walks can't loop forever. */
+const matterDescendantIds = (mid, seen = new Set()) => {
+    childMatters(mid).forEach(c => {
+        if (!seen.has(c.id)) { seen.add(c.id); matterDescendantIds(c.id, seen); }
+    });
+    return seen;
+};
+
+/* ---- billing ----
+   Type lives on the project and is inherited by subprojects that don't set
+   their own. Pro bono and partnership are non-billable: their time is still
+   logged (for the record) but never counted as unbilled or invoiced. */
+const BILLING_LABEL = { hourly: 'Hourly', fixed: 'Fixed fee', probono: 'Pro bono', partnership: 'Partnership' };
+const matterBillingType = (m) => {
+    let cur = m, guard = 0;
+    while (cur && guard++ < 20) { if (cur.billingType) return cur.billingType; cur = matterParent(cur); }
+    return 'hourly';
+};
+const isBillable = (m) => {
+    const b = matterBillingType(m);
+    return b === 'hourly' || b === 'fixed';
+};
+
 const taskStatus = (t) => {
     if (t.status === 'done') return 'done';
     if (t.due && isPastDate(t.due)) return 'overdue';
@@ -688,10 +724,22 @@ const totalUnbilledForClient = (cid) => {
         .filter(l => l.clientId === cid && !l.invoiceId && !l.deletedAt)
         .reduce((sum, l) => {
             const m = matterById(l.matterId);
+            // pro bono / partnership time is logged but never owed
+            if (m && !isBillable(m)) return sum;
             const rate = matterRate(m);
             return sum + (l.minutes / 60) * rate;
         }, 0);
 };
+
+/* A folder/link affordance — the thing you click to go do the work. Opens in
+   a new tab; data-stop keeps a click inside a task row from also opening the
+   task editor. Empty string when there is no link, so it drops out cleanly. */
+function driveLink(url, label = 'Open') {
+    if (!url) return '';
+    const safe = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+    return `<a class="drive-link" href="${esc(safe)}" target="_blank" rel="noopener" data-stop
+        title="${esc(safe)}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>${label ? `<span>${esc(label)}</span>` : ''}</a>`;
+}
 
 /* =========================================================================
  * 4. TOAST
@@ -726,14 +774,24 @@ function toast(message, kind = 'ok', undo = null) {
  * time ("friction, lazy") — so the moment a task is closed with nothing
  * logged on it, the toast offers four durations. One tap writes the log;
  * ignoring it costs nothing. */
-function quickLogPrompt(t) {
+/* Offer to log time in one tap. `label` lets the same chips serve both
+   "just finished it" and "log another session on this" — the recurring case
+   where you sit with one task 30 minutes a day for a fortnight. */
+function quickLogPrompt(t, label = '✓ done — how long did it take?') {
     const el = $('#toast');
-    if (!el || !t.matterId) return;
+    if (!el) return;
+    // A task you keep returning to should offer yesterday's amount first, so
+    // repeating it is one tap rather than arithmetic.
+    const prev = logsForTask(t.id)
+        .slice().sort((a, b) => (b.endedAt || '').localeCompare(a.endedAt || ''))[0];
+    const last = prev && prev.minutes ? Number(prev.minutes) : null;
+    const mins = [...new Set([...(last ? [last] : []), 15, 30, 60, 120])].slice(0, 4);
     clearTimeout(_toastTimer);
     el.dataset.kind = 'ok';
-    el.innerHTML = `<span>✓ done — how long did it take?</span>` +
-        [15, 30, 60, 120].map(m =>
-            `<button class="toast-chip" data-mins="${m}">${fmtMinutes(m)}</button>`).join('') +
+    el.innerHTML = `<span>${esc(label)}</span>` +
+        mins.map(m =>
+            `<button class="toast-chip" data-mins="${m}">${fmtMinutes(m)}${
+                m === last ? ' ↺' : ''}</button>`).join('') +
         `<button class="toast-chip ghost" data-mins="0">skip</button>`;
     el.hidden = false;
     el.querySelectorAll('[data-mins]').forEach(b => b.addEventListener('click', () => {
@@ -1919,22 +1977,27 @@ function viewClient(id) {
             const keys = [...groups.keys()].sort((a, b) => order(a).localeCompare(order(b)));
             return keys.map(k => {
                 const ts = groups.get(k);
-                const title = k === '_none' ? 'No project' : matterById(k).title;
-                const due = k !== '_none' && matterById(k)?.due ? matterById(k).due : null;
+                const m = k === '_none' ? null : matterById(k);
+                const title = m ? m.title : 'No project';
+                const due = m?.due || null;
                 return `
                     <div class="task-group">
                         <div class="task-group-head">
-                            ${k === '_none' ? `<span>${esc(title)}</span>` : `<a href="#/matters/${k}">${esc(title)}</a>`}
+                            ${m ? `<a href="#/matters/${k}">${esc(title)}</a>` : `<span>${esc(title)}</span>`}
                             <span class="n">${ts.length}</span>
                             ${due ? `<span class="badge sm ${due < todayISO() ? 'overdue' : ''}">${esc(fmtDate(due))}</span>` : ''}
+                            ${m ? driveLink(m.website, 'Drive') : ''}
                         </div>
                         <table class="t"><tbody>${ts.map(t => {
                             const overdue = t.due && t.due < todayISO();
                             return `<tr class="row" data-task="${t.id}">
                                 <td><strong>${esc(t.title)}</strong>${
-                                    t.blockedReason ? ` <span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span>` : ''}</td>
+                                    t.blockedReason ? ` <span class="badge stuck" title="${esc(t.blockedReason)}">stuck</span>` : ''}${
+                                    t.link ? ' ' + driveLink(t.link, '') : ''}</td>
                                 <td class="date ${overdue ? 'overdue' : ''}">${t.due ? esc(fmtDate(t.due)) : ''}</td>
                                 <td><span class="badge ${esc(t.priority || 'normal')}">${esc(t.priority || 'normal')}</span></td>
+                                <td class="row-log"><button class="btn xs" data-log="${esc(t.id)}" title="Log time on this task">${
+                                    icon('clock', 13)}</button></td>
                             </tr>`;
                         }).join('')}</tbody></table>
                     </div>`;
@@ -2080,6 +2143,7 @@ function viewMatter(id) {
             <div class="meta"><span class="badge ${m.status||'open'}">${esc(m.status||'open')}</span>${
                 m.due ? ` <span class="badge ${m.due < todayISO() && m.status !== 'closed' ? 'overdue' : ''}">due ${esc(fmtDate(m.due))}</span>` : ''}</div>
             <div class="actions">
+                ${m.website ? `<a class="btn" href="${esc(/^https?:\/\//i.test(m.website) ? m.website : 'https://' + m.website)}" target="_blank" rel="noopener">📁 Drive</a>` : ''}
                 <button class="btn" data-act="edit-matter" data-id="${m.id}">Edit</button>
                 <button class="btn" data-act="new-task" data-matter="${m.id}">＋ Task</button>
                 ${unbilled > 0 ? `<button class="btn primary" data-act="new-invoice" data-matter="${m.id}">＋ Invoice unbilled</button>` : ''}
@@ -2909,6 +2973,8 @@ function openTaskForm(id = null, defaultMatterId = null) {
             { name: 'assigneeEmail', label: 'Assignee email', type: 'email', value: t?.assigneeEmail || '',
                 placeholder: 'teammate@example.com',
                 hint: 'Leave blank to keep the task yours. The assignee sees it when they sign in.' },
+            { name: 'link', label: 'Drive / link', type: 'url', value: t?.link || '', placeholder: 'https://drive.google.com/…',
+                hint: 'A folder or document to open when you sit down to do this — Google Drive, a data room, anything.' },
             { name: 'blockedReason', label: 'Stuck / waiting on', value: t?.blockedReason || '', full: true,
                 placeholder: 'e.g. waiting for signed POA from the client',
                 hint: 'Why the task is not moving. Shown on the client portal if this client is shared — write it for the client to read.' },
@@ -2925,6 +2991,7 @@ function openTaskForm(id = null, defaultMatterId = null) {
                 priority: data.priority,
                 assigneeEmail: (data.assigneeEmail || '').trim().toLowerCase() || null,
                 blockedReason: (data.blockedReason || '').trim() || null,
+                link: (data.link || '').trim() || null,
                 notes: data.notes
             };
             if (t) {
@@ -3147,11 +3214,29 @@ function openBankAccountForm(id = null) {
  * ========================================================================= */
 
 function bindGlobalActions() {
+    // Quick time capture from anywhere: ⌘L / Ctrl+L opens the time entry, which
+    // leads with the AI bar — say "1h40 on the Novawave memo" and it's logged.
+    // This is the realistic "sync": you describe the time, ordify files it.
+    document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'l') {
+            e.preventDefault();
+            openLogForm();
+        }
+    });
+
     document.body.addEventListener('click', (e) => {
         // navigate by row
         const goRow = e.target.closest('[data-go]');
         if (goRow && !e.target.closest('[data-act], [data-toggle], [data-start], button, a')) {
             navigate(goRow.dataset.go);
+            return;
+        }
+
+        // log time on a task without finishing it — the every-day-for-a-fortnight case
+        const logBtn = e.target.closest('[data-log]');
+        if (logBtn) {
+            const t = taskById(logBtn.dataset.log);
+            if (t) quickLogPrompt(t, 'How long on “' + (t.title || 'this') + '” today?');
             return;
         }
 
@@ -3164,8 +3249,13 @@ function bindGlobalActions() {
                 t.status = t.status === 'done' ? 'todo' : 'done';
                 t.completedAt = t.status === 'done' ? new Date().toISOString() : null;
                 Tasks.put(t); render();
-                // closing a task with no time on it → offer to log it in one tap
-                if (becameDone && t.matterId && !logsForTask(t.id).length) quickLogPrompt(t);
+                // Closing a task offers to log the time — unless a running timer
+                // just logged it. It used to also require a project and demand
+                // the task had no time at all, which meant anything you return
+                // to day after day was never offered again.
+                const justTimed = logsForTask(t.id).some(l =>
+                    Date.now() - new Date(l.endedAt || l.startedAt).getTime() < 90 * 1000);
+                if (becameDone && !justTimed) quickLogPrompt(t);
             }
             return;
         }
@@ -3182,9 +3272,9 @@ function bindGlobalActions() {
             return;
         }
 
-        // task row click → edit
+        // task row click → edit, unless the click was on a link/control inside it
         const taskRow = e.target.closest('[data-task]');
-        if (taskRow && !e.target.closest('[data-toggle], [data-start]')) {
+        if (taskRow && !e.target.closest('[data-toggle], [data-start], [data-stop], a')) {
             openTaskForm(taskRow.dataset.task);
             return;
         }

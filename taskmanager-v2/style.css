@@ -2103,6 +2103,29 @@ dialog header h2 { font-family: var(--font-display); letter-spacing: -0.02em; }
 table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spacing: 0.08em; }
 
 /* === INBOX — Gmail triage === */
+/* one-tap "log time on this" on a task row */
+.btn.xs {
+    padding: 3px 7px; min-height: 26px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--fg-mute);
+}
+.btn.xs:hover { color: var(--accent); border-color: var(--accent); }
+td.row-log { width: 1%; white-space: nowrap; text-align: right; }
+@media (max-width: 720px) { .btn.xs { min-height: var(--tap); min-width: var(--tap); } }
+
+/* the folder/link you click to go do the work */
+.drive-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--accent); text-decoration: none;
+    font-size: var(--t-xs); font-weight: 600;
+    padding: 2px 7px; border-radius: var(--radius-pill);
+    border: 1px solid var(--accent-line); background: var(--accent-soft);
+    vertical-align: 1px;
+}
+.drive-link:hover { border-color: var(--accent); }
+.drive-link svg { flex: none; }
+.task-group-head .drive-link { margin-left: auto; }
+
 /* client detail — tasks grouped by project (workstreams, not one pile) */
 .task-group { margin-bottom: var(--s-4); }
 .task-group-head {
