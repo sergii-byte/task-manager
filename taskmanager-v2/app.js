@@ -843,16 +843,25 @@ const taskStatus = (t) => {
 const matterRate = (m) => Number(m?.rate) || Number(state.profile.rate) || 0;
 const profileCurrency = () => state.profile.currency || 'EUR';
 
+/* What the client actually owes — and it must agree with what an invoice
+   would say. Hourly counts the hours; a fixed-fee project counts its agreed
+   sum once, however many hours sit under it; pro bono and partnership count
+   nothing. Computing this per log entry is what made the client card and the
+   invoice disagree. */
 const totalUnbilledForClient = (cid) => {
-    return state.logs
-        .filter(l => l.clientId === cid && !l.invoiceId && !l.deletedAt)
-        .reduce((sum, l) => {
-            const m = matterById(l.matterId);
-            // pro bono / partnership time is logged but never owed
-            if (m && !isBillable(m)) return sum;
-            const rate = matterRate(m);
-            return sum + (l.minutes / 60) * rate;
-        }, 0);
+    const open = state.logs.filter(l =>
+        l.clientId === cid && !l.invoiceId && !l.deletedAt);
+    const fixedSeen = new Set();
+    return open.reduce((sum, l) => {
+        const m = l.matterId ? matterById(l.matterId) : null;
+        if (m && !isBillable(m)) return sum;
+        if (m && matterBillingType(m) === 'fixed') {
+            if (fixedSeen.has(m.id)) return sum;
+            fixedSeen.add(m.id);
+            return sum + (Number(m.fee) || 0);
+        }
+        return sum + (l.minutes / 60) * matterRate(m);
+    }, 0);
 };
 
 /* A folder/link affordance — the thing you click to go do the work. Opens in
@@ -2536,7 +2545,12 @@ function viewMatter(id) {
     const tasks = tasksForMatter(id);
     const logs = logsForMatter(id);
     const mins = logs.reduce((s,l)=>s+l.minutes,0);
-    const billable = (mins / 60) * matterRate(m);
+    // What this project is worth depends on how it is billed: hours for
+    // hourly, the agreed sum for fixed, nothing owed for pro bono/partnership.
+    const bType = matterBillingType(m);
+    const billable = bType === 'fixed' ? (Number(m.fee) || 0)
+                   : bType === 'hourly' ? (mins / 60) * matterRate(m)
+                   : 0;
     const unbilled = logs.filter(l => !l.invoiceId).reduce((s,l)=>s+l.minutes,0);
 
     return `
@@ -2559,7 +2573,12 @@ function viewMatter(id) {
         <div class="cards">
             <div class="card"><div class="card-label">Tasks</div><div class="card-value">${tasks.length}</div><div class="card-sub">${tasks.filter(t=>t.status!=='done').length} open</div></div>
             <div class="card"><div class="card-label">Time logged</div><div class="card-value">${fmtMinutes(mins)}</div></div>
-            <div class="card"><div class="card-label">Billable</div><div class="card-value">${fmtMoney(billable, profileCurrency())}</div><div class="card-sub">@ ${fmtMoney(matterRate(m), profileCurrency())}/h</div></div>
+            <div class="card"><div class="card-label">${bType === 'hourly' ? 'Billable' : esc(BILLING_LABEL[bType])}</div>
+                <div class="card-value">${bType === 'hourly' || bType === 'fixed'
+                    ? fmtMoney(billable, profileCurrency()) : '—'}</div>
+                <div class="card-sub">${bType === 'hourly'
+                    ? '@ ' + fmtMoney(matterRate(m), profileCurrency()) + '/h'
+                    : bType === 'fixed' ? 'agreed sum' : 'not billed'}</div></div>
             <div class="card"><div class="card-label">Unbilled</div><div class="card-value">${fmtMinutes(unbilled)}</div></div>
         </div>
 
@@ -3340,6 +3359,9 @@ function openMatterForm(id = null, defaultClientId = null, parentId = null) {
                 hint: 'When the whole project is due. Shown on the project and the client page.' },
             { name: 'rate', label: `Hourly rate (${profileCurrency()})`, type: 'number', min: 0, step: 1,
                 value: m?.rate ?? '', hint: `Leave blank to use default ${state.profile.rate}/h` },
+            { name: 'fee', label: `Fixed fee (${profileCurrency()})`, type: 'number', min: 0, step: 1,
+                value: m?.fee ?? '',
+                hint: 'The agreed sum, used instead of hours when billing is Fixed fee.' },
             { name: 'website', label: 'Link', type: 'url', value: m?.website || '', placeholder: 'https://',
                 hint: 'Deal room, repo, data room — whatever this project lives behind.' },
             { name: 'description', label: 'Description', type: 'textarea', value: m?.description || '', rows: 4, full: true }
@@ -3533,8 +3555,11 @@ function openInvoiceForm(matterId = null, existingId = null, clientId = null) {
     }
 
     // new invoice — pick a client, bundle ALL their unbilled time (across matters)
+    // Pro bono and partnership time is real work and stays on the record, but
+    // it is not money owed — so it never reaches an invoice.
     const clientUnbilled = (cid) => state.logs.filter(l =>
-        l.clientId === cid && !l.invoiceId && !l.deletedAt);
+        l.clientId === cid && !l.invoiceId && !l.deletedAt &&
+        (!l.matterId || isBillable(matterById(l.matterId))));
     const clientsWithUnbilled = liveClients().filter(c => clientUnbilled(c.id).length);
     if (!clientsWithUnbilled.length) {
         toast('No unbilled time to invoice yet', 'error');
@@ -3568,6 +3593,18 @@ function openInvoiceForm(matterId = null, existingId = null, clientId = null) {
                 const m = matterById(mid);
                 const mins = logs.reduce((s,l)=>s+l.minutes,0);
                 const hours = +(mins / 60).toFixed(2);
+                // A fixed-fee project charges the agreed sum however long it
+                // took; the hours still travel with the line as the record of
+                // what was done.
+                if (m && matterBillingType(m) === 'fixed') {
+                    return {
+                        description: m.title + ' — fixed fee',
+                        matterId: mid,
+                        entries: logs.length,
+                        hours, rate: 0,
+                        amount: +(Number(m.fee) || 0).toFixed(2)
+                    };
+                }
                 const rate = matterRate(m);
                 return {
                     description: m ? m.title : 'General work',
