@@ -1,11 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="ordify">
-  <!-- The "o" as a dial with one tenth of an hour filled — the unit a practice
-       bills in. One ring, one arc: still legible at 16px. -->
+  <!-- The "o", as a thick ring. The earlier mark drew a tenth-of-an-hour arc
+       inside it, which is the right idea for a logo and the wrong one for a
+       favicon: at 16px that arc is under 2px and disappears, leaving a plain
+       ring anyway. A favicon has one job — be recognised in a row of tabs —
+       so this commits to the letter and lets the dial live where there is
+       room for it. -->
   <rect width="512" height="512" rx="116" fill="#2f5d3f"/>
-  <g transform="translate(256 256)">
-    <circle r="136" fill="none" stroke="#eef4ef" stroke-width="36" opacity="0.3"/>
-    <circle r="136" fill="none" stroke="#eef4ef" stroke-width="36" stroke-linecap="round"
-            transform="rotate(-90)"
-            stroke-dasharray="85.45 769.06" />
-  </g>
+  <circle cx="256" cy="256" r="128" fill="none" stroke="#f3f8f3" stroke-width="64"/>
 </svg>
