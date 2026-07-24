@@ -772,7 +772,7 @@ const liveLogs = () => live(state.logs);
 const liveInvoices = () => live(state.invoices);
 
 const mattersForClient = (cid) => state.matters.filter(m => m.clientId === cid && !m.deletedAt);
-const tasksForMatter = (mid) => state.tasks.filter(t => t.matterId === mid && !t.deletedAt);
+const tasksForMatter = (mid) => ordered(state.tasks.filter(t => t.matterId === mid && !t.deletedAt));
 const tasksForClient = (cid) => state.tasks.filter(t => t.clientId === cid && !t.deletedAt);
 const logsForMatter = (mid) => state.logs.filter(l => l.matterId === mid && !l.deletedAt);
 const logsForTask = (tid) => state.logs.filter(l => l.taskId === tid && !l.deletedAt);
@@ -783,15 +783,35 @@ const logsForClient = (cid) => state.logs.filter(l => l.clientId === cid && !l.d
    subproject. The field is optional, so every existing project reads as
    top-level — no migration. */
 const matterParent = (m) => (m && m.parentId ? matterById(m.parentId) : null);
-const childMatters = (mid) => state.matters.filter(m => m.parentId === mid && !m.deletedAt);
+const childMatters = (mid) => ordered(state.matters.filter(m => m.parentId === mid && !m.deletedAt));
 const topMattersForClient = (cid) =>
-    state.matters.filter(m => m.clientId === cid && !m.parentId && !m.deletedAt);
+    ordered(state.matters.filter(m => m.clientId === cid && !m.parentId && !m.deletedAt));
 /* Tasks that hang directly off the client, not under any project — the
    standalone tasks the client page needs a home for. */
 const standaloneTasksForClient = (cid) =>
     state.tasks.filter(t => t.clientId === cid && !t.matterId && !t.deletedAt);
 /* Guard against a cycle a bad edit could introduce (A parent of B, B parent
    of A) so tree walks can't loop forever. */
+/* ---- manual order ----
+   Anything never dragged has no `order` and keeps its natural position at the
+   end; dragging assigns positions to that list only. Sparse numbering means a
+   single move rewrites one row, not the whole list. */
+const ordered = (list) => list.slice().sort((a, b) => {
+    const ao = a.order == null ? Infinity : a.order;
+    const bo = b.order == null ? Infinity : b.order;
+    return ao - bo;
+});
+
+/* Put `moved` next to `target` inside `siblings`, and renumber that group. */
+function placeBeside(siblings, moved, targetId, before) {
+    const rest = ordered(siblings).filter(x => x.id !== moved.id);
+    const at = rest.findIndex(x => x.id === targetId);
+    const idx = at < 0 ? rest.length : (before ? at : at + 1);
+    rest.splice(idx, 0, moved);
+    rest.forEach((x, i) => { x.order = i * 10; });
+    return rest;
+}
+
 const matterDescendantIds = (mid, seen = new Set()) => {
     childMatters(mid).forEach(c => {
         if (!seen.has(c.id)) { seen.add(c.id); matterDescendantIds(c.id, seen); }
@@ -1979,7 +1999,10 @@ function renderTaskList(tasks) {
  * ========================================================================= */
 
 function viewClients() {
-    const list = [...liveClients()].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    // Dragged clients keep the order you gave them; the rest stay alphabetical
+    // behind them, so pulling one to the front doesn't scramble everything else.
+    const list = ordered(liveClients().slice()
+        .sort((a,b) => (a.name||'').localeCompare(b.name||'')));
     return `
         <div class="view-head">
             <h1>Clients</h1>
@@ -2002,7 +2025,8 @@ function viewClients() {
                     const openTasks = tasksForClient(c.id).filter(t => t.status !== 'done').length;
                     const stuck = tasksForClient(c.id).filter(t => t.status !== 'done' && t.blockedReason).length;
                     const unbilled = totalUnbilledForClient(c.id);
-                    return `<div class="entity-card" data-go="clients/${c.id}" role="link" tabindex="0">
+                    return `<div class="entity-card" data-go="clients/${c.id}" role="link" tabindex="0"
+                        draggable="true" data-drag="client" data-drag-id="${esc(c.id)}">
                         <div class="e-name">${esc(c.name)}</div>
                         ${c.email ? `<div class="e-sub">${esc(c.email)}</div>` : ''}
                         <div class="e-stats">
@@ -2130,7 +2154,8 @@ function viewClient(id) {
 function treeTaskRow(t) {
     const overdue = t.due && t.due < todayISO() && t.status !== 'done';
     return `
-        <li class="tr-task ${t.status === 'done' ? 'is-done' : ''}" data-task="${esc(t.id)}">
+        <li class="tr-task ${t.status === 'done' ? 'is-done' : ''}" data-task="${esc(t.id)}"
+            draggable="true" data-drag="task" data-drag-id="${esc(t.id)}">
             <span class="tr-check" data-toggle="${esc(t.id)}" role="checkbox"
                   aria-checked="${t.status === 'done'}" tabindex="0"></span>
             <span class="tr-title">${esc(t.title)}</span>
@@ -2152,7 +2177,7 @@ function treeNode(m, depth = 0) {
 
     return `
         <li class="tr-node" data-node="${esc(m.id)}" style="--depth:${depth}">
-            <div class="tr-head">
+            <div class="tr-head" draggable="true" data-drag="matter" data-drag-id="${esc(m.id)}">
                 <button class="tr-twist ${open ? 'open' : ''}" data-tree-toggle="${esc(m.id)}"
                         aria-expanded="${open}" ${count ? '' : 'data-empty'}
                         title="${open ? 'Collapse' : 'Expand'}">›</button>
@@ -2176,6 +2201,153 @@ function treeNode(m, depth = 0) {
                 </ul>` : ''}
         </li>`;
 }
+
+/* =========================================================================
+ * DRAG — move things where they belong, and put the important ones on top.
+ *
+ * Two intents, read from where in the row you let go: near the middle of a
+ * project means "put it inside", near an edge means "put it here, alongside".
+ * A project cannot be dropped into its own descendant — that would detach the
+ * branch from the tree entirely.
+ * ========================================================================= */
+
+const Drag = {
+    kind: null,   // 'matter' | 'task' | 'client'
+    id: null,
+
+    start(e) {
+        const row = e.target.closest('[data-drag]');
+        if (!row) return;
+        Drag.kind = row.dataset.drag;
+        Drag.id = row.dataset.dragId;
+        row.classList.add('dragging');
+        try {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', Drag.id);   // Firefox needs a payload
+        } catch (err) {}
+    },
+
+    end() {
+        $$('.dragging').forEach(el => el.classList.remove('dragging'));
+        Drag._clearHints();
+        Drag.kind = null;
+        Drag.id = null;
+    },
+
+    _clearHints() {
+        $$('.drop-into, .drop-before, .drop-after').forEach(el =>
+            el.classList.remove('drop-into', 'drop-before', 'drop-after'));
+    },
+
+    /* Where would this land if released now? */
+    _intent(e) {
+        const row = e.target.closest('[data-drag]');
+        if (!row || !Drag.kind) return null;
+        if (row.dataset.dragId === Drag.id) return null;
+        // dropping a project inside itself or its own child would orphan the branch
+        if (Drag.kind === 'matter' && row.dataset.drag === 'matter') {
+            if (matterDescendantIds(Drag.id).has(row.dataset.dragId)) return null;
+        }
+        if (Drag.kind === 'client' && row.dataset.drag !== 'client') return null;
+        if (Drag.kind !== 'client' && row.dataset.drag === 'client') return null;
+
+        const r = row.getBoundingClientRect();
+        const third = r.height / 3;
+        const canNest = row.dataset.drag === 'matter' && Drag.kind !== 'client';
+        if (canNest && e.clientY > r.top + third && e.clientY < r.bottom - third) {
+            return { row, mode: 'into' };
+        }
+        return { row, mode: e.clientY < r.top + r.height / 2 ? 'before' : 'after' };
+    },
+
+    over(e) {
+        const it = Drag._intent(e);
+        Drag._clearHints();
+        if (!it) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        it.row.classList.add(it.mode === 'into' ? 'drop-into'
+                           : it.mode === 'before' ? 'drop-before' : 'drop-after');
+    },
+
+    drop(e) {
+        const it = Drag._intent(e);
+        if (!it) { Drag.end(); return; }
+        e.preventDefault();
+        const targetId = it.row.dataset.dragId;
+        const before = it.mode === 'before';
+
+        if (Drag.kind === 'client') {
+            const moved = clientById(Drag.id);
+            if (moved) {
+                placeBeside(liveClients(), moved, targetId, before);
+                Store.save(); render();
+            }
+            Drag.end();
+            return;
+        }
+
+        if (Drag.kind === 'matter') {
+            const moved = matterById(Drag.id);
+            const target = matterById(targetId);
+            if (!moved || !target) { Drag.end(); return; }
+            if (it.mode === 'into') {
+                moved.parentId = target.id;
+                moved.clientId = target.clientId;
+                placeBeside(childMatters(target.id), moved, null, false);
+                UI.open(target.id);
+            } else {
+                moved.parentId = target.parentId || null;
+                moved.clientId = target.clientId;
+                const sibs = target.parentId
+                    ? childMatters(target.parentId)
+                    : topMattersForClient(target.clientId);
+                placeBeside(sibs, moved, target.id, before);
+            }
+            History.record('matterUpdated', 'matter', moved.id, 'moved: ' + moved.title);
+            Store.save(); render();
+            Drag.end();
+            return;
+        }
+
+        // a task: into a project, or alongside another task
+        const t = taskById(Drag.id);
+        if (!t) { Drag.end(); return; }
+        if (it.row.dataset.drag === 'matter') {
+            const m = matterById(targetId);
+            if (m) {
+                t.matterId = m.id;
+                t.clientId = m.clientId;
+                placeBeside(tasksForMatter(m.id), t, null, false);
+                UI.open(m.id);
+            }
+        } else {
+            const sibling = taskById(targetId);
+            if (sibling) {
+                t.matterId = sibling.matterId;
+                t.clientId = sibling.clientId;
+                placeBeside(
+                    sibling.matterId ? tasksForMatter(sibling.matterId)
+                                     : standaloneTasksForClient(sibling.clientId),
+                    t, sibling.id, before);
+            }
+        }
+        Tasks.put(t);
+        History.record('taskUpdated', 'task', t.id, 'moved: ' + t.title);
+        Store.save(); render();
+        Drag.end();
+    },
+
+    bind() {
+        const v = $('#view');
+        if (!v || v.dataset.dragBound) return;
+        v.dataset.dragBound = '1';
+        v.addEventListener('dragstart', Drag.start);
+        v.addEventListener('dragover', Drag.over);
+        v.addEventListener('drop', Drag.drop);
+        v.addEventListener('dragend', Drag.end);
+    }
+};
 
 function renderClientTree(cid) {
     const tops = topMattersForClient(cid);
@@ -3801,6 +3973,7 @@ function render() {
     }
     root.innerHTML = html;
     UI.route = route;
+    Drag.bind();               // delegated, so it survives every re-render
     window.scrollTo(0, keepScroll);
     _restoreFocus(keepFocus);
     if (view === 'today') populateTodaySchedule();

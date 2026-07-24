@@ -2180,6 +2180,22 @@ table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spaci
 
 @media (prefers-reduced-motion: reduce) { .tr-twist, .tr-actions { transition: none; } }
 
+/* === DRAG — where it will land, shown before you let go === */
+[data-drag] { cursor: grab; }
+[data-drag]:active { cursor: grabbing; }
+.dragging { opacity: 0.4; }
+/* into: the row becomes the container you are dropping inside */
+.drop-into {
+    background: var(--accent-soft) !important;
+    box-shadow: inset 0 0 0 2px var(--accent);
+    border-radius: var(--radius);
+}
+/* before/after: a line where the row will sit */
+.drop-before { box-shadow: inset 0 2px 0 0 var(--accent); }
+.drop-after  { box-shadow: inset 0 -2px 0 0 var(--accent); }
+.entity-card.drop-before { box-shadow: inset 2px 0 0 0 var(--accent); }
+.entity-card.drop-after  { box-shadow: inset -2px 0 0 0 var(--accent); }
+
 /* === HISTORY — the provenance chain === */
 .hist-verdict {
     font-family: var(--font-mono); font-size: var(--t-xs); font-weight: 600;
