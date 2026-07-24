@@ -2184,6 +2184,12 @@ table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spaci
 [data-drag] { cursor: grab; }
 [data-drag]:active { cursor: grabbing; }
 .dragging { opacity: 0.4; }
+/* picked up by a long press, waiting for you to say where */
+.picked-up {
+    background: var(--accent-soft) !important;
+    box-shadow: inset 0 0 0 2px var(--accent);
+    border-radius: var(--radius);
+}
 /* into: the row becomes the container you are dropping inside */
 .drop-into {
     background: var(--accent-soft) !important;

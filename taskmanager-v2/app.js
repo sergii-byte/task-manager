@@ -2237,10 +2237,13 @@ const Drag = {
     },
 
     end() {
-        $$('.dragging').forEach(el => el.classList.remove('dragging'));
+        $$('.dragging, .picked-up').forEach(el =>
+            el.classList.remove('dragging', 'picked-up'));
         Drag._clearHints();
+        clearTimeout(Drag._hold);
         Drag.kind = null;
         Drag.id = null;
+        Drag.picked = null;
     },
 
     _clearHints() {
@@ -2347,6 +2350,59 @@ const Drag = {
         Drag.end();
     },
 
+    /* ---- touch: pick up, then place ----
+     * HTML5 drag events never fire on a touchscreen, so on a phone the tree
+     * was arrangeable only in theory. Rather than emulate dragging — fighting
+     * the scroll the whole way — a long press picks an item up and the next
+     * tap says where it goes. Same two intents, same drop rules.
+     */
+    picked: null,
+
+    _hold: null,
+
+    touchStart(e) {
+        const row = e.target.closest('[data-drag]');
+        if (!row) return;
+        clearTimeout(Drag._hold);
+        Drag._hold = setTimeout(() => {
+            Drag.kind = row.dataset.drag;
+            Drag.id = row.dataset.dragId;
+            Drag.picked = row.dataset.dragId;
+            row.classList.add('picked-up');
+            if (navigator.vibrate) navigator.vibrate(15);
+            toast('Picked up — tap where it should go', 'ok', () => Drag.cancelPick());
+        }, 450);
+    },
+
+    /* Any movement means they meant to scroll, not to pick up. */
+    touchMove() { clearTimeout(Drag._hold); },
+
+    touchEnd(e) {
+        clearTimeout(Drag._hold);
+        if (!Drag.picked) return;
+        const row = e.target.closest('[data-drag]');
+        if (!row || row.dataset.dragId === Drag.picked) return;
+        e.preventDefault();
+        const r = row.getBoundingClientRect();
+        const t = (e.changedTouches && e.changedTouches[0]) || {};
+        const y = t.clientY != null ? t.clientY : r.top + r.height / 2;
+        // reuse the pointer path by handing it a shaped event
+        Drag.drop({
+            target: row,
+            clientY: y,
+            preventDefault() {},
+            dataTransfer: null
+        });
+    },
+
+    cancelPick() {
+        clearTimeout(Drag._hold);
+        $$('.picked-up').forEach(el => el.classList.remove('picked-up'));
+        Drag.picked = null;
+        Drag.kind = null;
+        Drag.id = null;
+    },
+
     bind() {
         const v = $('#view');
         if (!v || v.dataset.dragBound) return;
@@ -2355,6 +2411,9 @@ const Drag = {
         v.addEventListener('dragover', Drag.over);
         v.addEventListener('drop', Drag.drop);
         v.addEventListener('dragend', Drag.end);
+        v.addEventListener('touchstart', Drag.touchStart, { passive: true });
+        v.addEventListener('touchmove', Drag.touchMove, { passive: true });
+        v.addEventListener('touchend', Drag.touchEnd);
     }
 };
 
