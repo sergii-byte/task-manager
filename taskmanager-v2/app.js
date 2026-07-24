@@ -1266,6 +1266,76 @@ const Modal = {
  * 6. ROUTER
  * ========================================================================= */
 
+/* =========================================================================
+ * 5b. VIEW STATE — how you are looking at the data, kept apart from the data.
+ *
+ * Every mutation re-renders the whole view, which threw all of this away:
+ * anything you had expanded closed itself, and the caret jumped out of the
+ * field you were typing in. Data changes constantly; the way you are looking
+ * at it should survive that. Two earlier patches (keeping comment drafts on
+ * the client page, writing AI values straight into live inputs) were really
+ * this same problem worked around twice.
+ * ========================================================================= */
+
+const UI = {
+    expanded: new Set(),          // tree nodes the user has opened
+    route: null,                  // the route currently on screen
+
+    isOpen(id) { return UI.expanded.has(id); },
+    open(id)   { UI.expanded.add(id); },
+    toggleOpen(id) {
+        if (UI.expanded.has(id)) UI.expanded.delete(id); else UI.expanded.add(id);
+    }
+};
+
+/* The page scrolls on the window — #view has no overflow of its own, so the
+ * old `root.scrollTop = 0` never did anything. */
+function _captureFocus() {
+    const el = document.activeElement;
+    const view = $('#view');
+    if (!el || !view || !view.contains(el)) return null;
+    // An id is the surest handle, but most fields in the app only carry a
+    // name — without that fallback this would restore almost nothing.
+    const sel = el.id ? '#' + CSS.escape(el.id)
+              : el.name ? `[name="${CSS.escape(el.name)}"]`
+              : null;
+    if (!sel) return null;
+    const f = { sel };
+    // Carry the half-typed value across too: a re-render rebuilds the field
+    // from state, and whatever you had not saved yet is not in state — which
+    // is exactly how typing disappears mid-sentence.
+    if (typeof el.value === 'string' && el.type !== 'password') f.value = el.value;
+    if (typeof el.selectionStart === 'number') {
+        f.start = el.selectionStart;
+        f.end = el.selectionEnd;
+    }
+    return f;
+}
+
+function _restoreFocus(f) {
+    if (!f) return;
+    const el = $('#view ' + f.sel) || $(f.sel);
+    if (!el) return;
+    if (f.value != null && typeof el.value === 'string' && el.value !== f.value) {
+        el.value = f.value;
+    }
+    el.focus({ preventScroll: true });
+    if (f.start != null && typeof el.setSelectionRange === 'function') {
+        try { el.setSelectionRange(f.start, f.end); } catch (e) {}
+    }
+}
+
+/* Replace one region instead of the whole view — a branch of the tree can
+ * redraw without disturbing the page around it, or the caret inside it. */
+function patch(hostOrSelector, html) {
+    const host = typeof hostOrSelector === 'string' ? $(hostOrSelector) : hostOrSelector;
+    if (!host) return false;
+    const focus = _captureFocus();
+    host.innerHTML = html;
+    _restoreFocus(focus);
+    return true;
+}
+
 function parseHash() {
     const h = (location.hash || '#/today').replace(/^#\/?/, '');
     const parts = h.split('/').filter(Boolean);
@@ -3494,6 +3564,12 @@ function render() {
     renderSidebar();
     const { view, id } = parseHash();
     const root = $('#view');
+    // A re-render in place keeps where you were and what you were typing; only
+    // an actual move to another page starts at the top.
+    const route = view + '/' + (id || '');
+    const sameRoute = UI.route === route;
+    const keepScroll = sameRoute ? window.scrollY : 0;
+    const keepFocus = sameRoute ? _captureFocus() : null;
     let html = '';
     try {
         switch (view) {
@@ -3512,7 +3588,9 @@ function render() {
         html = `<div class="empty-state"><h3>Render error</h3><pre>${esc(e.stack || e.message)}</pre></div>`;
     }
     root.innerHTML = html;
-    root.scrollTop = 0;
+    UI.route = route;
+    window.scrollTo(0, keepScroll);
+    _restoreFocus(keepFocus);
     if (view === 'today') populateTodaySchedule();
     if (view === 'inbox') populateInbox();
     if (view === 'settings') {
