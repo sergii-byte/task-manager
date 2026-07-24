@@ -127,6 +127,8 @@ const defaultState = () => ({
     logs: [],
     invoices: [],
     attachments: [],
+    history: [],          // tamper-evident chain of what happened — see History
+    historyAnchor: '',    // hash of the last trimmed entry, so the chain still verifies
     emailHandled: [],     // Gmail message ids already turned into tasks / dismissed
     tasksMigrated: false, // set true once blob tasks moved into /tasks
     timer: null           // { taskId, matterId, clientId, label, startedAt }
@@ -652,6 +654,108 @@ const Comments = {
  * 3. SELECTORS / DERIVED
  * ========================================================================= */
 
+/* =========================================================================
+ * 4b. HISTORY — a tamper-evident record of what happened, and when.
+ *
+ * The shape is borrowed from the audit log in Block's Buzz: entries carry a
+ * monotonic sequence number, and each one holds the SHA-256 of the entry
+ * before it, with the owner's id folded into the hash so a row cannot be
+ * moved between accounts without breaking the chain. Alter or remove a row
+ * and every later hash stops matching — which is the whole point.
+ *
+ * For a practice this is provenance: evidence that a matter's record was not
+ * quietly rewritten after the fact. Actions are a closed set of plain names,
+ * with the detail kept in separate fields, so the log stays readable.
+ * ========================================================================= */
+
+const HISTORY_LABEL = {
+    clientCreated:  'Client created',
+    clientUpdated:  'Client updated',
+    matterCreated:  'Project created',
+    matterUpdated:  'Project updated',
+    matterDeleted:  'Project deleted',
+    taskCreated:    'Task created',
+    taskUpdated:    'Task updated',
+    taskCompleted:  'Task completed',
+    taskReopened:   'Task reopened',
+    taskDeleted:    'Task deleted',
+    timeLogged:     'Time logged',
+    invoiceCreated: 'Invoice created',
+    portalShared:   'Client portal shared',
+    portalDisabled: 'Client portal disabled'
+};
+
+const History = {
+    MAX: 2000,
+    _queue: Promise.resolve(),
+
+    /* Callers stay synchronous; appends are serialised so the chain keeps its
+     * order even when several things happen at once. */
+    record(action, entity, entityId, summary = '') {
+        History._queue = History._queue
+            .then(() => History._append(action, entity, entityId, summary))
+            .catch(e => console.warn('history append failed', e));
+        return History._queue;
+    },
+
+    async _append(action, entity, entityId, summary) {
+        if (!HISTORY_LABEL[action]) return;
+        state.history = state.history || [];
+        const prev = state.history[state.history.length - 1];
+        const entry = {
+            seq: prev ? prev.seq + 1 : 1,
+            at: new Date().toISOString(),
+            owner: (typeof Tasks !== 'undefined' && Tasks.uid) || '',
+            action, entity,
+            entityId: entityId || '',
+            summary: String(summary || '').slice(0, 200),
+            prevHash: prev ? prev.hash : (state.historyAnchor || '')
+        };
+        entry.hash = await History._hash(History._payload(entry));
+        state.history.push(entry);
+        // Keep the stored blob bounded without making the chain unverifiable:
+        // the hash of the last trimmed entry becomes the anchor the remainder
+        // verifies from.
+        if (state.history.length > History.MAX) {
+            const cut = state.history.length - History.MAX;
+            state.historyAnchor = state.history[cut - 1].hash;
+            state.history = state.history.slice(cut);
+        }
+        Store.save();
+    },
+
+    _payload(e) {
+        return [e.owner, e.seq, e.at, e.action, e.entity, e.entityId, e.summary, e.prevHash].join('|');
+    },
+
+    async _hash(str) {
+        const buf = new TextEncoder().encode(str);
+        const digest = await crypto.subtle.digest('SHA-256', buf);
+        return Array.from(new Uint8Array(digest))
+            .map(b => b.toString(16).padStart(2, '0')).join('');
+    },
+
+    forEntity(entity, id) {
+        return (state.history || [])
+            .filter(e => e.entity === entity && e.entityId === id)
+            .slice().reverse();
+    },
+
+    /* Walk the chain and name the first entry that no longer adds up. */
+    async verify() {
+        const h = state.history || [];
+        let expected = state.historyAnchor || '';
+        for (const e of h) {
+            if (e.prevHash !== expected) return { ok: false, seq: e.seq, reason: 'chain broken' };
+            if (await History._hash(History._payload(e)) !== e.hash) {
+                return { ok: false, seq: e.seq, reason: 'entry altered' };
+            }
+            expected = e.hash;
+        }
+        return { ok: true, count: h.length };
+    }
+};
+
 const byId = (list, id) => list.find(x => x.id === id);
 // byId returns even soft-deleted items (so restore works)
 const clientById = (id) => byId(state.clients, id);
@@ -805,6 +909,7 @@ function quickLogPrompt(t, label = '✓ done — how long did it take?') {
             endedAt: new Date(end).toISOString(),
             minutes: mins, notes: t.title, invoiceId: null
         });
+        History.record('timeLogged', 'task', t.id, `${fmtMinutes(mins)} — ${t.title}`);
         Store.save(); render();
         toast(`Logged ${fmtMinutes(mins)}`);
     }));
@@ -2091,6 +2196,54 @@ function viewClient(id) {
     `;
 }
 
+/* The provenance panel: what happened to this thing, newest first, with a
+ * statement about whether the chain still adds up. Tasks belonging to a
+ * project are folded in, since "what happened on this matter" is the
+ * question a practice actually asks. */
+function renderHistory(entity, id) {
+    let entries = History.forEntity(entity, id);
+    if (entity === 'matter') {
+        const taskIds = new Set(tasksForMatter(id).map(t => t.id));
+        entries = (state.history || [])
+            .filter(e => (e.entity === 'matter' && e.entityId === id) ||
+                         (e.entity === 'task' && taskIds.has(e.entityId)))
+            .slice().reverse();
+    }
+    const when = (iso) => {
+        try {
+            return new Date(iso).toLocaleString([], {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return iso; }
+    };
+    return `
+        <h2 class="section-h">History <span class="hist-verdict" id="hist-verdict">checking…</span></h2>
+        ${!entries.length ? '<div class="empty">Nothing recorded yet.</div>' : `
+            <ol class="hist">
+                ${entries.slice(0, 50).map(e => `
+                    <li class="hist-row">
+                        <span class="hist-seq">#${e.seq}</span>
+                        <span class="hist-what">${esc(HISTORY_LABEL[e.action] || e.action)}</span>
+                        <span class="hist-sum">${esc(e.summary || '')}</span>
+                        <span class="hist-when">${esc(when(e.at))}</span>
+                    </li>`).join('')}
+            </ol>
+            <p class="muted" style="font-size:12px;margin-top:6px">Each entry is sealed with the hash of the one before it —
+            altering or removing any of them breaks every hash that follows.</p>
+        `}`;
+}
+
+/* Verify runs after paint: hashing is async and the answer is not worth
+   blocking the page for. */
+async function paintHistoryVerdict() {
+    const el = $('#hist-verdict');
+    if (!el) return;
+    const r = await History.verify();
+    el.dataset.ok = r.ok ? 'yes' : 'no';
+    el.textContent = r.ok
+        ? `intact · ${r.count} entr${r.count === 1 ? 'y' : 'ies'}`
+        : `broken at #${r.seq} — ${r.reason}`;
+}
+
 /* Portal conversation, grouped by task. Threads with unanswered client
  * messages float to the top — those are the ones costing time. */
 function renderClientThread(c) {
@@ -2234,6 +2387,8 @@ function viewMatter(id) {
 
         <h2 class="section-h">Attachments</h2>
         <div id="att-host-matter"></div>
+
+        ${renderHistory('matter', m.id)}
 
         <h2 class="section-h">Time entries</h2>
         ${logs.length ? `
@@ -2941,9 +3096,11 @@ function openClientForm(id = null) {
             if (!data.name?.trim()) { toast('Name is required', 'error'); return false; }
             if (c) {
                 Object.assign(c, data);
+                History.record('clientUpdated', 'client', c.id, data.name);
             } else {
                 const nc = { id: uuid(), createdAt: new Date().toISOString(), ...data };
                 state.clients.push(nc);
+                History.record('clientCreated', 'client', nc.id, data.name);
             }
             Store.save(); render();
             toast(c ? 'Client updated' : 'Client added');
@@ -2998,9 +3155,11 @@ function openMatterForm(id = null, defaultClientId = null) {
             if (!data.title?.trim()) { toast('Title is required', 'error'); return false; }
             if (m) {
                 Object.assign(m, data);
+                History.record('matterUpdated', 'matter', m.id, data.title);
             } else {
                 const nm = { id: uuid(), openedAt: new Date().toISOString(), ...data };
                 state.matters.push(nm);
+                History.record('matterCreated', 'matter', nm.id, data.title);
             }
             Store.save(); render();
             toast(m ? 'Project updated' : 'Project created');
@@ -3067,9 +3226,11 @@ function openTaskForm(id = null, defaultMatterId = null) {
             if (t) {
                 Object.assign(t, payload);
                 Tasks.put(t);
+                History.record('taskUpdated', 'task', t.id, payload.title);
             } else {
                 const nt = { id: uuid(), status: 'todo', createdAt: new Date().toISOString(), ...payload };
                 Tasks.put(nt);
+                History.record('taskCreated', 'task', nt.id, payload.title);
             }
             render();
             toast(t ? 'Task updated' : 'Task added');
@@ -3323,6 +3484,7 @@ function bindGlobalActions() {
                 // just logged it. It used to also require a project and demand
                 // the task had no time at all, which meant anything you return
                 // to day after day was never offered again.
+                History.record(becameDone ? 'taskCompleted' : 'taskReopened', 'task', t.id, t.title);
                 const justTimed = logsForTask(t.id).some(l =>
                     Date.now() - new Date(l.endedAt || l.startedAt).getTime() < 90 * 1000);
                 if (becameDone && !justTimed) quickLogPrompt(t);
@@ -3601,6 +3763,7 @@ function render() {
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);
+        paintHistoryVerdict();
     } else if (view === 'clients' && id) {
         Attach.renderInto('att-host-client', Attach.forClient(id), true);
         const sel = $('#share-done-days');

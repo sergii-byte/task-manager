@@ -2103,6 +2103,37 @@ dialog header h2 { font-family: var(--font-display); letter-spacing: -0.02em; }
 table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spacing: 0.08em; }
 
 /* === INBOX — Gmail triage === */
+/* === HISTORY — the provenance chain === */
+.hist-verdict {
+    font-family: var(--font-mono); font-size: var(--t-xs); font-weight: 600;
+    text-transform: none; letter-spacing: 0.02em;
+    padding: 2px 8px; border-radius: var(--radius-pill);
+    border: 1px solid var(--line); background: var(--bg-soft); color: var(--fg-mute);
+    margin-left: var(--s-2);
+}
+.hist-verdict[data-ok="yes"] { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.hist-verdict[data-ok="no"]  { color: var(--danger); border-color: var(--danger-line); background: var(--danger-bg); }
+
+.hist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+.hist-row {
+    display: grid;
+    grid-template-columns: 46px 150px 1fr auto;
+    gap: var(--s-3);
+    align-items: baseline;
+    padding: 9px var(--s-4);
+    border-bottom: 1px solid var(--line-soft);
+    font-size: var(--t-sm);
+}
+.hist-row:last-child { border-bottom: 0; }
+.hist-seq { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-faint); }
+.hist-what { font-weight: 600; color: var(--ink); }
+.hist-sum { color: var(--fg-mute); min-width: 0; overflow-wrap: anywhere; }
+.hist-when { font-family: var(--font-mono); font-size: var(--t-xs); color: var(--fg-mute); white-space: nowrap; }
+@media (max-width: 720px) {
+    .hist-row { grid-template-columns: 40px 1fr; row-gap: 2px; }
+    .hist-sum, .hist-when { grid-column: 2; }
+}
+
 /* one-tap "log time on this" on a task row */
 .btn.xs {
     padding: 3px 7px; min-height: 26px;
