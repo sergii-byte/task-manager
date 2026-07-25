@@ -1490,8 +1490,10 @@ dialog footer button.danger:hover { background: var(--danger-bg); border-color: 
 }
 /* the collapsed tail of an AI form — hidden until revealed, per-field by the
    AI or all at once by the toggle */
-#modal-body.modal-has-ai .field[data-minor] { display: none; }
+#modal-body.modal-has-ai .field[data-minor],
+#modal-body.modal-has-ai .field-group[data-minor] { display: none; }
 #modal-body.modal-has-ai.reveal-minor .field[data-minor] { display: flex; }
+#modal-body.modal-has-ai.reveal-minor .field-group[data-minor] { display: block; }
 
 .more-fields {
     justify-self: start;
@@ -2117,6 +2119,27 @@ table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spaci
 .card.is-action:hover:not(:disabled) .card-sub { color: var(--accent); }
 .card.is-action:disabled { cursor: default; opacity: 0.7; }
 .card.is-action .card-sub { font-size: var(--t-xs); }
+
+/* form grouping and richer controls */
+.field-group {
+    grid-column: 1 / -1;
+    font-size: var(--t-xs); font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--fg-mute);
+    padding-top: var(--s-3); margin-top: var(--s-1);
+    border-top: 1px solid var(--line-soft);
+}
+.seg { display: flex; gap: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg-opt {
+    flex: 1; min-height: var(--tap); border: 0; background: var(--bg);
+    font: inherit; font-size: var(--t-sm); color: var(--fg-mute); cursor: pointer;
+    border-right: 1px solid var(--line);
+}
+.seg-opt:last-child { border-right: 0; }
+.seg-opt:hover { background: var(--bg-hover); color: var(--fg); }
+.seg-opt.on { background: var(--accent); color: #fff; font-weight: 600; }
+.datefield { display: flex; flex-direction: column; gap: var(--s-2); }
+.date-quick { display: flex; gap: var(--s-1); flex-wrap: wrap; }
 
 /* the task screen: state first, then the actions, then the record */
 .ts-states { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-3) 0; }

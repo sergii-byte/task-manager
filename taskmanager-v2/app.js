@@ -1170,11 +1170,23 @@ const Modal = {
         // of fields sits behind one disclosure so the form isn't the wall of
         // empty inputs the AI bar exists to spare you. When editing, every
         // field that already holds a value shows — you came to change them.
+        // Decide visibility first, then let a group heading follow its own
+        // fields: a heading over nothing is worse than no heading.
+        const minorOf = fields.map(f => Modal.aiHint ? !Modal._isPrimary(f, editing) : false);
+        fields.forEach((f, i) => {
+            if (!f.group) return;
+            let anyShown = false;
+            for (let j = i + 1; j < fields.length && !fields[j].group; j++) {
+                if (!minorOf[j]) { anyShown = true; break; }
+            }
+            minorOf[i] = !anyShown;
+        });
         body.innerHTML =
             (Modal.aiHint ? Modal._aiBarHtml() : '') +
-            fields.map(f => Modal._renderField(f, Modal.aiHint ? !Modal._isPrimary(f, editing) : false)).join('') +
+            fields.map((f, i) => Modal._renderField(f, minorOf[i])).join('') +
             (Modal.aiHint ? Modal._moreToggleHtml() : '');
 
+        Modal._bindFieldControls();
         if (Modal.aiHint) { Modal._bindAiBar(); Modal._bindMoreToggle(); Modal._syncMoreToggle(); }
         Modal.el.showModal();
         // focus the AI bar when there is one — describing beats tabbing
@@ -1240,6 +1252,36 @@ const Modal = {
         if (label) label.hidden = false;
         if (inp) inp.placeholder = 'e.g. the client is Datavise, due Friday';
         if (go) go.textContent = 'Redo';
+    },
+
+    /* The new controls are plain buttons, so one delegated listener on the
+       body serves every form without rebinding after each render. */
+    _bindFieldControls() {
+        const body = $('#modal-body');
+        if (!body || body.dataset.fieldBound) return;
+        body.dataset.fieldBound = '1';
+        body.addEventListener('click', (e) => {
+            const seg = e.target.closest('[data-seg]');
+            if (seg) {
+                const hidden = $(`#modal-body [name="${CSS.escape(seg.dataset.seg)}"]`);
+                if (hidden) hidden.value = seg.dataset.val;
+                seg.parentElement.querySelectorAll('.seg-opt').forEach(b => {
+                    const on = b === seg;
+                    b.classList.toggle('on', on);
+                    b.setAttribute('aria-checked', on);
+                });
+                return;
+            }
+            const q = e.target.closest('[data-date]');
+            if (q) {
+                const input = $(`#modal-body [name="${CSS.escape(q.dataset.date)}"]`);
+                if (!input) return;
+                input.value = q.dataset.days === ''
+                    ? ''
+                    : isoDate(new Date(Date.now() + Number(q.dataset.days) * 86400000));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
     },
 
     _bindAiBar() {
@@ -1317,7 +1359,16 @@ const Modal = {
             // a field the AI just filled must be visible to be checked, even if
             // it started life in the collapsed tail
             const field = el.closest('.field');
-            if (field) field.removeAttribute('data-minor');
+            if (field) {
+                field.removeAttribute('data-minor');
+                // bring its heading back with it
+                let prev = field.previousElementSibling;
+                while (prev && !prev.classList.contains('field-group')) {
+                    if (prev.classList.contains('field') && !prev.hasAttribute('data-minor')) break;
+                    prev = prev.previousElementSibling;
+                }
+                if (prev && prev.classList.contains('field-group')) prev.removeAttribute('data-minor');
+            }
             el.dispatchEvent(new Event('change', { bubbles: true }));
             done.push(spec ? spec.label.toLowerCase() : name);
         });
@@ -1326,6 +1377,9 @@ const Modal = {
     },
 
     _renderField(f, minor = false) {
+        if (f.group) {
+            return `<div class="field-group ${minor ? '' : ''}" ${minor ? 'data-minor' : ''}>${esc(f.group)}</div>`;
+        }
         const id = 'mf_' + f.name;
         const val = f.value ?? '';
         const req = f.required ? 'required' : '';
@@ -1337,6 +1391,27 @@ const Modal = {
             input = `<select id="${id}" name="${f.name}" ${req}>` +
                 f.options.map(o => `<option value="${esc(o.value)}" ${o.value == val ? 'selected':''}>${esc(o.label)}</option>`).join('') +
                 `</select>`;
+        } else if (f.type === 'segment') {
+            // Three or four mutually exclusive options read faster as a row of
+            // choices than as a dropdown you have to open to see.
+            input = `<div class="seg" role="radiogroup" aria-label="${esc(f.label)}">
+                <input type="hidden" name="${f.name}" id="${id}" value="${esc(val)}">
+                ${f.options.map(o => `<button type="button" class="seg-opt ${o.value == val ? 'on' : ''}"
+                    data-seg="${f.name}" data-val="${esc(o.value)}"
+                    role="radio" aria-checked="${o.value == val}">${esc(o.label)}</button>`).join('')}
+            </div>`;
+        } else if (f.type === 'date') {
+            // The same quick answers the app already offers as suggestions —
+            // typing a date by hand for "tomorrow" was needless work.
+            input = `<div class="datefield">
+                <input id="${id}" name="${f.name}" type="date" value="${esc(val)}" ${req}>
+                <div class="date-quick">
+                    <button type="button" class="chip xs" data-date="${f.name}" data-days="0">today</button>
+                    <button type="button" class="chip xs" data-date="${f.name}" data-days="1">tomorrow</button>
+                    <button type="button" class="chip xs" data-date="${f.name}" data-days="7">+1 week</button>
+                    <button type="button" class="chip xs ghost" data-date="${f.name}" data-days="">none</button>
+                </div>
+            </div>`;
         } else if (f.type === 'checkbox') {
             input = `<label class="cb"><input type="checkbox" id="${id}" name="${f.name}" ${val ? 'checked':''}> ${esc(f.checkboxLabel || '')}</label>`;
         } else {
@@ -1374,7 +1449,7 @@ const Modal = {
         const btn = $('#modal-more');
         const body = $('#modal-body');
         if (!btn || !body) return;
-        const hidden = $$('.field[data-minor]', body).length;
+        const hidden = $$('.field[data-minor]', body).length;   // .field-group is not .field
         if (!hidden) { btn.hidden = true; return; }
         btn.hidden = false;
         const open = body.classList.contains('reveal-minor');
@@ -3678,28 +3753,37 @@ function openTaskForm(id = null, defaultMatterId = null, defaultClientId = null)
         title: t ? 'Edit task' : 'New task',
         ai: { hint: 'Say it in a sentence — “draft the escrow review for Fligen, high, by Friday”' },
         fields: [
-            { name: 'title', label: 'Title', value: t?.title || '', required: true, full: true },
+            { name: 'title', label: 'Task', value: t?.title || '', required: true, full: true,
+                placeholder: 'What needs doing' },
             { name: 'matterId', label: 'Project', type: 'select',
                 value: t?.matterId || defaultMatterId || '',
                 options: [{ value:'', label:'— none —' }, ...state.matters.map(m => ({
                     value: m.id, label: `${clientById(m.clientId)?.name || '—'} · ${m.title}`
                 }))]},
+
+            { group: 'When' },
             { name: 'due', label: 'Due date', type: 'date', value: fmtDateInput(t?.due) },
-            { name: 'priority', label: 'Priority', type: 'select',
+            { name: 'priority', label: 'Priority', type: 'segment',
                 value: t?.priority || 'normal',
                 options: [
                     { value: 'low', label: 'Low' },
                     { value: 'normal', label: 'Normal' },
                     { value: 'high', label: 'High' }
                 ]},
+
+            { group: 'Status' },
+            // Not an ordinary text field: anything typed here marks the task
+            // stuck everywhere in the app, so it says so.
+            { name: 'blockedReason', label: 'Waiting on someone?', value: t?.blockedReason || '', full: true,
+                placeholder: 'e.g. signed POA from the client',
+                hint: 'Fill this in and the task is flagged as stuck — on Today, on the client page, and on their portal. Leave empty if it is moving.' },
+
+            { group: 'Where and who' },
+            { name: 'link', label: 'Drive / link', type: 'url', value: t?.link || '', placeholder: 'https://drive.google.com/…',
+                hint: 'A folder or document to open when you sit down to do this.' },
             { name: 'assigneeEmail', label: 'Assignee email', type: 'email', value: t?.assigneeEmail || '',
                 placeholder: 'teammate@example.com',
-                hint: 'Leave blank to keep the task yours. The assignee sees it when they sign in.' },
-            { name: 'link', label: 'Drive / link', type: 'url', value: t?.link || '', placeholder: 'https://drive.google.com/…',
-                hint: 'A folder or document to open when you sit down to do this — Google Drive, a data room, anything.' },
-            { name: 'blockedReason', label: 'Stuck / waiting on', value: t?.blockedReason || '', full: true,
-                placeholder: 'e.g. waiting for signed POA from the client',
-                hint: 'Why the task is not moving. Shown on the client portal if this client is shared — write it for the client to read.' },
+                hint: 'Leave blank to keep the task yours.' },
             { name: 'notes', label: 'Notes (internal)', type: 'textarea', value: t?.notes || '', rows: 3, full: true }
         ],
         onSave: (data) => {
