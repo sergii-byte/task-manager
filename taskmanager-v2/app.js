@@ -2566,6 +2566,101 @@ function renderClientTree(cid) {
         </div>`;
 }
 
+/* =========================================================================
+ * TASK — the screen a task lives on.
+ *
+ * Clicking a task used to open the edit form: eight inputs of equal weight,
+ * and none of what the app already knew — how long it has taken, what it is
+ * worth, how late it is, why it is stuck. Worse, the two things you most
+ * often want (start the clock, close it) were available in the list but not
+ * inside the task. Reading and editing are now separate: this is the state,
+ * Edit is the form.
+ * ========================================================================= */
+
+function viewTask(id) {
+    const t = taskById(id);
+    if (!t || t.deletedAt) {
+        return `<div class="empty-state"><h3>Task not found</h3><a href="#/today">Back to today</a></div>`;
+    }
+    const m = t.matterId ? matterById(t.matterId) : null;
+    const c = t.clientId ? clientById(t.clientId) : null;
+    const logs = logsForTask(t.id);
+    const mins = logs.reduce((s, l) => s + l.minutes, 0);
+    const billable = m && isBillable(m) && matterBillingType(m) === 'hourly'
+        ? (mins / 60) * matterRate(m) : 0;
+    const st = taskStatus(t);
+    const lateBy = st === 'overdue'
+        ? Math.max(1, Math.round((Date.now() - new Date(t.due + 'T00:00:00')) / 86400000)) : 0;
+
+    // The state, said plainly and once — not inferred from a date in a field.
+    const banner = t.status === 'done'
+        ? `<div class="ts-state is-done">${icon('check', 15)} Done${
+            t.completedAt ? ' · ' + esc(fmtDate(t.completedAt)) : ''}</div>`
+        : st === 'overdue'
+        ? `<div class="ts-state is-late">${icon('alert', 15)} ${lateBy} day${lateBy===1?'':'s'} overdue${
+            t.due ? ' · was due ' + esc(fmtDate(t.due)) : ''}</div>`
+        : t.due === todayISO()
+        ? `<div class="ts-state is-now">${icon('circle', 15)} Due today</div>`
+        : t.due
+        ? `<div class="ts-state">${icon('circle', 15)} Due ${esc(fmtDate(t.due))}</div>`
+        : '';
+
+    const stuck = (t.status !== 'done' && t.blockedReason)
+        ? `<div class="ts-state is-stuck">${icon('flag', 15)} Waiting on: ${esc(t.blockedReason)}</div>` : '';
+
+    return `
+        <div class="breadcrumb">
+            ${c ? `<a href="#/clients/${esc(c.id)}">${esc(c.name)}</a> ›` : ''}
+            ${m ? `<a href="#/matters/${esc(m.id)}">${esc(m.title)}</a> ›` : ''}
+        </div>
+        <div class="view-head">
+            <h1>${esc(t.title)}</h1>
+            <div class="actions">
+                ${driveLink(t.link, 'Drive')}
+                <button class="btn" data-act="edit-task" data-id="${esc(t.id)}">Edit</button>
+            </div>
+        </div>
+
+        <div class="ts-states">${banner}${stuck}</div>
+
+        <div class="ts-bar">
+            ${t.matterId ? `<button class="btn primary" data-start="${esc(t.id)}">${icon('play',13)} Start timer</button>` : ''}
+            <button class="btn" data-log="${esc(t.id)}">${icon('clock',13)} Log time</button>
+            <button class="btn" data-toggle="${esc(t.id)}">${icon('check',13)} ${
+                t.status === 'done' ? 'Reopen' : 'Mark done'}</button>
+        </div>
+
+        <div class="cards">
+            <div class="card"><div class="card-label">Time on this</div>
+                <div class="card-value">${fmtMinutes(mins)}</div>
+                <div class="card-sub">${logs.length} session${logs.length===1?'':'s'}</div></div>
+            <div class="card"><div class="card-label">Worth</div>
+                <div class="card-value">${billable ? fmtMoney(billable, profileCurrency()) : '—'}</div>
+                <div class="card-sub">${m ? (matterBillingType(m) === 'hourly'
+                    ? '@ ' + fmtMoney(matterRate(m), profileCurrency()) + '/h'
+                    : esc(BILLING_LABEL[matterBillingType(m)])) : 'no project'}</div></div>
+            <div class="card"><div class="card-label">Priority</div>
+                <div class="card-value">${esc(t.priority || 'normal')}</div></div>
+        </div>
+
+        ${t.notes ? `<h2 class="section-h">Notes</h2><div class="notes-block">${esc(t.notes)}</div>` : ''}
+
+        ${logs.length ? `
+            <h2 class="section-h">Time entries</h2>
+            <table class="t">
+                <tbody>${[...logs].sort((a,b)=>(b.startedAt||'').localeCompare(a.startedAt||'')).map(l => `
+                    <tr class="row" data-act="edit-log" data-id="${esc(l.id)}">
+                        <td>${esc(fmtDate(l.startedAt))}</td>
+                        <td>${esc(l.notes || '')}</td>
+                        <td class="num">${fmtMinutes(l.minutes)}</td>
+                    </tr>`).join('')}
+                </tbody>
+            </table>` : ''}
+
+        ${renderHistory('task', t.id)}
+    `;
+}
+
 /* The provenance panel: what happened to this thing, newest first, with a
  * statement about whether the chain still adds up. Tasks belonging to a
  * project are folded in, since "what happened on this matter" is the
@@ -3962,10 +4057,11 @@ function bindGlobalActions() {
             return;
         }
 
-        // task row click → edit, unless the click was on a link/control inside it
+        // A task row opens the task, not the edit form — reading is the common
+        // case, editing is a step you take from there.
         const taskRow = e.target.closest('[data-task]');
-        if (taskRow && !e.target.closest('[data-toggle], [data-start], [data-stop], a')) {
-            openTaskForm(taskRow.dataset.task);
+        if (taskRow && !e.target.closest('[data-toggle], [data-start], [data-stop], [data-log], [data-assist], a, button')) {
+            navigate('tasks/' + taskRow.dataset.task);
             return;
         }
 
@@ -4079,6 +4175,7 @@ function bindGlobalActions() {
                 if (em) Google.openThread(em.threadId);
                 break;
             }
+            case 'edit-task': openTaskForm(act.dataset.id); break;
             case 'add-bank': openBankAccountForm(); break;
             case 'edit-bank': openBankAccountForm(act.dataset.id); break;
             case 'remove-bank': {
@@ -4193,8 +4290,9 @@ function render() {
     let html = '';
     try {
         switch (view) {
-            case 'today':
-            case 'tasks':    html = viewToday(); break;   // #/tasks folded into Today
+            case 'today':    html = viewToday(); break;
+            // #/tasks alone is Today; #/tasks/:id is that task's own screen
+            case 'tasks':    html = id ? viewTask(id) : viewToday(); break;
             case 'clients':  html = id ? viewClient(id) : viewClients(); break;
             case 'matters':  html = id ? viewMatter(id) : viewMatters(); break;
             case 'time':     html = viewTime(); break;
@@ -4210,6 +4308,9 @@ function render() {
     root.innerHTML = html;
     UI.route = route;
     Drag.bind();               // delegated, so it survives every re-render
+    // any screen that shows a history panel gets its chain verified; this used
+    // to run only for projects, so the task screen sat on "checking…" forever
+    if ($('#hist-verdict')) paintHistoryVerdict();
     window.scrollTo(0, keepScroll);
     _restoreFocus(keepFocus);
     if (view === 'today') populateTodaySchedule();
@@ -4222,7 +4323,6 @@ function render() {
     // mount attachment widgets if their hosts are present in the rendered view
     if (view === 'matters' && id) {
         Attach.renderInto('att-host-matter', Attach.forMatter(id), true);
-        paintHistoryVerdict();
     } else if (view === 'clients' && id) {
         Attach.renderInto('att-host-client', Attach.forClient(id), true);
         const sel = $('#share-done-days');
