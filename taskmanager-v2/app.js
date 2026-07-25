@@ -989,6 +989,7 @@ const Assist = {
                 && (t.completedAt || '') >= recent
                 && !logsForTask(t.id).length && !Assist._hidden('log:' + t.id))
             .slice(0, 2).forEach(t => out.push({
+                taskId: t.id,
                 icon: 'clock', text: `“${t.title}” closed — no time on it`,
                 chips: [15, 30, 60, 120].map(m => ({ label: fmtMinutes(m), assist: `log:${t.id}:${m}` }))
                     .concat([{ label: 'skip', assist: `dismiss:log:${t.id}`, ghost: true }])
@@ -999,6 +1000,7 @@ const Assist = {
             .slice(0, 2).forEach(t => {
                 const days = Math.max(1, Math.round((Date.now() - new Date(t.due + 'T00:00:00').getTime()) / 86400000));
                 out.push({
+                    taskId: t.id,
                     icon: 'alert', text: `“${t.title}” — ${days} day${days === 1 ? '' : 's'} overdue`,
                     chips: [
                         { label: 'today', assist: `due:${t.id}:0` },
@@ -1025,6 +1027,7 @@ const Assist = {
             .slice(0, 1).forEach(t => {
                 const c = clientById(t.clientId);
                 out.push({
+                    taskId: t.id,
                     icon: 'flag', text: `“${t.title}” — waiting on: ${t.blockedReason}`,
                     chips: [
                         ...(c && c.shareEnabled ? [{ label: 'nudge in portal', assist: `nudge:${t.clientId}` }] : []),
@@ -1617,6 +1620,7 @@ function weekStartDate() {
 }
 
 function viewToday() {
+    _assistByTask = null;
     const today = todayISO();
     const now = new Date();
     const tasks = liveTasks();
@@ -1736,7 +1740,14 @@ function viewToday() {
         </div>
 
         ${(() => {
-            const cards = Assist.cards();
+            // Suggestions about a task ride on that task's row. But if the
+            // filter has hidden that task, the row is not there to carry it —
+            // and a stuck or overdue task going silent is worse than a
+            // duplicate, so it falls back to being a card.
+            const onScreen = new Set(list.map(t => t.id));
+            if (heroTaskId) onScreen.add(heroTaskId);
+            const cards = Assist.cards().filter(c =>
+                !c.taskId || !onScreen.has(c.taskId));
             return cards.length ? `
         <section class="t-assist" aria-label="Suggestions">
             ${cards.map(c => `
@@ -1773,11 +1784,45 @@ function viewToday() {
                 <span class="right"><button class="btn sm primary" data-act="new-task">＋ task</button></span>
             </div>
             <div class="t-filters" role="group" aria-label="Filter tasks">${chips}</div>
-            ${list.length
-                ? `<div class="t-tasks">${list.map(_todayTaskRow).join('')}</div>`
-                : `<div class="t-sched-msg">${EMPTY[todayFilter] || EMPTY.week}</div>`}
+            ${(() => {
+                // The hero answers "what now"; the list answers "what else".
+                // Drawing the hero's task again is the same object twice.
+                const shown = list.filter(t => t.id !== heroTaskId);
+                const hidden = list.length - shown.length;
+                return shown.length
+                    ? `<div class="t-tasks">${shown.map(_todayTaskRow).join('')}</div>`
+                      + (hidden ? `<div class="t-listnote">plus the one above</div>` : '')
+                    : (hidden ? `<div class="t-listnote">Just the one above — nothing else ${esc(todayFilter === 'today' ? 'today' : 'here')}.</div>`
+                              : `<div class="t-sched-msg">${EMPTY[todayFilter] || EMPTY.week}</div>`);
+            })()}
         </section>
     </div>`;
+}
+
+/* The suggestions that belong to one task, rendered where that task already
+   is. Cached per render so each row does not recompute the whole set. */
+let _assistByTask = null;
+function taskSuggestions(taskId) {
+    if (!_assistByTask) {
+        _assistByTask = new Map();
+        Assist.cards().forEach(c => {
+            if (!c.taskId) return;
+            if (!_assistByTask.has(c.taskId)) _assistByTask.set(c.taskId, []);
+            _assistByTask.get(c.taskId).push(c);
+        });
+    }
+    return _assistByTask.get(taskId) || [];
+}
+
+function taskSuggestionHtml(taskId) {
+    const cards = taskSuggestions(taskId);
+    if (!cards.length) return '';
+    return `<div class="t-task-sugg">${cards.map(c => `
+        <span class="sugg">
+            <span class="sugg-why">${esc(c.text.replace(/^“[^”]*”\s*[—-]\s*/, ''))}</span>
+            ${c.chips.map(ch => `<button class="chip xs ${ch.ghost ? 'ghost' : ''}"
+                data-assist="${esc(ch.assist)}">${esc(ch.label)}</button>`).join('')}
+        </span>`).join('')}</div>`;
 }
 
 function _todayTaskRow(t) {
@@ -1803,6 +1848,7 @@ function _todayTaskRow(t) {
                 ${ctx ? `<div class="t-task-ctx">${ctx}</div>` : ''}
             </div>
             ${mat ? `<button class="t-task-go" data-start="${t.id}" title="Start timer">${icon('play', 12)}</button>` : ''}
+            ${taskSuggestionHtml(t.id)}
         </div>`;
 }
 
@@ -1820,7 +1866,12 @@ let todayEventsCache = [];
 const SCHEDULE_RANGES = { today: 0, week: 6, month: 30 };
 let scheduleRange = 'today';
 
+/* Which task the hero is currently showing, so the list below can avoid
+   drawing it a second time. Null when the hero is a meeting or empty. */
+let heroTaskId = null;
+
 function nowCardHtml() {
+    heroTaskId = null;
     const nowMs = Date.now();
     const timed = todayEventsCache.filter(e => !e.allDay && e.start && e.end);
     const ongoing = timed.find(e => new Date(e.start) <= nowMs && new Date(e.end) >= nowMs);
@@ -1847,6 +1898,7 @@ function nowCardHtml() {
         || (a.due || '9999').localeCompare(b.due || '9999')
         || (rank[a.priority || 'normal'] - rank[b.priority || 'normal']))[0];
     if (!t) return '';
+    heroTaskId = t.id;
     const cli = clientById(t.clientId), mat = matterById(t.matterId);
     const meta = [cli?.name, mat?.title,
         t.due ? (taskStatus(t) === 'overdue' ? 'overdue · ' + fmtDate(t.due) : 'due ' + fmtDate(t.due)) : '']
@@ -1860,6 +1912,7 @@ function nowCardHtml() {
                 ${t.matterId ? `<button class="btn primary" data-start="${t.id}">${icon('play', 13)} start timer</button>` : ''}
                 <button class="btn" data-toggle="${t.id}">${icon('check', 13)} done</button>
             </div>
+            ${taskSuggestionHtml(t.id)}
         </div>`;
 }
 

@@ -5,18 +5,18 @@
  */
 'use strict';
 
-const CACHE = 'ordify-v76';
+const CACHE = 'ordify-v78';
 const CORE = [
     './',
     './index.html',
-    './style.css?v=76',
-    './app.js?v=76',
-    './attach.js?v=76',
-    './google.js?v=76',
-    './docimport.js?v=76',
-    './omni.js?v=76',
-    './firebase-init.js?v=76',
-    './auth.js?v=76',
+    './style.css?v=78',
+    './app.js?v=78',
+    './attach.js?v=78',
+    './google.js?v=78',
+    './docimport.js?v=78',
+    './omni.js?v=78',
+    './firebase-init.js?v=78',
+    './auth.js?v=78',
     './manifest.webmanifest',
     './icon.svg'
 ];

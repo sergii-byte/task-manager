@@ -2118,6 +2118,22 @@ table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spaci
 .card.is-action:disabled { cursor: default; opacity: 0.7; }
 .card.is-action .card-sub { font-size: var(--t-xs); }
 
+/* a task's own suggestions, living on its row instead of as a separate card */
+.t-task-sugg {
+    grid-column: 1 / -1;
+    display: flex; flex-wrap: wrap; gap: var(--s-2);
+    margin-top: var(--s-1);
+}
+.sugg {
+    display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--s-1);
+    font-size: var(--t-xs);
+}
+.sugg-why { color: var(--fg-mute); margin-right: 2px; }
+.chip.xs { min-height: 26px; padding: 2px var(--s-2); font-size: var(--t-xs); }
+@media (max-width: 720px) { .chip.xs { min-height: var(--tap); padding: 2px var(--s-3); } }
+.now-card .t-task-sugg { margin-top: var(--s-2); }
+.t-listnote { font-size: var(--t-sm); color: var(--fg-faint); padding: var(--s-2) 0 0; }
+
 /* === TREE — a client's work as folders === */
 .tree, .tr-children { list-style: none; margin: 0; padding: 0; }
 .tr-node { --pad: calc(var(--depth, 0) * 18px); }
