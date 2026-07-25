@@ -1569,8 +1569,7 @@ const NAV_GROUPS = [
     { label: 'day',   items: [
         { id: 'today',    label: 'today',     icon: 'circle' } ] },
     { label: 'work',  items: [
-        { id: 'clients',  label: 'clients',   icon: 'users' },
-        { id: 'matters',  label: 'projects',  icon: 'folder' } ] },
+        { id: 'clients',  label: 'work',      icon: 'users' } ] },
     { label: 'money', items: [
         { id: 'time',     label: 'time',      icon: 'clock' },
         { id: 'invoices', label: 'invoices',  icon: 'receipt' } ] }
@@ -1578,8 +1577,11 @@ const NAV_GROUPS = [
 const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items);
 
 function renderSidebar() {
-    // #/tasks is an alias for Today, so it must light up the same nav item
-    const cur = parseHash().view === 'tasks' ? 'today' : parseHash().view;
+    // Some routes are lenses on a destination rather than destinations: #/tasks
+    // is Today, and #/matters is the all-projects view of Work. Both must light
+    // up the item they belong to, or the sidebar loses its place.
+    const raw = parseHash().view;
+    const cur = raw === 'tasks' ? 'today' : raw === 'matters' ? 'clients' : raw;
     const nav = $('#nav');
     const item = (it) => {
         let count = '';
@@ -2120,9 +2122,10 @@ function viewClients() {
         .sort((a,b) => (a.name||'').localeCompare(b.name||'')));
     return `
         <div class="view-head">
-            <h1>Clients</h1>
-            <div class="meta">${list.length} total</div>
+            <h1>Work</h1>
+            <div class="meta">${list.length} client${list.length===1?'':'s'}</div>
             <div class="actions">
+                <a class="btn" href="#/matters">All projects</a>
                 <button class="btn primary" data-act="new-client">＋ New client</button>
             </div>
         </div>
@@ -2676,9 +2679,12 @@ function viewMatters() {
     const list = [...liveMatters()].sort((a,b)=> (a.title||'').localeCompare(b.title||''));
     return `
         <div class="view-head">
-            <h1>Projects</h1>
-            <div class="meta">${list.length} total · ${list.filter(m=>m.status!=='closed').length} active</div>
+            <div class="breadcrumb"><a href="#/clients">Work</a> ›</div>
+            <h1>All projects</h1>
+            <div class="meta">${list.length} total · ${list.filter(m=>m.status!=='closed').length} active
+                · across every client</div>
             <div class="actions">
+                <a class="btn" href="#/clients">By client</a>
                 <button class="btn primary" data-act="new-matter">＋ New project</button>
             </div>
         </div>

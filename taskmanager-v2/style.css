@@ -2692,7 +2692,11 @@ p.muted { font-size: var(--t-sm); }
         left: 0; right: 0; bottom: 0;
         z-index: 60;
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        /* auto-fit the destinations rather than hard-coding a count — the
+           bar left a phantom fifth column when Work absorbed Projects */
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        grid-template-columns: none;
         gap: 0;
         background: var(--surface);
         border-top: 1px solid var(--line);
