@@ -1736,6 +1736,28 @@ function viewToday() {
         done: 'Nothing completed yet.'
     };
 
+    // A practice with nothing in it yet should be offered a first step, not a
+    // dashboard of zeroes. Nine noughts and seven buttons, none of which was
+    // the thing to do first, is not an empty state — it is a report on
+    // emptiness.
+    if (!liveClients().length && !openTasks.length && !liveMatters().length) {
+        return `
+        <div class="today-v3">
+            <div class="first-run">
+                <h1>Let's set up your practice</h1>
+                <p>Start with a client — projects, time and invoices all hang off one.
+                   Or just say what you need doing and let it be sorted out afterwards.</p>
+                <div class="first-actions">
+                    <button class="btn primary lg" data-act="new-client">Add your first client</button>
+                    <button class="btn lg" data-act="new-task">Add a task</button>
+                </div>
+                <p class="first-hint">The bar at the top takes a whole sentence —
+                   type or dictate “call Novawave tomorrow about the AML report”
+                   and it becomes the client, the project and the task.</p>
+            </div>
+        </div>`;
+    }
+
     return `
     <div class="today-v3">
         <div class="t-daterow">
