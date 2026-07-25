@@ -79,6 +79,7 @@ const ICONS = {
     mail:     '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
     users:    '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.5a3.5 3.5 0 010 7"/><path d="M21 20c0-2.6-1.6-4.8-4-5.7"/>',
     folder:   '<path d="M3 7a2 2 0 012-2h4l2 3h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+    'folder-open': '<path d="M3 7a2 2 0 012-2h4l2 3h8a2 2 0 012 2v1H6l-3 8z"/><path d="M3 20l3-8h16l-3 8z"/>',
     clock:    '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     receipt:  '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
     sliders:  '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.5"/><circle cx="8" cy="17" r="2.5"/>',
@@ -2075,10 +2076,19 @@ function viewClient(id) {
         </div>
 
         <div class="cards">
-            <div class="card"><div class="card-label">Projects</div><div class="card-value">${matters.length}</div></div>
-            <div class="card"><div class="card-label">Total time</div><div class="card-value">${fmtMinutes(totalMins)}</div></div>
-            <div class="card"><div class="card-label">Unbilled</div><div class="card-value">${fmtMoney(unbilled, profileCurrency())}</div></div>
-            <div class="card"><div class="card-label">Open tasks</div><div class="card-value">${tasks.filter(t=>t.status!=='done').length}</div></div>
+            <button class="card is-action" data-card="expand" data-id="${c.id}" title="Show every project and task">
+                <div class="card-label">Projects</div><div class="card-value">${matters.length}</div>
+                <div class="card-sub">open all</div></button>
+            <button class="card is-action" data-card="time" data-id="${c.id}" title="Time entries for this client">
+                <div class="card-label">Total time</div><div class="card-value">${fmtMinutes(totalMins)}</div>
+                <div class="card-sub">see entries</div></button>
+            <button class="card is-action" data-card="invoice" data-id="${c.id}" ${unbilled ? '' : 'disabled'}
+                title="${unbilled ? 'Invoice this client' : 'Nothing to invoice yet'}">
+                <div class="card-label">Unbilled</div><div class="card-value">${fmtMoney(unbilled, profileCurrency())}</div>
+                <div class="card-sub">${unbilled ? 'invoice it' : 'nothing due'}</div></button>
+            <button class="card is-action" data-card="expand" data-id="${c.id}" title="Show every project and task">
+                <div class="card-label">Open tasks</div><div class="card-value">${tasks.filter(t=>t.status!=='done').length}</div>
+                <div class="card-sub">open all</div></button>
         </div>
 
         <div class="info-grid">
@@ -2132,7 +2142,7 @@ function viewClient(id) {
         <h2 class="section-h">Attachments</h2>
         <div id="att-host-client"></div>
 
-        <h2 class="section-h">Work</h2>
+        <h2 class="section-h" id="client-work">Work</h2>
         ${renderClientTree(c.id)}
         ${invoices.length ? `
             <h2 class="section-h">Invoices</h2>
@@ -2188,8 +2198,9 @@ function treeNode(m, depth = 0) {
         <li class="tr-node" data-node="${esc(m.id)}" style="--depth:${depth}">
             <div class="tr-head" draggable="true" data-drag="matter" data-drag-id="${esc(m.id)}">
                 <button class="tr-twist ${open ? 'open' : ''}" data-tree-toggle="${esc(m.id)}"
-                        aria-expanded="${open}" ${count ? '' : 'data-empty'}
+                        aria-expanded="${open}"
                         title="${open ? 'Collapse' : 'Expand'}">›</button>
+                <span class="tr-folder">${icon(open ? 'folder-open' : 'folder', 15)}</span>
                 <a class="tr-name" href="#/matters/${esc(m.id)}">${esc(m.title)}</a>
                 ${count ? `<span class="tr-n">${count}</span>` : ''}
                 ${bill !== 'hourly' ? `<span class="badge sm bill-${esc(bill)}">${esc(BILLING_LABEL[bill])}</span>` : ''}
@@ -3752,6 +3763,24 @@ function bindGlobalActions() {
         const goRow = e.target.closest('[data-go]');
         if (goRow && !e.target.closest('[data-act], [data-toggle], [data-start], button, a')) {
             navigate(goRow.dataset.go);
+            return;
+        }
+
+        // the figures at the top of a client page are buttons, not decoration
+        const card = e.target.closest('[data-card]');
+        if (card && !card.disabled) {
+            const cid = card.dataset.id;
+            if (card.dataset.card === 'expand') {
+                // open every project of this client, at any depth
+                mattersForClient(cid).forEach(m => UI.open(m.id));
+                render();
+                const work = $('#client-work');
+                if (work) work.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else if (card.dataset.card === 'time') {
+                navigate('time');
+            } else if (card.dataset.card === 'invoice') {
+                openInvoiceForm(null, null, cid);
+            }
             return;
         }
 
