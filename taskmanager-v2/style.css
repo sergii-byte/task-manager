@@ -2118,6 +2118,21 @@ table.t th { font-family: var(--font-mono); font-size: var(--t-xs); letter-spaci
 .card.is-action:disabled { cursor: default; opacity: 0.7; }
 .card.is-action .card-sub { font-size: var(--t-xs); }
 
+/* the day in sections — late, now, coming, undated */
+.t-group + .t-group { margin-top: var(--s-4); }
+.t-group-h {
+    display: flex; align-items: baseline; gap: var(--s-2);
+    font-size: var(--t-xs); font-weight: 700;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--fg-mute);
+    padding-bottom: var(--s-1);
+}
+.t-group-h.is-late { color: var(--danger); }
+.t-group-h .n {
+    font-family: var(--font-mono); font-weight: 600;
+    color: var(--fg-faint); letter-spacing: 0;
+}
+
 /* a task's own suggestions, living on its row instead of as a separate card */
 .t-task-sugg {
     grid-column: 1 / -1;

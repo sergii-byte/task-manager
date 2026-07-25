@@ -59,7 +59,17 @@ const fmtClock = (ms) => {
     return [h, m, s].map(n => String(n).padStart(2, '0')).join(':');
 };
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+/* A calendar date in the user's own timezone. toISOString() converts to UTC
+   first, so for anyone east of Greenwich it returns yesterday's date late in
+   the evening, and for anyone west it returns tomorrow's early — which for a
+   task manager means "due today" is wrong for part of every day. */
+const isoDate = (d = new Date()) => {
+    const x = new Date(d);
+    return x.getFullYear() + '-' +
+           String(x.getMonth() + 1).padStart(2, '0') + '-' +
+           String(x.getDate()).padStart(2, '0');
+};
+const todayISO = () => isoDate();
 const isPastDate = (iso) => iso && iso < todayISO();
 
 const debounce = (fn, ms) => {
@@ -1067,7 +1077,7 @@ const Assist = {
         if (verb === 'due') {
             const [id, days] = rest, t = taskById(id);
             if (!t) return;
-            t.due = new Date(Date.now() + Number(days) * 86400000).toISOString().slice(0, 10);
+            t.due = isoDate(new Date(Date.now() + Number(days) * 86400000));
             Tasks.put(t); render(); toast('Rescheduled to ' + fmtDate(t.due));
             return;
         }
@@ -1665,42 +1675,54 @@ function viewToday() {
     // same tasks, sliced by when they are due rather than by which screen
     // you happened to open.
     const wkEnd = new Date(wkStart); wkEnd.setDate(wkEnd.getDate() + 7);
-    const wkEndISO = wkEnd.toISOString().slice(0, 10);
+    const wkEndISO = isoDate(wkEnd);
 
     const byUrgency = (a, b) =>
         (a.due || '9999').localeCompare(b.due || '9999')
         || ({ high: 0, normal: 1, low: 2 }[a.priority || 'normal'] - { high: 0, normal: 1, low: 2 }[b.priority || 'normal']);
 
-    let list;
-    if (todayFilter === 'today')        list = [...overdue, ...dueToday];
-    else if (todayFilter === 'overdue') list = [...overdue];
-    else if (todayFilter === 'nodate')  list = openTasks.filter(t => !t.due);
-    else if (todayFilter === 'all')     list = [...openTasks].sort(byUrgency);
-    else if (todayFilter === 'done')    list = liveTasks().filter(t => t.status === 'done')
-                                                .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
-                                                .slice(0, 50);
-    else /* week */                     list = [
-        ...overdue,
-        ...dueToday,
-        ...openTasks.filter(t => t.due && t.due > today && t.due < wkEndISO),
-        ...openTasks.filter(t => !t.due).slice(0, 4)
-    ];
-    const seen = new Set();
-    list = list.filter(t => (seen.has(t.id) ? false : seen.add(t.id)));
+    // The day, laid out as it is lived: what is late, what is due now, what is
+    // coming, what has no date. A calendar week was the wrong window — on a
+    // Saturday it meant "one more day", so tomorrow's work was invisible.
+    // Seven days from today always means seven days.
+    const horizon = isoDate(new Date(Date.now() + 7 * 86400000));
+    const later = openTasks.filter(t => t.due && t.due > today && t.due <= horizon).sort(byUrgency);
+    const undated = openTasks.filter(t => !t.due).sort(byUrgency);
+    const beyond = openTasks.filter(t => t.due && t.due > horizon).sort(byUrgency);
+
+    let groups;
+    if (todayFilter === 'all') {
+        groups = [
+            { key: 'overdue', label: 'Overdue', items: [...overdue].sort(byUrgency) },
+            { key: 'today',   label: 'Today',   items: [...dueToday].sort(byUrgency) },
+            { key: 'later',   label: 'Next 7 days', items: later },
+            { key: 'beyond',  label: 'Later',   items: beyond },
+            { key: 'nodate',  label: 'No date', items: undated }
+        ];
+    } else if (todayFilter === 'done') {
+        groups = [{ key: 'done', label: 'Done', items: liveTasks()
+            .filter(t => t.status === 'done')
+            .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''))
+            .slice(0, 50) }];
+    } else {
+        groups = [
+            { key: 'overdue', label: 'Overdue', items: [...overdue].sort(byUrgency) },
+            { key: 'today',   label: 'Today',   items: [...dueToday].sort(byUrgency) },
+            { key: 'later',   label: 'Next 7 days', items: later },
+            { key: 'nodate',  label: 'No date', items: undated.slice(0, 5) }
+        ];
+    }
+    groups = groups.filter(g => g.items.length);
+    const list = groups.flatMap(g => g.items);
 
     const FILTERS = [
-        ['today',   'today'],
-        ['week',    'this week'],
-        ['overdue', 'overdue'],
-        ['nodate',  'no date'],
-        ['all',     'all open'],
-        ['done',    'done']
+        ['week', 'the week'],
+        ['all',  'everything'],
+        ['done', 'done']
     ];
     const counts = {
-        today:   overdue.length + dueToday.length,
-        overdue: overdue.length,
-        nodate:  openTasks.filter(t => !t.due).length,
-        all:     openTasks.length
+        week: overdue.length + dueToday.length + later.length,
+        all:  openTasks.length
     };
     const chips = FILTERS.map(([id, label]) => {
         const n = counts[id];
@@ -1709,12 +1731,9 @@ function viewToday() {
     }).join('');
 
     const EMPTY = {
-        today:   'Nothing due today. Enjoy it.',
-        week:    'No open tasks this week — capture one with the bar above.',
-        overdue: 'Nothing overdue. ✓',
-        nodate:  'Every open task has a date on it.',
-        all:     'No open tasks at all.',
-        done:    'Nothing completed yet.'
+        week: 'Nothing due in the next seven days — capture something with the bar above.',
+        all:  'No open tasks at all.',
+        done: 'Nothing completed yet.'
     };
 
     return `
@@ -1787,12 +1806,23 @@ function viewToday() {
             ${(() => {
                 // The hero answers "what now"; the list answers "what else".
                 // Drawing the hero's task again is the same object twice.
-                const shown = list.filter(t => t.id !== heroTaskId);
-                const hidden = list.length - shown.length;
-                return shown.length
-                    ? `<div class="t-tasks">${shown.map(_todayTaskRow).join('')}</div>`
-                      + (hidden ? `<div class="t-listnote">plus the one above</div>` : '')
-                    : (hidden ? `<div class="t-listnote">Just the one above — nothing else ${esc(todayFilter === 'today' ? 'today' : 'here')}.</div>`
+                let hidden = 0;
+                const html = groups.map(g => {
+                    const items = g.items.filter(t => {
+                        if (t.id === heroTaskId) { hidden++; return false; }
+                        return true;
+                    });
+                    if (!items.length) return '';
+                    return `<div class="t-group">
+                        <div class="t-group-h ${g.key === 'overdue' ? 'is-late' : ''}">
+                            ${esc(g.label)}<span class="n">${items.length}</span>
+                        </div>
+                        <div class="t-tasks">${items.map(_todayTaskRow).join('')}</div>
+                    </div>`;
+                }).join('');
+                return html
+                    ? html + (hidden ? `<div class="t-listnote">plus the one above</div>` : '')
+                    : (hidden ? `<div class="t-listnote">Just the one above — nothing else due.</div>`
                               : `<div class="t-sched-msg">${EMPTY[todayFilter] || EMPTY.week}</div>`);
             })()}
         </section>
