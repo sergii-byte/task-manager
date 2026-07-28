@@ -114,4 +114,43 @@ function MemoryAdapter(seed = {}) {
     };
 }
 
-if (typeof module !== 'undefined') module.exports = { Store, MemoryAdapter };
+/* Local storage, which is where the practice actually lives until you sign in.
+   Same shape as the memory adapter, so nothing above it knows the difference —
+   and the same field-merge applies, because two tabs of the same browser are
+   already two writers. */
+function LocalAdapter(prefix = 'ordify.v3') {
+    const key = (kind) => prefix + '.' + kind;
+    const read = (kind) => {
+        try { return JSON.parse(localStorage.getItem(key(kind)) || '[]'); }
+        catch (e) { console.warn('unreadable store, starting empty', e); return []; }
+    };
+    const write = (kind, rows) => {
+        try { localStorage.setItem(key(kind), JSON.stringify(rows)); }
+        catch (e) {
+            // out of quota is the one failure worth surfacing: silently losing
+            // a write is exactly the class of bug this rewrite exists to kill
+            console.error('could not save', e);
+            throw new Error('Could not save — storage is full.');
+        }
+    };
+    return {
+        async all(kind) { return read(kind); },
+        async get(kind, id) { return read(kind).find(r => r.id === id) || null; },
+        async put(kind, rec) {
+            const rows = read(kind);
+            const i = rows.findIndex(r => r.id === rec.id);
+            if (i < 0) rows.push(rec); else rows[i] = rec;
+            write(kind, rows);
+            return rec;
+        },
+        /* Another tab writing the same practice is a real second device. */
+        subscribe(onExternal) {
+            window.addEventListener('storage', (e) => {
+                if (e.key && e.key.startsWith(prefix)) onExternal(e.key.slice(prefix.length + 1));
+            });
+        },
+        _clear() { ['node', 'entry', 'invoice'].forEach(k => localStorage.removeItem(key(k))); }
+    };
+}
+
+if (typeof module !== 'undefined') module.exports = { Store, MemoryAdapter, LocalAdapter };

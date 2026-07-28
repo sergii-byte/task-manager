@@ -406,20 +406,37 @@ function bind() {
 }
 
 async function boot() {
-    Store.use(MemoryAdapter());
+    // localStorage is where the practice lives until there is a sign-in; the
+    // adapter shape is the same one Firestore will use, so nothing above here
+    // changes when it arrives.
+    const local = (() => {
+        try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return LocalAdapter(); }
+        catch (e) { console.warn('no local storage — this session will not persist', e); return MemoryAdapter(); }
+    })();
+    Store.use(local);
+
     const [nodes, entries] = await Promise.all([Store.all('node'), Store.all('entry')]);
     P = new Practice(nodes, entries, []);
-    if (!P.nodes.length) seed();
+    if (!P.nodes.length) await seed();
+
+    // another tab is a second writer; reload from the store when it writes
+    if (local.subscribe) local.subscribe(async () => {
+        const [n, e] = await Promise.all([Store.all('node'), Store.all('entry')]);
+        P.nodes = n; P.entries = e;
+        render();
+    });
+
     bind();
     render();
 }
 
 /* A practice to look at while there is no sign-in — the shape of real work,
    so the screens are judged against something realistic. */
-function seed() {
+async function seed() {
+    const writes = [];
     const mk = (type, title, parent, extra = {}) => {
         const n = makeNode(type, { title, parentId: parent, ...extra });
-        P.nodes.push(n); Store.put(type === 'task' || type === 'project' || type === 'client' ? 'node' : 'node', n);
+        P.nodes.push(n); writes.push(Store.put('node', n));
         return n;
     };
     const nova = mk('client', 'Novawave S.A.');
@@ -439,10 +456,11 @@ function seed() {
 
     const e = (nodeId, minutes, daysAgo) => {
         const entry = { id: uid(), nodeId, minutes, on: addDays(-daysAgo), invoiceId: null, deletedAt: null };
-        P.entries.push(entry); Store.put('entry', entry);
+        P.entries.push(entry); writes.push(Store.put('entry', entry));
     };
     e(aml.id, 95, 3); e(aml.id, 30, 1); e(decorp.id, 240, 2);
     UI.open.add(nova.id); UI.open.add(aml.id);
+    await Promise.all(writes);
 }
 
 document.addEventListener('DOMContentLoaded', boot);
