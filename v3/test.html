@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ordify · tests</title>
+<style>
+:root{
+  --bg:#f4f6f8; --surf:#fff; --line:#dce2e8; --ink:#141a20; --mute:#5e6975;
+  --ok:#2f5d3f; --bad:#a32135;
+  --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#101417; --surf:#1b2126; --line:#2a3238; --ink:#e9f0f2; --mute:#8a939b;
+  --ok:#5fae74; --bad:#f0879a;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:860px;margin:0 auto;padding:40px 24px 80px}
+h1{font-size:28px;letter-spacing:-0.03em;margin:0 0 4px}
+.sub{color:var(--mute);font-size:14px;margin-bottom:24px}
+.summary{display:flex;align-items:baseline;gap:14px;padding:16px 18px;border-radius:12px;
+  border:1px solid var(--line);background:var(--surf);margin-bottom:24px}
+.big{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-0.03em}
+.big.ok{color:var(--ok)} .big.bad{color:var(--bad)}
+.grp{margin-top:22px}
+.grp h2{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--mute);
+  margin:0 0 8px;font-weight:700}
+.row{display:grid;grid-template-columns:20px 1fr;gap:10px;padding:6px 0;
+  border-bottom:1px solid var(--line);align-items:baseline}
+.row:last-child{border-bottom:0}
+.mark{font-family:var(--mono);font-weight:700}
+.mark.ok{color:var(--ok)} .mark.bad{color:var(--bad)}
+.what{font-size:14px}
+.detail{grid-column:2;font-family:var(--mono);font-size:12px;color:var(--bad);
+  overflow-wrap:anywhere;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ordify · core tests</h1>
+  <div class="sub">Dates, the tree, and money — the arithmetic the practice depends on.</div>
+  <div id="out"></div>
+</div>
+
+<script src="core.js"></script>
+<script src="store.js"></script>
+<script src="tests.js"></script>
+<script>
+(() => {
+  const t = run();
+  const out = document.getElementById('out');
+  const groups = [...new Set(t.results.map(r => r.group))];
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  out.innerHTML = `
+    <div class="summary">
+      <span class="big ${t.failed ? 'bad' : 'ok'}">${t.passed}/${t.passed + t.failed}</span>
+      <span>${t.failed ? t.failed + ' failing' : 'all passing'}</span>
+    </div>
+    ${groups.map(g => `
+      <div class="grp">
+        <h2>${esc(g)}</h2>
+        ${t.results.filter(r => r.group === g).map(r => `
+          <div class="row">
+            <span class="mark ${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</span>
+            <span class="what">${esc(r.what)}</span>
+            ${r.detail ? `<span class="detail">${esc(r.detail)}</span>` : ''}
+          </div>`).join('')}
+      </div>`).join('')}
+  `;
+  document.title = `${t.failed ? '✗' : '✓'} ordify · ${t.passed}/${t.passed + t.failed}`;
+  window.__testResult = { passed: t.passed, failed: t.failed,
+    failures: t.results.filter(r => !r.ok).map(r => r.group + ': ' + r.what + ' — ' + r.detail) };
+})();
+</script>
+</body>
+</html>

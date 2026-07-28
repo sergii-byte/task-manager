@@ -4,20 +4,48 @@
     {
       "name": "misha-comics",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "3456"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3456"
+      ],
       "port": 3456
     },
     {
       "name": "taskflow",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "3457", "-d", "taskmanager"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "3457",
+        "-d",
+        "taskmanager"
+      ],
       "port": 3457
     },
     {
       "name": "ordify-static",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8770", "-d", "taskmanager-v2"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8770",
+        "-d",
+        "taskmanager-v2"
+      ],
       "port": 8770
+    },
+    {
+      "name": "ordify-v3",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8790",
+        "-d",
+        "v3"
+      ],
+      "port": 8790
     }
   ]
 }
