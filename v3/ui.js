@@ -24,7 +24,7 @@ const UI = {
     toggle(id) { UI.open.has(id) ? UI.open.delete(id) : UI.open.add(id); }
 };
 
-let P = new Practice();          // the practice, replaced by the store on boot
+/* P is declared in core.js — the model owns it; boot() fills it from the store. */
 
 /* ------------------------------------------------------------- routing --- */
 
@@ -67,6 +67,7 @@ function render() {
         else if (screen === 'work')  html = id ? viewNode(id) : viewWork();
         else if (screen === 'money') html = viewMoney();
         else if (screen === 'bin')   html = viewBin();
+        else if (screen === 'settings') html = viewSettings();
         else html = viewNow();
     } catch (e) {
         console.error(e);
@@ -285,6 +286,28 @@ function viewBin() {
           : `<div class="empty">Nothing deleted.</div>`}`;
 }
 
+function viewSettings() {
+    const key = (which, label, hint, placeholder) => `
+        <div class="field">
+            <label for="k-${which}">${label}</label>
+            <input id="k-${which}" type="password" placeholder="${placeholder}"
+                   value="${esc(AI.keys[which] || '')}" data-key="${which}" autocomplete="off">
+            <span class="hint">${hint}</span>
+        </div>`;
+    return `
+        <h1>Settings</h1>
+        <h2 class="sec">Keys</h2>
+        ${key('anthropic', 'Anthropic', 'Runs the understanding — turns a sentence into actions.', 'sk-ant-…')}
+        ${key('gemini', 'Gemini', 'Runs the ears — turns a recording into words. Free tier is enough.', 'AIza…')}
+        <p class="muted" style="max-width:52ch">Keys are kept in this browser only. Nothing is sent
+        anywhere except to the provider you are calling.</p>
+        <h2 class="sec">Data</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <a class="btn" href="#/bin">Open the bin</a>
+            <button class="btn" data-export>Export everything</button>
+        </div>`;
+}
+
 /* -------------------------------------------------------------- search --- */
 
 function runSearch() {
@@ -389,6 +412,30 @@ function bind() {
         if (!t('#find')) $('#results').hidden = true;
     });
 
+    // one way in: type or dictate, and the sheet confirms before anything exists
+    $('#saygo').addEventListener('click', () => Capture.submit($('#sayin').value));
+    $('#saymic').addEventListener('click', () => Mic.toggle($('#sayin')));
+    $('#sayin').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); Capture.submit($('#sayin').value); }
+        if (e.key === 'Escape') $('#sayin').value = '';
+    });
+
+    // keys save as you type them
+    document.body.addEventListener('change', (e) => {
+        const k = e.target.closest('[data-key]');
+        if (k) AI.saveKey(k.dataset.key, k.value.trim());
+    });
+    document.body.addEventListener('click', (e) => {
+        if (!e.target.closest('[data-export]')) return;
+        const blob = new Blob([JSON.stringify({ nodes: P.nodes, entries: P.entries }, null, 2)],
+                              { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `ordify-${today()}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    });
+
     $('#q').addEventListener('input', runSearch);
     $('#q').addEventListener('keydown', (e) => {
         if (e.key === 'Escape') { $('#q').value = ''; $('#results').hidden = true; $('#q').blur(); }
@@ -426,6 +473,8 @@ async function boot() {
         render();
     });
 
+    AI.loadKeys();
+    Sheet.mount();
     bind();
     render();
 }

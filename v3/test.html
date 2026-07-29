@@ -45,12 +45,13 @@ h1{font-size:28px;letter-spacing:-0.03em;margin:0 0 4px}
   <div id="out"></div>
 </div>
 
-<script src="core.js"></script>
-<script src="store.js"></script>
-<script src="tests.js"></script>
+<script src="core.js?v=7"></script>
+<script src="store.js?v=7"></script>
+<script src="capture.js?v=7"></script>
+<script src="tests.js?v=7"></script>
 <script>
-(() => {
-  const t = run();
+(async () => {
+  const t = await run();
   const out = document.getElementById('out');
   const groups = [...new Set(t.results.map(r => r.group))];
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));

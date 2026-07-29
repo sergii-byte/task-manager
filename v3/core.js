@@ -282,6 +282,11 @@ const fmtMinutes = (m) => {
 const fmtMoney = (n, ccy = 'EUR') =>
     new Intl.NumberFormat(undefined, { style: 'currency', currency: ccy }).format(Number(n) || 0);
 
+/* The practice itself. It lives here rather than in the view layer because
+   capture and storage need it too — having it declared in ui.js made those
+   modules quietly depend on the thing that draws the screens. */
+var P = new Practice();
+
 if (typeof module !== 'undefined') {
     module.exports = { isoDate, today, addDays, daysBetween, makeNode, Practice,
                        sortNodes, reorder, fmtMinutes, fmtMoney, BILLING, BILLING_LABEL, uid };

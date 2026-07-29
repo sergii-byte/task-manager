@@ -16,9 +16,9 @@ const T = {
     /* A throw inside a group is a failure of that group, not the end of the
        run — otherwise one broken expectation hides every test after it, which
        is precisely when you most need the rest of the report. */
-    group(name, fn) {
+    async group(name, fn) {
         T._group = name;
-        try { fn(); }
+        try { await fn(); }
         catch (e) { T._record(false, 'group threw', String(e && e.message || e)); }
     },
 
@@ -35,11 +35,11 @@ const T = {
     }
 };
 
-function run() {
+async function run() {
     T.passed = 0; T.failed = 0; T.results = [];
 
     /* ------------------------------------------------------------ dates --- */
-    T.group('dates', () => {
+    await T.group('dates', () => {
         const d = new Date(2026, 0, 1, 23, 30);          // 1 Jan, late evening, local
         T.is(isoDate(d), '2026-01-01', 'late evening keeps the local date');
 
@@ -54,7 +54,7 @@ function run() {
     });
 
     /* ------------------------------------------------------------- tree --- */
-    T.group('tree', () => {
+    await T.group('tree', () => {
         const p = new Practice();
         const client  = makeNode('client',  { title: 'Novawave' });
         const project = makeNode('project', { title: 'AML', parentId: client.id });
@@ -79,7 +79,7 @@ function run() {
     });
 
     /* --------------------------------------------------------- ordering --- */
-    T.group('ordering', () => {
+    await T.group('ordering', () => {
         const p = new Practice();
         const a = makeNode('client', { title: 'Alpha' });
         const b = makeNode('client', { title: 'Beta' });
@@ -93,7 +93,7 @@ function run() {
     });
 
     /* ---------------------------------------------------------- billing --- */
-    T.group('billing', () => {
+    await T.group('billing', () => {
         const p = new Practice();
         const client = makeNode('client', { title: 'Client' });
         const hourly = makeNode('project', { title: 'Hourly', parentId: client.id, billing: 'hourly', rate: 200 });
@@ -113,7 +113,7 @@ function run() {
     });
 
     /* ------------------------------------------------------------ money --- */
-    T.group('money', () => {
+    await T.group('money', () => {
         const p = new Practice();
         const client = makeNode('client', { title: 'Client' });
         const hourly = makeNode('project', { title: 'Hourly', parentId: client.id, billing: 'hourly', rate: 200 });
@@ -149,7 +149,7 @@ function run() {
     });
 
     /* -------------------------------------------------------------- day --- */
-    T.group('the day', () => {
+    await T.group('the day', () => {
         const p = new Practice();
         const c = makeNode('client', { title: 'C' });
         const pr = makeNode('project', { title: 'P', parentId: c.id });
@@ -177,7 +177,7 @@ function run() {
     });
 
     /* ----------------------------------------------------------- search --- */
-    T.group('search', () => {
+    await T.group('search', () => {
         const p = new Practice();
         const c = makeNode('client', { title: 'Novawave' });
         const pr = makeNode('project', { title: 'AML compliance', parentId: c.id });
@@ -196,7 +196,7 @@ function run() {
     /* ------------------------------------------------------------ store ---
        The bug that loses work rather than annoying you: two devices editing
        and one silently winning. */
-    T.group('store · concurrent edits', () => {
+    await T.group('store · concurrent edits', () => {
         const A = { id: 'n1', title: 'Original', due: null, _v: {} };
         // device one renames it at 1000; device two sets a due date at 2000
         const one = Store.stamp({ ...A, title: 'Renamed' }, ['title'], 1000, 'phone');
@@ -218,7 +218,7 @@ function run() {
         T.is(Store.merge(t1, t2).title, Store.merge(t2, t1).title, 'a tie resolves the same way both ways');
     });
 
-    T.group('store · deleting and the bin', async () => {
+    await T.group('store · deleting and the bin', async () => {
         // synchronous assertions on the promise-free parts
         const adapter = MemoryAdapter({ node: [
             { id: 'x', title: 'Doomed', deletedAt: null, _v: {} }
@@ -229,8 +229,69 @@ function run() {
         T.ok(typeof Store.binned === 'function', 'the bin can be listed');
     });
 
+    /* ---------------------------------------------------------- capture ---
+       The AI names things; resolving names to nodes happens once, here. This
+       is where a proposal quietly becomes a duplicate client if it is wrong. */
+    await T.group('capture · turning proposals into nodes', async () => {
+        // capture.js reads the globals P and Store, so stand them up
+        const saved = { P: typeof P !== 'undefined' ? P : null };
+        P = new Practice();
+        Store.use(MemoryAdapter());
+
+        const client = makeNode('client', { title: 'Novawave' });
+        const project = makeNode('project', { title: 'AML', parentId: client.id });
+        P.nodes.push(client, project);
+
+        // a task naming an existing project by name lands inside it
+        await applyAction({ op: 'createTask', data: { title: 'Report', projectName: 'AML', clientName: 'Novawave' } });
+        const t = P.ofType('task').find(n => n.title === 'Report');
+        T.ok(t, 'the task was created');
+        T.is(t && t.parentId, project.id, 'named project resolves to the existing one');
+        T.is(P.ofType('client').length, 1, 'and no second Novawave appears');
+
+        // an unknown client is created once, not once per action
+        await applyAction({ op: 'createTask', data: { title: 'A', clientName: 'Fligen' } });
+        await applyAction({ op: 'createTask', data: { title: 'B', clientName: 'Fligen' } });
+        T.is(P.ofType('client').filter(c => c.title === 'Fligen').length, 1,
+             'two tasks for a new client make one client');
+
+        // matching ignores case, because the model will not match your casing
+        await applyAction({ op: 'createTask', data: { title: 'C', clientName: 'novawave' } });
+        T.is(P.ofType('client').filter(c => /novawave/i.test(c.title)).length, 1,
+             'client matching ignores case');
+
+        // time with nothing to attach it to must refuse rather than vanish
+        let threw = false;
+        try { await applyAction({ op: 'logTime', data: { minutes: 60, clientName: 'Nobody At All' } }); }
+        catch (e) { threw = true; }
+        T.ok(threw, 'time with no target is refused, not silently dropped');
+
+        threw = false;
+        try { await applyAction({ op: 'logTime', data: { minutes: 0, clientName: 'Novawave' } }); }
+        catch (e) { threw = true; }
+        T.ok(threw, 'a time entry with no minutes is refused');
+
+        await applyAction({ op: 'logTime', data: { minutes: 90, projectName: 'AML' } });
+        T.is(P.minutesOn(project.id), 90, 'time lands on the named project');
+
+        if (saved.P) P = saved.P;
+    });
+
+    await T.group('capture · what a proposal says it will do', () => {
+        const saved = P;
+        P = new Practice();
+        Store.use(MemoryAdapter());
+        T.ok(/New client/.test(describe({ op: 'createClient', data: { title: 'X' } })),
+             'a client proposal reads as one');
+        T.ok(/in Novawave/.test(describe({ op: 'createTask', data: { title: 'T', clientName: 'Novawave' } })),
+             'a task says where it will go');
+        T.ok(/1h 30m/.test(describe({ op: 'logTime', data: { minutes: 90, projectName: 'AML' } })),
+             'time reads as hours and minutes, not raw minutes');
+        P = saved;
+    });
+
     /* ------------------------------------------------------- formatting --- */
-    T.group('formatting', () => {
+    await T.group('formatting', () => {
         T.is(fmtMinutes(0), '0m', 'zero');
         T.is(fmtMinutes(45), '45m', 'under an hour');
         T.is(fmtMinutes(60), '1h 00m', 'exactly an hour');
