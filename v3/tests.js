@@ -328,6 +328,101 @@ async function run() {
         P = saved;
     });
 
+    /* ------------------------------------- changing what already exists ---
+     * Creating a duplicate is untidy. Closing the wrong matter puts a false
+     * statement in the record, so resolution refuses rather than guesses.
+     */
+    await T.group('capture · touching what already exists', async () => {
+        const saved = P;
+        P = new Practice();
+        Store.use(MemoryAdapter());
+
+        const client  = makeNode('client',  { title: 'Novawave' });
+        const aml     = makeNode('project', { title: 'AML', parentId: client.id });
+        const report  = makeNode('task', { title: 'Quarterly report', parentId: aml.id, status: 'todo', due: addDays(-2) });
+        const other   = makeNode('client',  { title: 'Datavise' });
+        const decorp  = makeNode('project', { title: 'DE package', parentId: other.id });
+        const twin    = makeNode('task', { title: 'Bylaws', parentId: decorp.id, status: 'todo' });
+        const twin2   = makeNode('task', { title: 'Bylaws', parentId: aml.id, status: 'todo' });
+        P.nodes.push(client, aml, report, other, decorp, twin, twin2);
+
+        await applyAction({ op: 'completeTask', data: { nodeId: report.id } });
+        T.is(P.byId(report.id).status, 'done', 'a task said to be finished is finished');
+        T.ok(P.byId(report.id).completedAt, 'and records when');
+
+        await applyAction({ op: 'completeTask', data: { nodeId: report.id, reopen: true } });
+        T.is(P.byId(report.id).status, 'todo', 'and can be put back');
+        T.is(P.byId(report.id).completedAt, null, 'with the completion cleared');
+
+        await applyAction({ op: 'reschedule', data: { nodeId: report.id, due: '2026-09-01' } });
+        T.is(P.byId(report.id).due, '2026-09-01', 'a deadline moves');
+        await applyAction({ op: 'reschedule', data: { nodeId: report.id, due: null } });
+        T.is(P.byId(report.id).due, null, 'and can be taken away entirely');
+
+        await applyAction({ op: 'setBlocked', data: { nodeId: report.id, blocked: 'client data' } });
+        T.is(P.byId(report.id).blocked, 'client data', 'stuck, and on what');
+        await applyAction({ op: 'setBlocked', data: { nodeId: report.id, blocked: null } });
+        T.is(P.byId(report.id).blocked, null, 'and moving again');
+
+        await applyAction({ op: 'rename', data: { nodeId: report.id, title: 'Q2 AML report' } });
+        T.is(P.byId(report.id).title, 'Q2 AML report', 'wording can be fixed');
+
+        await applyAction({ op: 'move', data: { nodeId: report.id, parentId: decorp.id } });
+        T.is(P.byId(report.id).parentId, decorp.id, 'and it can change hands');
+
+        // the refusals — each one is a wrong record that never gets written
+        const refuses = async (action, what) => {
+            try { await applyAction(action); T.ok(false, what + ' (it went ahead)'); }
+            catch (e) { T.ok(true, what); }
+        };
+        await refuses({ op: 'completeTask', data: { nodeId: 'n-invented' } },
+                      'refuses an id it was never given');
+        await refuses({ op: 'completeTask', data: { title: 'Bylaws' } },
+                      'refuses a name that matches two tasks');
+        await refuses({ op: 'completeTask', data: { title: 'Nothing like this' } },
+                      'refuses a name that matches nothing');
+        await refuses({ op: 'move', data: { nodeId: aml.id, parentId: report.id } },
+                      'refuses a move that would detach the branch');
+
+        // one unambiguous name is still allowed, since the sheet shows the path
+        await applyAction({ op: 'completeTask', data: { title: 'Q2 AML report' } });
+        T.is(P.byId(report.id).status, 'done', 'an unambiguous name resolves');
+
+        T.is(pathOf(P.byId(twin.id)), 'Datavise › DE package › Bylaws',
+             'a proposal names the full path, so the wrong row is visible before you accept');
+        T.ok(/Mark done · Datavise › DE package › Bylaws/.test(
+                describe({ op: 'completeTask', data: { nodeId: twin.id } })),
+             'and the description says which one it means');
+
+        P = saved;
+    });
+
+    /* --------------------------------------------------------- memory --- */
+    await T.group('memory', async () => {
+        Store.use(MemoryAdapter());
+        Memory.items = [];
+
+        await Memory.remember('Delaware packages are always a fixed fee', 'corrected twice');
+        await Memory.remember('Dmytro means Dmytro Romanchenko');
+        T.is(Memory.items.length, 2, 'facts are kept');
+
+        // the same fact said again is a vote, not a second copy
+        await Memory.remember('delaware packages are always a fixed fee!');
+        T.is(Memory.items.length, 2, 'restating one does not duplicate it');
+        T.is(Memory.items[0].uses, 1, 'it counts as a reaffirmation');
+        T.ok(/Delaware/.test(Memory.items[0].text), 'and rises to the top');
+
+        T.ok(/- Dmytro means/.test(Memory.block()), 'all of it reaches the prompt');
+        T.not(Memory.block().includes('corrected twice'), 'the reason is for you, not the model');
+
+        await Memory.forget(Memory.items[0].id);
+        T.is(Memory.items.length, 1, 'a wrong fact can be dropped');
+        T.not(/Delaware/.test(Memory.block()), 'and stops being sent');
+
+        T.is(await Memory.remember('  '), null, 'an empty memory is not a memory');
+        T.is(Memory.items.length, 1, 'and nothing was filed for it');
+    });
+
     /* ------------------------------------------------------- formatting --- */
     await T.group('formatting', () => {
         T.is(fmtMinutes(0), '0m', 'zero');

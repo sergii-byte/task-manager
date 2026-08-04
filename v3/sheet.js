@@ -56,6 +56,13 @@ const Sheet = {
             if (act === 'mic') {
                 return Mic.toggle(el.querySelector('#fixit'));
             }
+            if (act === 'forget') {
+                const id = b.dataset.id;
+                return Memory.forget(id).then(() => {
+                    Capture.learned = (Capture.learned || []).filter(m => m.id !== id);
+                    Sheet.repaint();
+                });
+            }
         });
 
         el.addEventListener('keydown', (e) => {
@@ -132,19 +139,39 @@ const Sheet = {
             </div>
             <div class="s-body">
                 ${ps.map((p, i) => Sheet._card(p, i)).join('')}
+                ${Sheet._learned()}
             </div>
             ${Sheet._fixRow()}`);
     },
 
+    /* Nothing is learned about you behind your back. What it kept is shown
+       here, in the same breath as the proposals, with one tap to drop it —
+       a wrong fact you cannot see would bend every later reading in silence. */
+    _learned() {
+        const ls = Capture.learned || [];
+        if (!ls.length) return '';
+        return `
+            <div class="s-learn">
+                <div class="s-op">also remembered</div>
+                ${ls.map(m => `
+                    <div class="s-learn-row">
+                        <span>${esc(m.text)}</span>
+                        <button class="btn sm" data-sheet="forget" data-id="${esc(m.id)}">Forget</button>
+                    </div>`).join('')}
+            </div>`;
+    },
+
     _card(p, i) {
         const d = p.data || {};
+        // only the fields this verb actually has: a blank "Title" box on a
+        // "Mark done" card invites you to fill in something that means nothing
         const fields = [];
-        if ('title' in d || p.op !== 'logTime')
-            fields.push(['title', 'Title', 'text', d.title || '']);
-        if (p.op === 'createTask')
+        if (/^create/.test(p.op)) fields.push(['title', 'Title', 'text', d.title || '']);
+        if (p.op === 'createTask' || p.op === 'reschedule')
             fields.push(['due', 'Due', 'date', d.due || '']);
-        if (p.op === 'logTime')
-            fields.push(['minutes', 'Minutes', 'number', d.minutes || '']);
+        if (p.op === 'logTime') fields.push(['minutes', 'Minutes', 'number', d.minutes || '']);
+        if (p.op === 'rename') fields.push(['title', 'New title', 'text', d.title || '']);
+        if (p.op === 'setBlocked') fields.push(['blocked', 'Waiting on', 'text', d.blocked || '']);
         return `
             <div class="s-card ${p.accepted ? 'done' : ''}">
                 <div class="s-op">${esc(p.op.replace(/([A-Z])/g, ' $1').toLowerCase())}</div>

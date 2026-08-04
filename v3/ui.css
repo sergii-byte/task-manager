@@ -465,3 +465,25 @@ input.h1:focus { outline: none; border-color: var(--accent); background: var(--s
     input.h1 { min-height: var(--tap); font-size: var(--t-xl); }
     .path a { display: inline-flex; align-items: center; min-height: var(--tap); }
 }
+
+/* ---- what it knows about you ----
+   Shown plainly, and every line has a way out. A memory you cannot see would
+   bend every future reading without ever explaining itself. */
+.memos { display: flex; flex-direction: column; gap: var(--s-2); max-width: 620px; }
+.memo {
+    display: grid; grid-template-columns: 1fr auto; align-items: center;
+    gap: var(--s-1) var(--s-3);
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: var(--s-2) var(--s-3);
+}
+.memo .t { color: var(--ink); font-size: var(--t-sm); }
+.memo .w { grid-column: 1; font-size: var(--t-xs); color: var(--fg-mute); }
+.memo button { grid-row: 1 / -1; grid-column: 2; }
+
+/* the same thing, said at the moment it is learned */
+.s-learn { border-top: 1px dashed var(--line); margin-top: var(--s-3); padding-top: var(--s-3); }
+.s-learn-row {
+    display: flex; align-items: center; gap: var(--s-3);
+    justify-content: space-between; padding: var(--s-1) 0;
+    font-size: var(--t-sm); color: var(--fg);
+}

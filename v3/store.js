@@ -149,7 +149,7 @@ function LocalAdapter(prefix = 'ordify.v3') {
                 if (e.key && e.key.startsWith(prefix)) onExternal(e.key.slice(prefix.length + 1));
             });
         },
-        _clear() { ['node', 'entry', 'invoice'].forEach(k => localStorage.removeItem(key(k))); }
+        _clear() { ['node', 'entry', 'invoice', 'memo'].forEach(k => localStorage.removeItem(key(k))); }
     };
 }
 

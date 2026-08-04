@@ -521,6 +521,19 @@ function viewSettings() {
         ${key('gemini', 'Gemini', 'Runs the ears — turns a recording into words. Free tier is enough.', 'AIza…')}
         <p class="muted" style="max-width:52ch">Keys are kept in this browser only. Nothing is sent
         anywhere except to the provider you are calling.</p>
+
+        <h2 class="sec">What it knows about you</h2>
+        <p class="muted" style="max-width:56ch">Written only when you correct a reading or ask it to
+        remember something, and sent with every sentence you say. It shapes how you are understood —
+        it never does anything on its own. Delete anything that is wrong.</p>
+        ${Memory.items.length ? `<div class="memos">${Memory.items.map(m => `
+            <div class="memo">
+                <div class="t">${esc(m.text)}</div>
+                ${m.why ? `<div class="w">${esc(m.why)}</div>` : ''}
+                <button class="btn sm" data-forget="${esc(m.id)}">Forget</button>
+            </div>`).join('')}</div>`
+          : `<div class="empty">Nothing yet. Correct it once and it will start keeping up.</div>`}
+
         <h2 class="sec">Data</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
             <a class="btn" href="#/bin">Open the bin</a>
@@ -683,6 +696,9 @@ function bind() {
         const res = t('[data-restore]');
         if (res) { restoreNode(res.dataset.restore); return; }
 
+        const forget = t('[data-forget]');
+        if (forget) { Memory.forget(forget.dataset.forget).then(render); return; }
+
         const hit = t('[data-go]');
         if (hit) { $('#q').value = ''; $('#results').hidden = true; go('work/' + hit.dataset.go); return; }
 
@@ -774,10 +790,12 @@ async function boot() {
     if (local.subscribe) local.subscribe(async () => {
         const [n, e] = await Promise.all([Store.all('node'), Store.all('entry')]);
         P.nodes = n; P.entries = e;
+        await Memory.load();          // a correction made in the other tab counts here too
         render();
     });
 
     AI.loadKeys();
+    await Memory.load();
     Sheet.mount();
     bind();
     render();

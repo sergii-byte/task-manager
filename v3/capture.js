@@ -17,6 +17,7 @@
 
 const Capture = {
     proposals: [],
+    learned: [],      // memories written by the last reading, shown in the sheet
     lastInput: '',
     busy: false,
 
@@ -43,6 +44,14 @@ const Capture = {
                 : await AI.parse(words, { parentId });
             if (mode !== 'refine') Capture.lastInput = words;
             Capture.proposals = (result.actions || []).map(a => ({ ...a, accepted: false }));
+            // what it learned about you is kept whether or not you accept the
+            // actions — being told "that is Datavise, not Novawave" is useful
+            // even when the proposal it came with was wrong in other ways
+            Capture.learned = [];
+            for (const m of (result.remember || [])) {
+                const saved = await Memory.remember(m && m.text, m && m.why);
+                if (saved) Capture.learned.push(saved);
+            }
             Sheet.show(result);
         } catch (e) {
             console.error('capture failed', e);
@@ -76,10 +85,45 @@ const Capture = {
 
     clear() {
         Capture.proposals = [];
+        Capture.learned = [];
         Capture.lastInput = '';
         Sheet.hide();
     }
 };
+
+/* The verbs that change something that is already in the practice. Kept as a
+   set because both applying and describing need to know which family an op
+   belongs to, and two lists would eventually disagree. */
+const MUTATING = new Set(['completeTask', 'reschedule', 'setBlocked', 'rename', 'move']);
+
+/* The full path of a node, which is what makes a proposal checkable: two
+   clients can both have "Quarterly filings", and a bare title cannot tell
+   you which one is about to be closed. */
+function pathOf(n) {
+    if (!n) return '';
+    const up = P.ancestors(n).map(a => a.title);
+    return up.length ? up.join(' › ') + ' › ' + n.title : n.title;
+}
+
+/* Strict on purpose. An id from context, or a title matching exactly one live
+   node — never a best guess, because the cost of being wrong here is a task
+   marked done that was not. */
+function resolveNode(d, expectType = null) {
+    if (d.nodeId) {
+        const n = P.byId(d.nodeId);
+        if (n && !n.deletedAt) return n;
+        throw new Error('That refers to something no longer here');
+    }
+    const name = String(d.title || d.taskName || d.projectName || d.clientName || '').trim();
+    if (!name) throw new Error('Nothing named to change');
+
+    const hits = P.live().filter(n =>
+        (!expectType || n.type === expectType) &&
+        (n.title || '').toLowerCase() === name.toLowerCase());
+    if (hits.length === 1) return hits[0];
+    if (!hits.length) throw new Error(`Nothing here called "${name}"`);
+    throw new Error(`"${name}" matches ${hits.length} things — open the one you mean`);
+}
 
 /* ---------------------------------------------------------------- apply ---
    A proposal names what it wants; resolving names to nodes happens once,
@@ -133,6 +177,49 @@ async function applyAction(p) {
         return node;
     }
 
+    /* ---- ops that touch something that already exists ----
+       Creating a duplicate is untidy; closing the wrong matter puts a false
+       statement in the record. So these resolve strictly: an id from context,
+       or a title that matches exactly one live node. Anything else refuses
+       rather than picking. */
+    if (MUTATING.has(p.op)) {
+        const node = resolveNode(d, p.op === 'completeTask' ? 'task' : null);
+
+        if (p.op === 'completeTask') {
+            node.status = d.reopen ? 'todo' : 'done';
+            node.completedAt = d.reopen ? null : new Date().toISOString();
+            await Store.put('node', node, ['status', 'completedAt']);
+            return node;
+        }
+        if (p.op === 'reschedule') {
+            node.due = d.due || null;
+            await Store.put('node', node, ['due']);
+            return node;
+        }
+        if (p.op === 'setBlocked') {
+            node.blocked = d.blocked || null;
+            await Store.put('node', node, ['blocked']);
+            return node;
+        }
+        if (p.op === 'rename') {
+            const title = String(d.title || '').trim();
+            if (!title) throw new Error('That rename has no new title');
+            node.title = title;
+            await Store.put('node', node, ['title']);
+            return node;
+        }
+        if (p.op === 'move') {
+            const parentId = d.parentId || null;
+            if (parentId && !P.byId(parentId)) throw new Error('Nowhere to move that to');
+            if (!P.canMove(node.id, parentId)) {
+                throw new Error(`"${node.title}" cannot go there`);
+            }
+            P.move(node.id, parentId);
+            await Store.put('node', node, ['parentId', 'order']);
+            return node;
+        }
+    }
+
     if (p.op === 'logTime') {
         let target = d.nodeId ? P.byId(d.nodeId) : null;
         if (!target && d.projectName) {
@@ -159,11 +246,20 @@ async function applyAction(p) {
 }
 
 /* A one-line description of what a proposal will do — written from the data,
-   so it cannot drift from what will actually happen. */
+   so it cannot drift from what will actually happen.
+   For anything that touches an existing thing it names that thing by its full
+   path, because the one mistake worth catching before you accept is the right
+   verb aimed at the wrong row. */
 function describe(p) {
     const d = p.data || {};
     const where = d.projectName || d.clientName ||
         (d.parentId && P.byId(d.parentId) ? P.byId(d.parentId).title : '');
+
+    // never throws: a proposal that cannot be resolved still has to be readable
+    let target = null;
+    if (MUTATING.has(p.op)) { try { target = resolveNode(d); } catch (e) { target = null; } }
+    const it = target ? pathOf(target) : (d.nodeId ? '(not found)' : d.title || '—');
+
     switch (p.op) {
         case 'createClient':  return `New client · ${d.title || d.name || '—'}`;
         case 'createProject': return `New project · ${d.title || '—'}${where ? ' for ' + where : ''}`;
@@ -171,8 +267,17 @@ function describe(p) {
                                      `${d.due ? ' · due ' + d.due : ''}`;
         case 'logTime':       return `Log ${fmtMinutes(d.minutes)}${where ? ' on ' + where : ''}` +
                                      `${d.on && d.on !== today() ? ' · ' + d.on : ''}`;
+        case 'completeTask':  return `${d.reopen ? 'Reopen' : 'Mark done'} · ${it}`;
+        case 'reschedule':    return d.due ? `Move to ${d.due} · ${it}` : `Remove the date · ${it}`;
+        case 'setBlocked':    return d.blocked ? `Waiting on ${d.blocked} · ${it}`
+                                               : `No longer stuck · ${it}`;
+        case 'rename':        return `Rename to "${d.title || '—'}" · ${it}`;
+        case 'move':          return `Move under ${d.parentId && P.byId(d.parentId)
+                                        ? P.byId(d.parentId).title : '—'} · ${it}`;
         default:              return p.op;
     }
 }
 
-if (typeof module !== 'undefined') module.exports = { Capture, applyAction, describe };
+if (typeof module !== 'undefined') {
+    module.exports = { Capture, applyAction, describe, resolveNode, pathOf, MUTATING };
+}
