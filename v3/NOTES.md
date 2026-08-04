@@ -45,10 +45,33 @@ Time entries and invoices are separate facts *about* nodes, not nodes.
 - `ai.js` — Gemini transcribes, Claude understands. Never the other way
   round: in v2 dictation reached different conclusions from typing the same
   sentence because a second engine was thinking with the first one's prompt.
-- `capture.js` — turns proposals into nodes. The only place creation happens.
+  The context it sends carries full paths, due dates, what is stuck and how
+  things are billed — enough for a sentence about something that already
+  exists to find it.
+- `memory.js` — what stays true about how you work, kept between sessions and
+  sent with every reading. Written only from a correction or an explicit ask,
+  always visible with a way out, and never itself an instruction to act.
+- `capture.js` — turns proposals into changes. The only place anything is
+  created or altered. Verbs that touch an existing node resolve strictly: an
+  id from context or a title matching exactly one node, never a best guess.
 - `sheet.js` — where proposals are confirmed. Header / scrolling list /
-  **pinned** correction row.
-- `ui.js` — three screens and a search.
+  **pinned** correction row. Anything aimed at an existing node names it by
+  full path, so the right verb on the wrong row is visible before you accept.
+- `ui.js` — three screens, a search, and one page shape for every node.
+
+## The node page
+
+A client, a project and a task are one kind of thing, so they get one layout,
+read top to bottom: **where you are** (the path, every step clickable) →
+**what it is** (the title, typed into directly) → **how it stands** (one line
+of facts) → **what you can do** (two actions and a ⋯) → **what is in it** (the
+tree, or for a task its fields) → **drawers**, closed, for everything else.
+
+v2 had three layouts, each ordered by the order its features were built; on a
+client that put the work eighth, under a sharing settings panel. There are no
+stat cards — four tiles where two were the same button said less than one line
+of words. There is no form: you edit the page, and creating is one line typed
+where the thing will live.
 
 ## Rules that came from v2's mistakes
 
@@ -82,4 +105,6 @@ four assertions passing by accident).
 
 Sign-in and Firestore (data is in `localStorage`), the client portal,
 invoices as documents, drag to rearrange, the tamper-evident history chain.
+No prompt change has been run against a live model here — there is no API
+key in this environment, so the plumbing is tested and the wording is not.
 v2 has all of these if you need to see how they behaved.
