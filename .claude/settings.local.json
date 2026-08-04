@@ -265,7 +265,14 @@
       "Bash(curl -sI \"https://fligenair.com/thank-you.html\")",
       "Bash(curl -s \"https://fligenair.com/\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://fligenair.com/\" -H \"Content-Type: application/x-www-form-urlencoded\" -d \"form-name=contact&name=Test&company=Test&email=test@test.com&subject=engines&message=Test+message\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://fligenair.com/\" -H \"Content-Type: application/x-www-form-urlencoded\" -d \"form-name=contact&name=Test&company=TestCo&email=test@test.com&subject=engines&message=Test+message\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://fligenair.com/\" -H \"Content-Type: application/x-www-form-urlencoded\" -d \"form-name=contact&name=Test&company=TestCo&email=test@test.com&subject=engines&message=Test+message\")",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(node -e ' *)",
+      "PowerShell(\\(Get-Command node -ErrorAction SilentlyContinue\\).Source; \\(Get-Command python -ErrorAction SilentlyContinue\\).Source)",
+      "Bash(git commit -q -m 'v3: notes catch up with the page and the memory *)",
+      "Bash(cp /tmp/migrate.orig.js migrate.js)",
+      "Bash(git commit -q -m 'Permissions accumulated over the session *)"
     ]
   }
 }
