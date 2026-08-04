@@ -78,6 +78,14 @@ function render() {
         if (UI.logging !== id) UI.logging = null;
     }
 
+    // signed out, there is exactly one thing to look at
+    document.body.classList.toggle('locked', Session.mode === 'out');
+    if (Session.mode === 'out') {
+        $('main').innerHTML = viewDoor();
+        UI.route = 'door';
+        return;
+    }
+
     let html = '';
     try {
         if (screen === 'now')   html = viewNow();
@@ -99,6 +107,24 @@ function render() {
     // whatever you just asked for should already have the caret
     const fresh = $('main [name="newtitle"]') || $('main [name="mins"]');
     if (fresh && document.activeElement !== fresh) { fresh.focus(); fresh.select(); }
+}
+
+/* ---------------------------------------------------------------- door --- */
+
+function viewDoor() {
+    return `
+        <div class="door">
+            <h1>ordify</h1>
+            <p class="muted">Your clients, what is due, the time on each of them,
+            and what that is worth. Sign in and it follows you between devices.</p>
+            <div class="acts">
+                <button class="btn primary" data-signin>Continue with Google</button>
+                <button class="btn" data-anon>Look around first</button>
+            </div>
+            <p class="muted" style="max-width:44ch">Looking around keeps everything in this
+            browser and starts you on example data. Nothing is sent anywhere until you sign in.</p>
+            <div id="door-err" class="s-error" hidden></div>
+        </div>`;
 }
 
 /* ----------------------------------------------------------------- now --- */
@@ -514,8 +540,28 @@ function viewSettings() {
                    value="${esc(AI.keys[which] || '')}" data-key="${which}" autocomplete="off">
             <span class="hint">${hint}</span>
         </div>`;
+    const localCount = (() => {
+        try { return JSON.parse(localStorage.getItem('ordify.v3.node') || '[]').length; }
+        catch (e) { return 0; }
+    })();
+
     return `
         <h1>Settings</h1>
+
+        <h2 class="sec">Account</h2>
+        ${Session.mode === 'cloud' ? `
+            <div class="line">Signed in as ${esc(Session.user.email || Session.user.uid)} —
+            this practice syncs to every device you sign in on, and works offline.</div>
+            <div class="acts">
+                <button class="btn" data-signout>Sign out</button>
+                ${localCount ? `<button class="btn" data-upload>Bring ${localCount} item${localCount === 1 ? '' : 's'} up from this browser</button>` : ''}
+            </div>`
+        : `
+            <div class="line">Not signed in. Everything is kept in this browser only —
+            clear the browser and it is gone, and no other device can see it.</div>
+            <div class="acts"><button class="btn primary" data-signin>Continue with Google</button></div>
+            <div id="door-err" class="s-error" hidden></div>`}
+
         <h2 class="sec">Keys</h2>
         ${key('anthropic', 'Anthropic', 'Runs the understanding — turns a sentence into actions.', 'sk-ant-…')}
         ${key('gemini', 'Gemini', 'Runs the ears — turns a recording into words. Free tier is enough.', 'AIza…')}
@@ -630,6 +676,26 @@ async function removeNode(id) {
     render();
 }
 
+/* Anything typed while looking around anonymously can come up to the account,
+   once. It is a copy, not a move — the browser copy stays where it is, so a
+   half-finished upload never leaves you with neither. Ids are preserved, so
+   pressing it twice writes the same records again rather than duplicating
+   them. */
+async function uploadThisBrowser() {
+    if (Session.mode !== 'cloud') return;
+    const local = LocalAdapter();
+    const kinds = ['node', 'entry', 'memo'];
+    let n = 0;
+    for (const kind of kinds) {
+        for (const rec of await local.all(kind)) { await Store.put(kind, rec); n++; }
+    }
+    const [nodes, entries] = await Promise.all([Store.all('node'), Store.all('entry')]);
+    P = new Practice(nodes, entries, []);
+    await Memory.load();
+    render();
+    return n;
+}
+
 async function restoreNode(id) {
     const n = P.byId(id);
     if (!n) return;
@@ -698,6 +764,22 @@ function bind() {
 
         const forget = t('[data-forget]');
         if (forget) { Memory.forget(forget.dataset.forget).then(render); return; }
+
+        if (t('[data-signin]')) {
+            const err = $('#door-err');
+            Auth.signIn().catch(e => {
+                if (!err) return;
+                err.textContent = e.message || 'Sign-in failed.';
+                err.hidden = false;
+            });
+            return;
+        }
+        if (t('[data-anon]')) { Session.mode = 'local'; openPractice(); return; }
+        if (t('[data-signout]')) {
+            Auth.signOut().then(() => { Session.mode = 'out'; openPractice(); });
+            return;
+        }
+        if (t('[data-upload]')) { uploadThisBrowser(); return; }
 
         const hit = t('[data-go]');
         if (hit) { $('#q').value = ''; $('#results').hidden = true; go('work/' + hit.dataset.go); return; }
@@ -772,33 +854,84 @@ function bind() {
     window.addEventListener('hashchange', render);
 }
 
-async function boot() {
-    // localStorage is where the practice lives until there is a sign-in; the
-    // adapter shape is the same one Firestore will use, so nothing above here
-    // changes when it arrives.
-    const local = (() => {
-        try { localStorage.setItem('__t', '1'); localStorage.removeItem('__t'); return LocalAdapter(); }
-        catch (e) { console.warn('no local storage — this session will not persist', e); return MemoryAdapter(); }
-    })();
-    Store.use(local);
+/* Which practice is open, and where it is kept.
+   'out'   — nobody signed in; the only screen is the door
+   'cloud' — signed in; Firestore, synced, offline-capable
+   'local' — deliberately anonymous; this browser only, with demo data */
+const Session = { mode: 'out', user: null, unsubscribe: null };
+
+function localAdapter() {
+    try {
+        localStorage.setItem('__t', '1'); localStorage.removeItem('__t');
+        return LocalAdapter();
+    } catch (e) {
+        console.warn('no local storage — this session will not persist', e);
+        return MemoryAdapter();
+    }
+}
+
+/* Everything a change of practice has to do, in one place: drop the old
+   listener, point the store somewhere new, read it, and start listening
+   again. Signing in and signing out are the same operation twice. */
+async function openPractice() {
+    if (Session.unsubscribe) { Session.unsubscribe(); Session.unsubscribe = null; }
+
+    if (Session.mode === 'out') { P = new Practice(); Memory.items = []; render(); return; }
+
+    let adapter;
+    if (Session.mode === 'cloud') {
+        try {
+            adapter = FirestoreAdapter(Session.user.uid);
+        } catch (e) {
+            // Signed in but the cloud is unreachable. Falling back silently
+            // would look like the practice had been emptied, which is worse
+            // than saying so.
+            console.error('cloud unavailable', e);
+            Session.mode = 'local';
+            adapter = localAdapter();
+        }
+    } else {
+        adapter = localAdapter();
+    }
+    Store.use(adapter);
 
     const [nodes, entries] = await Promise.all([Store.all('node'), Store.all('entry')]);
     P = new Practice(nodes, entries, []);
-    if (!P.nodes.length) await seed();
-
-    // another tab is a second writer; reload from the store when it writes
-    if (local.subscribe) local.subscribe(async () => {
-        const [n, e] = await Promise.all([Store.all('node'), Store.all('entry')]);
-        P.nodes = n; P.entries = e;
-        await Memory.load();          // a correction made in the other tab counts here too
-        render();
-    });
-
-    AI.loadKeys();
     await Memory.load();
+
+    // an empty cloud belongs to someone starting out — the first-run screen
+    // tells them so. Demo data is only ever for the anonymous look-around.
+    if (Session.mode === 'local' && !P.nodes.length) await seed();
+
+    // another tab, or another device, is a second writer
+    if (adapter.subscribe) {
+        Session.unsubscribe = adapter.subscribe(async () => {
+            const [n, e] = await Promise.all([Store.all('node'), Store.all('entry')]);
+            P.nodes = n; P.entries = e;
+            await Memory.load();   // a correction made elsewhere counts here too
+            render();
+        }) || null;
+    }
+    render();
+}
+
+async function boot() {
+    AI.loadKeys();
     Sheet.mount();
     bind();
-    render();
+    render();                                  // the door, until Firebase answers
+
+    if (!Auth.ready()) {                       // no SDK: this device, or nothing
+        Session.mode = 'local';
+        return openPractice();
+    }
+    Auth.watch(async (user) => {
+        Session.user = user;
+        // an anonymous look-around is not interrupted by a stale session
+        if (!user && Session.mode === 'local') return;
+        Session.mode = user ? 'cloud' : 'out';
+        await openPractice();
+    });
 }
 
 /* A practice to look at while there is no sign-in — the shape of real work,

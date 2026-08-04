@@ -23,9 +23,29 @@ const Store = {
 
     use(adapter) { Store.adapter = adapter; return Store; },
 
+    /* Who this browser is, for the purpose of settling ties.
+       Equal timestamps are broken by comparing writer ids, which only works if
+       the ids differ — while everything was local they were all "local", so
+       two writes in the same millisecond kept the older value. With devices
+       syncing through Firestore that stops being theoretical, so each browser
+       gets a stable id of its own and both sides settle on the same winner. */
+    writerId: null,
+    writer() {
+        if (Store.writerId) return Store.writerId;
+        const fresh = () => 'w-' + Math.random().toString(36).slice(2, 10);
+        try {
+            let id = localStorage.getItem('ordify.v3.writer');
+            if (!id) { id = fresh(); localStorage.setItem('ordify.v3.writer', id); }
+            Store.writerId = id;
+        } catch (e) {
+            Store.writerId = fresh();      // private mode: stable for this session
+        }
+        return Store.writerId;
+    },
+
     /* Every record carries who last touched each field and when, which is what
        makes a field-level merge possible at all. */
-    stamp(record, fields, at = Date.now(), by = 'local') {
+    stamp(record, fields, at = Date.now(), by = Store.writer()) {
         const meta = { ...(record._v || {}) };
         fields.forEach(f => { meta[f] = { at, by }; });
         return { ...record, _v: meta, updatedAt: at };
@@ -59,9 +79,22 @@ const Store = {
     async put(kind, record, changedFields) {
         const fields = changedFields || Object.keys(record).filter(k => k[0] !== '_');
         const stamped = Store.stamp(record, fields);
-        const existing = await Store.adapter.get(kind, record.id);
-        const merged = Store.merge(existing, stamped);
-        await Store.adapter.put(kind, merged);
+
+        /* A backend that can read and write atomically does the merge itself,
+           because read-then-write across a network is a race: two devices
+           saving at the same moment would both read the old document and the
+           second write would drop the first one's field. The rule doing the
+           merging is the same either way — Store.merge — so there is one
+           definition of who wins, not one per backend. */
+        const merged = Store.adapter.putMerged
+            ? await Store.adapter.putMerged(kind, stamped, Store.merge)
+            : await (async () => {
+                const existing = await Store.adapter.get(kind, record.id);
+                const m = Store.merge(existing, stamped);
+                await Store.adapter.put(kind, m);
+                return m;
+            })();
+
         if (Store.onChange) Store.onChange(kind, merged);
         return merged;
     },

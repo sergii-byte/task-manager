@@ -487,3 +487,11 @@ input.h1:focus { outline: none; border-color: var(--accent); background: var(--s
     justify-content: space-between; padding: var(--s-1) 0;
     font-size: var(--t-sm); color: var(--fg);
 }
+
+/* ---- the door ----
+   Signed out there is one thing to do, so the chrome that implies a practice
+   — tabs, search, the capture bar — is not shown pretending to work. */
+body.locked #tabs, body.locked #say, body.locked #find { display: none; }
+.door { max-width: 44ch; margin: 8vh auto 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.door h1 { font-size: var(--t-2xl); }
+.door .acts { margin: var(--s-2) 0 0; }

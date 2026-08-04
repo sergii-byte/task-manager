@@ -256,6 +256,59 @@ async function run() {
         T.is(Store.merge(t1, t2).title, Store.merge(t2, t1).title, 'a tie resolves the same way both ways');
     });
 
+    /* A networked backend must merge inside a transaction, or read-then-write
+     * is a race and the second device silently drops the first one's field —
+     * the v2 bug, reintroduced one layer lower. Store hands the merging over
+     * when the adapter can do it atomically, and the rule deciding who wins
+     * stays the same rule either way. */
+    await T.group('store · atomic backends do their own merge', async () => {
+        const seen = { merged: 0, plainPut: 0 };
+        const db = new Map();
+        Store.use({
+            async all() { return [...db.values()]; },
+            async get(kind, id) { return db.get(id) || null; },
+            async put(kind, rec) { seen.plainPut++; db.set(rec.id, rec); return rec; },
+            async putMerged(kind, stamped, merge) {
+                seen.merged++;                       // stands in for the transaction
+                const out = merge(db.get(stamped.id) || null, stamped);
+                db.set(out.id, out);
+                return out;
+            }
+        });
+
+        const t0 = Date.now();
+        const base = { id: 'n-1', title: 'Bylaws', due: null, deletedAt: null };
+        await Store.put('node', base);
+        T.is(seen.merged, 1, 'the atomic path is used when the adapter offers one');
+        T.is(seen.plainPut, 0, 'and the read-then-write path is not');
+
+        /* Two devices arriving at the transaction, each having touched a
+           different field. Stamped by hand because that is what the backend
+           receives — Store.put stamps with this browser's id and clock, and a
+           test that went through it would be testing one writer twice. */
+        const adapter = Store.adapter;
+        const phone = Store.stamp({ ...base, due: '2026-09-01' }, ['due'], t0 + 1000, 'phone');
+        await adapter.putMerged('node', phone, Store.merge);
+        const desk = Store.stamp({ ...base, title: 'Bylaws v2' }, ['title'], t0 + 2000, 'desk');
+        await adapter.putMerged('node', desk, Store.merge);
+
+        const out = db.get('n-1');
+        T.is(out.title, 'Bylaws v2', 'the later title wins');
+        T.is(out.due, '2026-09-01', 'and the other device\'s date is not lost with it');
+
+        // the same instant, two devices: someone has to win, and both must
+        // agree on who — otherwise they flip-flop forever
+        const a = Store.stamp({ ...base, title: 'from A' }, ['title'], t0 + 3000, 'w-aaa');
+        const b = Store.stamp({ ...base, title: 'from B' }, ['title'], t0 + 3000, 'w-bbb');
+        T.is(Store.merge(a, b).title, 'from B', 'a tie is settled by writer id');
+        T.is(Store.merge(b, a).title, 'from B', 'and settled the same way from either side');
+
+        T.not(Store.writer() === 'local', 'a browser has a writer id of its own');
+        T.is(Store.writer(), Store.writer(), 'and keeps it');
+
+        Store.use(MemoryAdapter());
+    });
+
     await T.group('store · deleting and the bin', async () => {
         // synchronous assertions on the promise-free parts
         const adapter = MemoryAdapter({ node: [
