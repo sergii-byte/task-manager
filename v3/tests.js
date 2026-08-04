@@ -149,6 +149,44 @@ async function run() {
     });
 
     /* -------------------------------------------------------------- day --- */
+    /* --------------------------------------------- what a page says it is ---
+     * The node page opens with one line of facts. If that line and the invoice
+     * are computed separately they drift, which is exactly the €2,000
+     * disagreement v2 shipped — so stats() must borrow, not re-derive.
+     */
+    await T.group('the line a page opens with', () => {
+        const p = new Practice();
+        const client  = makeNode('client',  { title: 'Novawave' });
+        const aml     = makeNode('project', { title: 'AML', parentId: client.id, billing: 'hourly', rate: 200 });
+        const filings = makeNode('project', { title: 'Filings', parentId: aml.id });
+        const late    = makeNode('task', { title: 'Late',  parentId: filings.id, status: 'todo', due: addDays(-2) });
+        const soon    = makeNode('task', { title: 'Soon',  parentId: aml.id,     status: 'todo', due: addDays(3) });
+        const shipped = makeNode('task', { title: 'Done',  parentId: aml.id,     status: 'done', due: addDays(-9) });
+        p.nodes.push(client, aml, filings, late, soon, shipped);
+        p.entries.push({ id: 'e1', nodeId: late.id, minutes: 95, on: addDays(-1), invoiceId: null });
+
+        const s = p.stats(client.id);
+        T.is(s.projects, 2, 'counts projects at every depth, not just direct children');
+        T.is(s.tasks, 3, 'counts tasks at every depth');
+        T.is(s.open, 2, 'a finished task is not open');
+        T.is(s.overdue, 1, 'and a finished task is never overdue, however old');
+        T.is(s.minutes, 95, 'time rolls up from a task three levels down');
+
+        // the guard against v2's two-calculations bug
+        T.is(s.unbilled, p.unbilledFor(client.id).total,
+             'the line and the invoice are the same number, by construction');
+
+        // a task speaks about itself, not about a subtree it does not have
+        const t = p.stats(late.id);
+        T.is(t.tasks, 1, 'a task counts itself');
+        T.is(t.overdue, 1, 'and knows it is late');
+        T.is(t.minutes, 95, 'its own time only');
+        T.is(t.unbilled, null, 'money is a client-level question');
+
+        // billing is inherited, so a subproject reports the parent's terms
+        T.is(p.stats(filings.id).billing, 'hourly', 'a subproject inherits how it is billed');
+    });
+
     await T.group('the day', () => {
         const p = new Practice();
         const c = makeNode('client', { title: 'C' });

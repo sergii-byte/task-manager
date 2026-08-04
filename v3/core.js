@@ -204,6 +204,30 @@ class Practice {
         return { total: +lines.reduce((s, l) => s + l.amount, 0).toFixed(2), lines };
     }
 
+    /* ---- what a page says about itself ----
+       Every node page opens with one line of facts instead of a grid of stat
+       cards. Those facts are computed here, once, so the line and the invoice
+       cannot drift apart: the money in it comes from unbilledFor — literally
+       the function that draws the invoice — rather than a second sum. */
+    stats(id) {
+        const n = this.byId(id);
+        if (!n) return null;
+        const inside = this.descendants(id);
+        const tasks = (n.type === 'task' ? [n] : inside).filter(x => x.type === 'task');
+        const open = tasks.filter(t => t.status !== 'done');
+        const ref = today();
+        return {
+            type: n.type,
+            projects: inside.filter(x => x.type === 'project').length,
+            tasks: tasks.length,
+            open: open.length,
+            overdue: open.filter(t => t.due && t.due < ref).length,
+            minutes: this.minutesOn(id, { includeChildren: n.type !== 'task' }),
+            billing: this.billingOf(n),
+            unbilled: n.type === 'client' ? this.unbilledFor(id).total : null
+        };
+    }
+
     /* The nearest project above a node — where money is decided. */
     projectFor(node) {
         let cur = node, guard = 0;

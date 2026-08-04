@@ -16,9 +16,16 @@ const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 
-/* How you are looking at things — kept apart from what you are looking at. */
+/* How you are looking at things — kept apart from what you are looking at.
+   `open` and `drawer` persist across screens: a branch you expanded and a
+   drawer you opened are decisions, and re-rendering must not undo them.
+   `adding`, `more` and `logging` are momentary and reset when you navigate. */
 const UI = {
-    open: new Set(),
+    open: new Set(),        // expanded tree branches
+    drawer: new Set(),      // expanded page drawers
+    adding: null,           // { parentId, type } — the inline new-thing row
+    more: null,             // node id whose ⋯ row is showing
+    logging: null,          // node id whose time row is showing
     route: null,
     isOpen: id => UI.open.has(id),
     toggle(id) { UI.open.has(id) ? UI.open.delete(id) : UI.open.add(id); }
@@ -60,6 +67,16 @@ function render() {
     const same = UI.route === route;
     const y = same ? window.scrollY : 0;
     const place = same ? keepPlace() : null;
+    // a half-typed new task does not follow you to another page — but asking
+    // to log time from Today and landing on the task should still find the row
+    if (!same) {
+        // the row survives exactly one navigation — the one that carries it to
+        // the screen that can host it (first-run "add a client" lands on Work)
+        if (UI.adding && UI.adding.pending) UI.adding.pending = false;
+        else UI.adding = null;
+        if (UI.more !== id) UI.more = null;
+        if (UI.logging !== id) UI.logging = null;
+    }
 
     let html = '';
     try {
@@ -78,6 +95,10 @@ function render() {
     $$('#tabs a').forEach(a => a.classList.toggle('on', a.dataset.screen === screen));
     window.scrollTo(0, y);
     restorePlace(place);
+
+    // whatever you just asked for should already have the caret
+    const fresh = $('main [name="newtitle"]') || $('main [name="mins"]');
+    if (fresh && document.activeElement !== fresh) { fresh.focus(); fresh.select(); }
 }
 
 /* ----------------------------------------------------------------- now --- */
@@ -107,8 +128,8 @@ function viewNow() {
             <p class="muted" style="max-width:46ch">Start with a client — everything else hangs off one.
             Or just say what needs doing and sort it out afterwards.</p>
             <div class="now acts" style="display:flex;gap:8px;margin-top:16px;box-shadow:none;border:0;padding:0;background:none">
-                <button class="btn primary" data-new="client">Add your first client</button>
-                <button class="btn" data-new="task">Add a task</button>
+                <button class="btn primary" data-add="client">Add your first client</button>
+                <button class="btn" data-add="task">Add a task</button>
             </div>`;
     }
 
@@ -149,6 +170,35 @@ function viewNow() {
 
 /* ---------------------------------------------------------------- work --- */
 
+/* Creating something is one line of text, typed where the thing will live.
+   v2 opened a nine-field modal for a task whose only required field was the
+   title — so eight of them were furniture you had to walk past. Everything
+   else has a sensible default and is edited on the page afterwards, if ever. */
+
+const isAddingTo = (parentId) =>
+    !!UI.adding && (UI.adding.parentId || null) === (parentId || null);
+
+const PLACEHOLDER = {
+    client:  'Client name',
+    project: 'Project title',
+    task:    'What needs doing'
+};
+
+function newRow(parentId, type, depth = 0) {
+    return `
+        <li class="newrow" style="--depth:${depth}">
+            <input name="newtitle" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="${esc(PLACEHOLDER[type])}"
+                   aria-label="${esc(PLACEHOLDER[type])}">
+            <button class="btn sm primary" data-newgo>Add</button>
+            <button class="btn sm" data-newcancel>Cancel</button>
+        </li>`;
+}
+
+/* The row appears under whichever node you asked from, and nowhere else. */
+const addingHere = (parentId, depth = 0) =>
+    isAddingTo(parentId) ? newRow(parentId, UI.adding.type, depth) : '';
+
 function treeNode(n, depth = 0) {
     const kids = P.children(n.id);
     const tasks = kids.filter(k => k.type === 'task' && k.status !== 'done');
@@ -168,77 +218,247 @@ function treeNode(n, depth = 0) {
                 ${billing && billing !== 'hourly'
                     ? `<span class="pill">${esc(BILLING_LABEL[billing])}</span>` : ''}
                 <span class="add">
-                    <button class="btn sm" data-new="task" data-parent="${esc(n.id)}">＋ task</button>
-                    ${n.type !== 'task' ? `<button class="btn sm" data-new="project" data-parent="${esc(n.id)}">＋ project</button>` : ''}
+                    <button class="btn sm" data-add="task" data-parent="${esc(n.id)}">＋ task</button>
+                    ${n.type !== 'task' ? `<button class="btn sm" data-add="project" data-parent="${esc(n.id)}">＋ project</button>` : ''}
                 </span>
             </div>
             ${open ? `<ul class="kids">
                 ${subs.map(s => treeNode(s, depth + 1)).join('')}
                 ${tasks.map(t => taskRow(t, { depth: depth + 1 })).join('')}
-                ${!count ? `<li class="empty" style="padding-left:${(depth+1)*18+24}px">Nothing here yet</li>` : ''}
+                ${addingHere(n.id, depth + 1)}
+                ${!count && !isAddingTo(n.id) ? `<li class="empty" style="padding-left:${(depth+1)*18+24}px">Nothing here yet</li>` : ''}
             </ul>` : ''}
         </li>`;
 }
 
 function viewWork() {
     const clients = P.ofType('client').filter(c => !c.parentId);
+    const adding = addingHere(null, 0);
     return `
         <h1>Work</h1>
-        <div class="muted">${clients.length} client${clients.length === 1 ? '' : 's'}</div>
-        ${clients.length
-            ? `<ul class="tree" style="margin-top:16px">${sortNodes(clients).map(c => treeNode(c)).join('')}</ul>`
-            : `<div class="empty">No clients yet.</div>`}
-        <div style="margin-top:20px"><button class="btn primary" data-new="client">＋ New client</button></div>`;
+        <div class="line">${clients.length} client${clients.length === 1 ? '' : 's'}</div>
+        <div class="acts">
+            <button class="btn primary" data-add="client">＋ Client</button>
+        </div>
+        ${clients.length || adding
+            ? `<ul class="tree">${sortNodes(clients).map(c => treeNode(c)).join('')}${adding}</ul>`
+            : `<div class="empty">No clients yet.</div>`}`;
+}
+
+/* =========================================================================
+ * THE NODE PAGE — one shape for a client, a project and a task.
+ *
+ * v2 had three different pages for what is one kind of thing, each ordered by
+ * the order its features were built. On a client that meant the work — the
+ * reason you opened the page — was the eighth block down, below a sharing
+ * settings panel. Here every page reads the same way, top to bottom:
+ *
+ *     where you are   → the path, every step clickable
+ *     what it is      → the title, editable in place
+ *     how it stands   → one line of facts, not a grid of stat cards
+ *     what you can do → two actions and a ⋯
+ *     what is in it   → the tree (or, for a task, its fields)
+ *     everything else → drawers, closed, labelled with what is inside
+ *
+ * A drawer with nothing in it is not drawn at all: a heading over an empty
+ * section is worse than no heading.
+ * ========================================================================= */
+
+/* The fields each kind of thing actually has. There is no `priority` and no
+   `assignee`: a three-way priority that is "normal" on every task ranks
+   nothing, and a solo practice has nobody to assign to. Due dates and
+   overdue already order the day. */
+const FIELDS = {
+    client: [
+        ['email',   'Email',    'email'],
+        ['website', 'Website',  'url'],
+        ['drive',   'Drive',    'url'],
+        ['taxId',   'Tax ID',   'text'],
+        ['address', 'Address',  'text'],
+        ['rate',    'Rate',     'number']
+    ],
+    project: [
+        ['billing', 'Billing',  'billing'],
+        ['fee',     'Fixed fee','number'],
+        ['rate',    'Rate',     'number'],
+        ['due',     'Deadline', 'date'],
+        ['drive',   'Drive',    'url']
+    ],
+    task: [
+        ['due',     'Due',        'date'],
+        ['blocked', 'Waiting on', 'text'],
+        ['drive',   'Drive',      'url']
+    ]
+};
+
+/* Editing is the page. There is no form and no save button: you type into the
+   thing you are reading and leaving the field writes it. */
+function field(n, name, label, kind) {
+    const v = n[name] == null ? '' : String(n[name]);
+    const at = `name="${esc(name)}" data-edit="${esc(n.id)}"`;
+    let control;
+    if (kind === 'billing') {
+        const inherited = BILLING_LABEL[P.billingOf(n)];
+        control = `<select ${at}>
+            <option value="">Inherit — ${esc(inherited)}</option>
+            ${BILLING.map(b => `<option value="${b}" ${n.billing === b ? 'selected' : ''}>${esc(BILLING_LABEL[b])}</option>`).join('')}
+        </select>`;
+    } else if (kind === 'notes') {
+        control = `<textarea ${at} rows="3" placeholder="Anything worth remembering">${esc(v)}</textarea>`;
+    } else {
+        control = `<input ${at} type="${esc(kind)}" value="${esc(v)}" placeholder="—" autocomplete="off">`;
+    }
+    return `<label class="kv ${kind === 'notes' ? 'wide' : ''}"><span>${esc(label)}</span>${control}</label>`;
+}
+
+function fieldsFor(n) {
+    const list = FIELDS[n.type].filter(f =>
+        f[0] !== 'fee' || n.billing === 'fixed' || (!n.billing && P.billingOf(n) === 'fixed'));
+    return `<div class="kvs">
+        ${list.map(f => field(n, f[0], f[1], f[2])).join('')}
+        ${field(n, 'notes', 'Notes', 'notes')}
+    </div>`;
+}
+
+/* One line, in words. Four stat cards where two were the same button told you
+   less than this does, and cost a grid. */
+function statusLine(n) {
+    const s = P.stats(n.id);
+    const bits = [];
+    const money = (v) => fmtMoney(v, P.settings.currency);
+
+    if (n.type === 'task') {
+        if (n.status === 'done') bits.push('Done');
+        else if (n.due && n.due < today()) {
+            const d = daysBetween(n.due, today());
+            bits.push(`<b class="late">${d} day${d === 1 ? '' : 's'} overdue</b>`);
+        }
+        else if (n.due === today()) bits.push('<b>Due today</b>');
+        else if (n.due) bits.push('Due ' + esc(n.due));
+        else bits.push('No date');
+        if (n.status !== 'done' && n.blocked) bits.push(`waiting on ${esc(n.blocked)}`);
+        if (s.minutes) bits.push(fmtMinutes(s.minutes));
+        if (P.isBillable(n) && P.billingOf(n) === 'hourly' && s.minutes) {
+            bits.push(money((s.minutes / 60) * P.rateOf(n)));
+        } else if (!P.isBillable(n)) {
+            bits.push(esc(BILLING_LABEL[s.billing]));
+        }
+    } else {
+        if (s.projects) bits.push(`${s.projects} project${s.projects === 1 ? '' : 's'}`);
+        bits.push(`${s.open} open`);
+        if (s.overdue) bits.push(`<b class="late">${s.overdue} overdue</b>`);
+        if (s.minutes) bits.push(fmtMinutes(s.minutes));
+        if (s.unbilled) bits.push(`${money(s.unbilled)} unbilled`);
+        if (n.type === 'project' && !P.isBillable(n)) bits.push(esc(BILLING_LABEL[s.billing]));
+    }
+    return bits.join(' · ');
+}
+
+function actions(n) {
+    const more = `<button class="btn more-b" data-more="${esc(n.id)}"
+                          aria-expanded="${UI.more === n.id}" aria-label="More actions">⋯</button>`;
+    if (n.type === 'task') {
+        return `
+            <button class="btn primary" data-log="${esc(n.id)}">Log time</button>
+            <button class="btn" data-done="${esc(n.id)}">${n.status === 'done' ? 'Reopen' : 'Mark done'}</button>
+            ${more}`;
+    }
+    return `
+        <button class="btn primary" data-add="task" data-parent="${esc(n.id)}">＋ Task</button>
+        <button class="btn" data-add="project" data-parent="${esc(n.id)}">＋ ${n.type === 'client' ? 'Project' : 'Subproject'}</button>
+        ${more}`;
+}
+
+/* Logging time is a number and two taps, not a browser prompt. */
+function logRow(n) {
+    const prev = P.entriesFor(n.id).slice(-1)[0];
+    return `
+        <div class="logrow">
+            <input name="mins" type="number" inputmode="numeric" min="1" step="5"
+                   value="${prev ? prev.minutes : 30}" aria-label="Minutes">
+            <span class="muted">min</span>
+            ${[15, 30, 60, 90].map(m => `<button class="btn sm" data-quick="${m}">${m}</button>`).join('')}
+            <button class="btn primary sm" data-logsave="${esc(n.id)}">Log</button>
+        </div>`;
+}
+
+function drawer(key, label, meta, body) {
+    if (!body) return '';
+    const on = UI.drawer.has(key);
+    return `
+        <div class="drw">
+            <button class="drw-h" data-drawer="${esc(key)}" aria-expanded="${on}">
+                <span class="tw ${on ? 'open' : ''}">›</span>
+                <span class="l">${esc(label)}</span>
+                ${meta ? `<span class="m">${esc(meta)}</span>` : ''}
+            </button>
+            ${on ? `<div class="drw-b">${body}</div>` : ''}
+        </div>`;
+}
+
+/* Time, as it was actually spent. Only drawn when there is any. */
+function timeDrawer(n) {
+    const deep = n.type !== 'task';
+    const es = P.entriesFor(n.id, { includeChildren: deep });
+    if (!es.length) return '';
+    const mins = es.reduce((s, e) => s + (Number(e.minutes) || 0), 0);
+    const rows = [...es]
+        .sort((a, b) => String(b.on).localeCompare(String(a.on)))
+        .map(e => {
+            const on = P.byId(e.nodeId);
+            return `<tr>
+                <td>${esc(e.on)}</td>
+                <td>${esc(on && on.id !== n.id ? on.title : '')}</td>
+                <td class="num">${fmtMinutes(e.minutes)}</td>
+                <td class="num">${e.invoiceId ? 'billed' : 'unbilled'}</td>
+            </tr>`;
+        }).join('');
+    return drawer('time-' + n.id, 'Time',
+        `${fmtMinutes(mins)} · ${es.length} ${es.length === 1 ? 'entry' : 'entries'}`,
+        `<table class="t"><tbody>${rows}</tbody></table>`);
 }
 
 function viewNode(id) {
     const n = P.byId(id);
-    if (!n || n.deletedAt) return `<h1>Not found</h1><a class="btn" href="#/work">Back to work</a>`;
-
-    const mins = P.minutesOn(n.id, { includeChildren: true });
-    const project = P.projectFor(n);
-    const billing = project ? P.billingOf(project) : 'hourly';
-    const worth = billing === 'hourly' ? (mins / 60) * P.rateOf(n)
-                : billing === 'fixed' && project ? Number(project.fee) || 0 : 0;
-    const late = n.due && n.due < today() && n.status !== 'done';
-    const path = P.ancestors(n);
+    if (!n || n.deletedAt) {
+        return `<h1>Not here</h1>
+                <div class="line">It may have been deleted — the bin keeps things for 30 days.</div>
+                <div class="acts"><a class="btn" href="#/work">Back to work</a>
+                <a class="btn" href="#/bin">Open the bin</a></div>`;
+    }
+    const isTask = n.type === 'task';
+    const kids = isTask ? [] : P.children(n.id);
+    const adding = addingHere(n.id, 0);
+    const filled = FIELDS[n.type].filter(f => n[f[0]] != null && n[f[0]] !== '').length;
 
     return `
-        <div class="muted">${path.map(a =>
-            `<a href="#/work/${esc(a.id)}" style="color:inherit">${esc(a.title)}</a>`).join(' › ')}</div>
-        <h1>${esc(n.title)}</h1>
-
-        ${n.type === 'task' ? `
-            <div class="now" style="box-shadow:none">
-                <div class="k">${n.status === 'done' ? 'done'
-                    : late ? 'overdue' : n.due ? 'due ' + esc(n.due) : 'no date'}</div>
-                ${n.blocked ? `<div class="path" style="color:var(--warn)">Waiting on: ${esc(n.blocked)}</div>` : ''}
-                <div class="acts">
-                    <button class="btn primary" data-log="${esc(n.id)}">Log time</button>
-                    <button class="btn" data-done="${esc(n.id)}">${n.status === 'done' ? 'Reopen' : 'Mark done'}</button>
-                    <button class="btn" data-del="${esc(n.id)}">Delete</button>
-                </div>
-            </div>` : ''}
-
-        <div class="cards">
-            <div class="card"><div class="k">Time</div><div class="v">${fmtMinutes(mins)}</div>
-                <div class="s">${P.entriesFor(n.id, { includeChildren: true }).length} entries</div></div>
-            <div class="card"><div class="k">${billing === 'hourly' ? 'Worth' : BILLING_LABEL[billing]}</div>
-                <div class="v">${worth ? fmtMoney(worth, P.settings.currency) : '—'}</div>
-                <div class="s">${billing === 'hourly' ? '@ ' + fmtMoney(P.rateOf(n), P.settings.currency) + '/h' : 'not hourly'}</div></div>
-            ${n.type !== 'task' ? `<div class="card"><div class="k">Inside</div>
-                <div class="v">${P.descendants(n.id).length}</div><div class="s">items</div></div>` : ''}
+        <div class="path">
+            <a href="#/work">Work</a>
+            ${P.ancestors(n).map(a => `<a href="#/work/${esc(a.id)}">${esc(a.title)}</a>`).join('')}
         </div>
 
-        ${n.type !== 'task' ? `
-            <h2 class="sec">Inside</h2>
-            <ul class="tree">${P.children(n.id).map(c =>
-                c.type === 'task' ? `<li>${taskRow(c)}</li>` : treeNode(c)).join('') ||
-                '<li class="empty">Nothing here yet</li>'}</ul>
-            <div style="margin-top:12px;display:flex;gap:8px">
-                <button class="btn" data-new="task" data-parent="${esc(n.id)}">＋ task</button>
-                <button class="btn" data-new="project" data-parent="${esc(n.id)}">＋ project</button>
-            </div>` : ''}`;
+        <input class="h1" name="title" data-edit="${esc(n.id)}" value="${esc(n.title)}"
+               aria-label="Title" spellcheck="false" autocomplete="off">
+        <div class="line ${isTask && n.status === 'done' ? 'is-done' : ''}">${statusLine(n)}</div>
+
+        <div class="acts">${actions(n)}</div>
+        ${UI.logging === n.id ? logRow(n) : ''}
+        ${UI.more === n.id ? `
+            <div class="acts more">
+                <button class="btn danger" data-del="${esc(n.id)}">Delete</button>
+                <span class="muted">Deleting keeps it in the bin for 30 days.</span>
+            </div>` : ''}
+
+        ${isTask
+            ? fieldsFor(n)
+            : `<ul class="tree">
+                    ${kids.map(c => c.type === 'task' ? `<li>${taskRow(c)}</li>` : treeNode(c)).join('')}
+                    ${adding}
+                    ${!kids.length && !adding ? '<li class="empty">Nothing here yet — add a task or a project above.</li>' : ''}
+               </ul>
+               ${drawer('det-' + n.id, 'Details', filled ? `${filled} filled` : 'empty', fieldsFor(n))}`}
+
+        ${timeDrawer(n)}`;
 }
 
 /* --------------------------------------------------------------- money --- */
@@ -328,14 +548,44 @@ function runSearch() {
 
 /* --------------------------------------------------------------- edits --- */
 
-async function createNode(type, parentId) {
-    const title = prompt(type === 'client' ? 'Client name' : type === 'project' ? 'Project title' : 'Task');
-    if (!title || !title.trim()) return;
-    const node = makeNode(type, { title: title.trim(), parentId: parentId || null });
+/* The inline row commits and stays open: you rarely add exactly one task. */
+async function commitNew() {
+    const input = $('main [name="newtitle"]');
+    if (!input || !UI.adding) return;
+    const title = input.value.trim();
+    if (!title) { UI.adding = null; render(); return; }
+
+    const { parentId, type } = UI.adding;
+    const node = makeNode(type, { title, parentId: parentId || null });
     if (type === 'task') node.status = 'todo';
     P.nodes.push(node);
     if (parentId) UI.open.add(parentId);
     await Store.put('node', node);
+    input.value = '';
+    render();
+}
+
+/* One field, written on blur. Empty means absent, not the empty string, so a
+   cleared rate falls back to the inherited one instead of reading as zero. */
+async function editField(el) {
+    const n = P.byId(el.dataset.edit);
+    if (!n) return;
+    const name = el.name;
+    let v = el.value;
+
+    if (name === 'title') {
+        v = v.trim();
+        if (!v) { render(); return; }        // a thing with no name is not an edit
+    } else if (el.type === 'number') {
+        v = v.trim() === '' ? null : Number(v);
+        if (v != null && !isFinite(v)) { render(); return; }
+    } else if (typeof v === 'string' && v.trim() === '') {
+        v = null;
+    }
+
+    if (n[name] === v) return;
+    n[name] = v;
+    await Store.put('node', n, [name]);
     render();
 }
 
@@ -348,15 +598,13 @@ async function toggleDone(id) {
     render();
 }
 
-async function logTime(id) {
-    const prev = P.entriesFor(id).slice(-1)[0];
-    const suggested = prev ? prev.minutes : 30;
-    const raw = prompt('Minutes on this?', String(suggested));
-    const minutes = Number(raw);
+async function logTime(id, minutes) {
     if (!minutes || minutes < 1) return;
     const entry = { id: uid(), nodeId: id, minutes, on: today(), invoiceId: null, deletedAt: null };
     P.entries.push(entry);
     await Store.put('entry', entry);
+    UI.logging = null;
+    UI.drawer.add('time-' + id);   // show what was just recorded
     render();
 }
 
@@ -386,14 +634,48 @@ function bind() {
         const twist = t('[data-twist]');
         if (twist) { UI.toggle(twist.dataset.twist); render(); return; }
 
+        const drw = t('[data-drawer]');
+        if (drw) {
+            const k = drw.dataset.drawer;
+            UI.drawer.has(k) ? UI.drawer.delete(k) : UI.drawer.add(k);
+            render(); return;
+        }
+
         const done = t('[data-done]');
         if (done) { toggleDone(done.dataset.done); return; }
 
+        // from Today this means "open the task and let me put the time in"
         const log = t('[data-log]');
-        if (log) { logTime(log.dataset.log); return; }
+        if (log) {
+            UI.logging = log.dataset.log;
+            if (parseHash().id === UI.logging) render(); else go('work/' + UI.logging);
+            return;
+        }
+        const quick = t('[data-quick]');
+        if (quick) { const m = $('main [name="mins"]'); if (m) { m.value = quick.dataset.quick; m.focus(); } return; }
+        const save = t('[data-logsave]');
+        if (save) {
+            const m = $('main [name="mins"]');
+            logTime(save.dataset.logsave, Number(m && m.value));
+            return;
+        }
 
-        const add = t('[data-new]');
-        if (add) { createNode(add.dataset.new, add.dataset.parent); return; }
+        const more = t('[data-more]');
+        if (more) { UI.more = UI.more === more.dataset.more ? null : more.dataset.more; render(); return; }
+
+        const add = t('[data-add]');
+        if (add) {
+            const parent = add.dataset.parent || null;
+            UI.adding = { parentId: parent, type: add.dataset.add };
+            if (parent) UI.open.add(parent);
+            // the tree already shows the row wherever it belongs; only come
+            // from another screen (Now's first run) does it need a trip
+            if (parseHash().screen === 'work') render();
+            else { UI.adding.pending = true; go('work' + (parent ? '/' + parent : '')); }
+            return;
+        }
+        if (t('[data-newgo]')) { commitNew(); return; }
+        if (t('[data-newcancel]')) { UI.adding = null; render(); return; }
 
         const del = t('[data-del]');
         if (del) { removeNode(del.dataset.del); return; }
@@ -420,10 +702,32 @@ function bind() {
         if (e.key === 'Escape') $('#sayin').value = '';
     });
 
-    // keys save as you type them
+    // keys save as you type them; so does every field on a node page
     document.body.addEventListener('change', (e) => {
         const k = e.target.closest('[data-key]');
-        if (k) AI.saveKey(k.dataset.key, k.value.trim());
+        if (k) { AI.saveKey(k.dataset.key, k.value.trim()); return; }
+        const f = e.target.closest('[data-edit]');
+        if (f) editField(f);
+    });
+
+    // Enter commits, Escape backs out — the same everywhere on the page
+    document.body.addEventListener('keydown', (e) => {
+        const el = e.target;
+        if (el.name === 'newtitle') {
+            if (e.key === 'Enter') { e.preventDefault(); commitNew(); }
+            if (e.key === 'Escape') { e.preventDefault(); UI.adding = null; render(); }
+            return;
+        }
+        if (el.name === 'mins' && e.key === 'Enter') {
+            e.preventDefault();
+            const btn = $('main [data-logsave]');
+            if (btn) logTime(btn.dataset.logsave, Number(el.value));
+            return;
+        }
+        if (el.dataset && el.dataset.edit && el.tagName === 'INPUT') {
+            if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+            if (e.key === 'Escape') { e.preventDefault(); render(); }
+        }
     });
     document.body.addEventListener('click', (e) => {
         if (!e.target.closest('[data-export]')) return;
