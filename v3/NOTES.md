@@ -101,9 +101,23 @@ The harness records a throw inside a group as a failure rather than aborting
 the run, and groups may be async (an earlier synchronous-only harness had
 four assertions passing by accident).
 
+## Coming out of v2
+
+Settings → "Bring your practice from the old version", once you are signed in.
+Two steps on purpose: **check** runs the whole transformation and reports what
+it found without writing anything, then **bring it across** writes it. v2 is
+only ever read; `/userdata` is never written to and keeps working as it does.
+
+The transformation itself (`fromV2` in `migrate.js`) is a pure function of
+plain data, which is why it can be tested against a fixture containing every
+broken shape v2 could produce rather than against a real practice. Ids are
+preserved, so running it twice rewrites the same records instead of making a
+second copy. Nothing orphaned is quietly reparented to a plausible guess — it
+comes across unfiled and is named in the report.
+
 ## Not built yet
 
-Sign-in and Firestore (data is in `localStorage`), the client portal,
+The client portal,
 invoices as documents, drag to rearrange, the tamper-evident history chain.
 No prompt change has been run against a live model here — there is no API
 key in this environment, so the plumbing is tested and the wording is not.

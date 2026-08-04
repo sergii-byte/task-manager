@@ -26,6 +26,7 @@ const UI = {
     adding: null,           // { parentId, type } — the inline new-thing row
     more: null,             // node id whose ⋯ row is showing
     logging: null,          // node id whose time row is showing
+    migration: null,        // the dry run's findings, until you navigate away
     route: null,
     isOpen: id => UI.open.has(id),
     toggle(id) { UI.open.has(id) ? UI.open.delete(id) : UI.open.add(id); }
@@ -76,6 +77,7 @@ function render() {
         else UI.adding = null;
         if (UI.more !== id) UI.more = null;
         if (UI.logging !== id) UI.logging = null;
+        if (screen !== 'settings') UI.migration = null;
     }
 
     // signed out, there is exactly one thing to look at
@@ -562,6 +564,20 @@ function viewSettings() {
             <div class="acts"><button class="btn primary" data-signin>Continue with Google</button></div>
             <div id="door-err" class="s-error" hidden></div>`}
 
+        ${Session.mode === 'cloud' ? `
+            <h2 class="sec">Bring your practice from the old version</h2>
+            <p class="muted" style="max-width:56ch">Reads the practice v2 keeps on this same
+            account and rewrites it in the new shape. v2 is only ever read — it keeps working
+            exactly as it does now. Ids are kept, so running it twice rewrites the same records
+            instead of making a second copy.</p>
+            <div class="acts">
+                <button class="btn" data-mig="plan">Check what would come across</button>
+                ${UI.migration && UI.migration.counts
+                    ? `<button class="btn primary" data-mig="run">Bring it across</button>` : ''}
+            </div>
+            ${UI.migration ? migrationReport(UI.migration) : ''}`
+        : ''}
+
         <h2 class="sec">Keys</h2>
         ${key('anthropic', 'Anthropic', 'Runs the understanding — turns a sentence into actions.', 'sk-ant-…')}
         ${key('gemini', 'Gemini', 'Runs the ears — turns a recording into words. Free tier is enough.', 'AIza…')}
@@ -585,6 +601,51 @@ function viewSettings() {
             <a class="btn" href="#/bin">Open the bin</a>
             <button class="btn" data-export>Export everything</button>
         </div>`;
+}
+
+/* What the dry run found. The problems are the reason this is two steps and
+   not one button: anything odd in twelve years of records is named here,
+   before a single document is written, and nothing was guessed on your
+   behalf to make the number look tidier. */
+function migrationReport(m) {
+    if (m.error) return `<div class="s-error">${esc(m.error)}</div>`;
+    if (m.busy) return `<div class="line">${esc(m.busy)}</div>`;
+    const c = m.counts;
+    return `
+        <div class="line" style="margin-top:var(--s-3)">
+            ${m.done ? 'Brought across' : 'Would bring'}:
+            ${c.clients} client${c.clients === 1 ? '' : 's'} ·
+            ${c.projects} project${c.projects === 1 ? '' : 's'} ·
+            ${c.tasks} task${c.tasks === 1 ? '' : 's'} ·
+            ${c.entries} time ${c.entries === 1 ? 'entry' : 'entries'} ·
+            ${c.invoices} invoice${c.invoices === 1 ? '' : 's'}${
+                c.deleted ? ` · ${c.deleted} already in the bin` : ''}
+        </div>
+        ${m.problems.length ? `
+            <h2 class="sec">Worth looking at (${m.problems.length})</h2>
+            <ul class="probs">${m.problems.map(p => `<li>${esc(p)}</li>`).join('')}</ul>`
+          : `<div class="muted">Nothing odd found.</div>`}`;
+}
+
+async function migration(step) {
+    if (Session.mode !== 'cloud') return;
+    UI.migration = { busy: step === 'run' ? 'Bringing it across…' : 'Reading v2…' };
+    render();
+    try {
+        UI.migration = step === 'run'
+            ? { ...(await Migrate.run(Session.user.uid, (n, total) => {
+                    UI.migration = { busy: `Writing ${n} of ${total}…` };
+                    render();
+                })), done: true }
+            : await Migrate.plan(Session.user.uid);
+        if (step === 'run') {
+            const [nodes, entries] = await Promise.all([Store.all('node'), Store.all('entry')]);
+            P = new Practice(nodes, entries, []);
+        }
+    } catch (e) {
+        UI.migration = { error: e.message || 'Could not read the old practice.' };
+    }
+    render();
 }
 
 /* -------------------------------------------------------------- search --- */
@@ -780,6 +841,8 @@ function bind() {
             return;
         }
         if (t('[data-upload]')) { uploadThisBrowser(); return; }
+        const mig = t('[data-mig]');
+        if (mig) { migration(mig.dataset.mig); return; }
 
         const hit = t('[data-go]');
         if (hit) { $('#q').value = ''; $('#results').hidden = true; go('work/' + hit.dataset.go); return; }

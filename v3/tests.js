@@ -476,6 +476,122 @@ async function run() {
         T.is(Memory.items.length, 1, 'and nothing was filed for it');
     });
 
+    /* ----------------------------------------------- coming out of v2 ---
+     * This runs once, against work that took years to accumulate, so the
+     * fixture deliberately contains every broken shape v2 could produce:
+     * a project pointing at a missing client, a subproject inside itself,
+     * a task whose matter is gone, time logged against nothing.
+     * None of it may be silently dropped or silently reparented.
+     */
+    await T.group('migration · v2 into one node type', () => {
+        const blob = {
+            clients: [
+                { id: 'c1', name: 'Novawave', email: 'legal@nova.sv', taxId: 'SV-1', notes: 'PSAD' },
+                { id: 'c2', name: 'Datavise' },
+                { id: 'c3', name: 'Gone', deletedAt: '2026-01-05T10:00:00.000Z' }
+            ],
+            matters: [
+                { id: 'm1', title: 'AML', clientId: 'c1', billingType: 'hourly', rate: 200,
+                  website: 'https://drive.example/aml', description: 'ongoing' },
+                { id: 'm2', title: 'Filings', clientId: 'c1', parentId: 'm1' },
+                { id: 'm3', title: 'DE package', clientId: 'c2', billingType: 'fixed', fee: 4000 },
+                { id: 'm4', title: 'Orphan', clientId: 'c-missing' },
+                { id: 'm5', title: 'Loop A', clientId: 'c1', parentId: 'm6' },
+                { id: 'm6', title: 'Loop B', clientId: 'c1', parentId: 'm5' },
+                { id: 'm7', title: 'Lost parent', clientId: 'c1', parentId: 'm-missing' }
+            ],
+            tasks: [{ id: 'stale', title: 'blob mirror', matterId: 'm1' }],
+            logs: [
+                { id: 'l1', taskId: 't1', matterId: 'm2', minutes: 95, startedAt: '2026-07-20T23:30:00.000Z' },
+                { id: 'l2', matterId: 'm3', minutes: 240, startedAt: '2026-07-21T09:00:00.000Z', invoiceId: 'i1' },
+                { id: 'l3', matterId: 'm-missing', minutes: 60, startedAt: '2026-07-22T09:00:00.000Z' }
+            ],
+            invoices: [{ id: 'i1', clientId: 'c2', number: 'INV-1' }]
+        };
+        // the authoritative copy, which must win over the blob's stale mirror
+        const taskDocs = [
+            { id: 't1', title: 'Quarterly report', matterId: 'm2', clientId: 'c1',
+              due: '2026-07-25', status: 'todo', blockedReason: 'client data',
+              link: 'https://drive.example/q2', priority: 'high' },
+            { id: 't2', title: 'Call back', clientId: 'c1', status: 'todo' },
+            { id: 't3', title: 'Homeless', matterId: 'm-missing', status: 'todo' },
+            { id: 't4', title: 'Old', matterId: 'm3', status: 'done',
+              deletedAt: '2026-02-01T00:00:00.000Z' }
+        ];
+
+        const r = fromV2(blob, taskDocs);
+        const at = (id) => r.nodes.find(n => n.id === id);
+
+        T.is(r.nodes.length, 3 + 7 + 4, 'every client, project and task comes across');
+        T.not(r.nodes.some(n => n.title === 'blob mirror'), 'the stale blob mirror loses to /tasks');
+        T.is(at('c1').type, 'client', 'a client is a node');
+        T.is(at('m1').type, 'project', 'a matter is a project');
+        T.is(at('t1').type, 'task', 'a task is a task');
+
+        // names change, meaning does not
+        T.is(at('c1').title, 'Novawave', 'name becomes title');
+        T.is(at('m1').billing, 'hourly', 'billingType becomes billing');
+        T.is(at('m1').drive, 'https://drive.example/aml', "a matter's website was its Drive link");
+        T.is(at('m1').notes, 'ongoing', 'description becomes notes');
+        T.is(at('t1').blocked, 'client data', 'blockedReason becomes blocked');
+        T.is(at('t1').drive, 'https://drive.example/q2', "a task's link becomes its Drive link");
+        T.is(at('t1').priority, 'high', 'a field v3 does not show is still carried, not dropped');
+
+        // the tree
+        T.is(at('m1').parentId, 'c1', 'a project hangs off its client');
+        T.is(at('m2').parentId, 'm1', 'a subproject hangs off its project');
+        T.is(at('t1').parentId, 'm2', 'a task hangs off its project');
+        T.is(at('t2').parentId, 'c1', 'a task with no project hangs off its client');
+
+        // the broken shapes: attached to nothing, and said out loud
+        T.is(at('m4').parentId, null, 'a project with no client is not guessed a new one');
+        T.is(at('t3').parentId, null, 'nor is a task');
+        T.is(at('m7').parentId, 'c1', 'a missing parent project falls back to the client');
+        T.ok(at('m5').parentId === 'c1' || at('m6').parentId === 'c1', 'a loop is broken');
+        T.not(at('m5').parentId === 'm6' && at('m6').parentId === 'm5', 'and not left as a loop');
+        T.is(r.problems.length, 5, 'and every one of them is reported');
+
+        // deleting marks, never erases — the bin should have them
+        T.ok(at('c3').deletedAt, 'a deleted client arrives still deleted');
+        T.ok(at('t4').deletedAt, 'so does a deleted task');
+
+        // time
+        T.is(r.entries.length, 2, 'time with nothing to attach to is left out, not invented');
+        T.is(r.entries.find(e => e.id === 'l1').nodeId, 't1', 'time lands on the most specific thing it named');
+        T.is(r.entries.find(e => e.id === 'l2').invoiceId, 'i1', 'and remembers it was billed');
+        T.ok(/had nothing to attach to/.test(r.problems.join(' ')), 'the dropped entry is reported');
+
+        // the UTC bug, guarded at the border: 23:30 UTC on the 20th is still
+        // the 20th in London and the 21st in Kyiv — the local date is the one
+        // that has to survive, because that is what "logged on" means
+        // Computed from Date's own local getters rather than from isoDate:
+        // comparing the result against the very function under test would be
+        // an assertion that cannot fail however wrong that function became.
+        const late = new Date('2026-07-20T23:30:00.000Z');
+        const localDay = late.getFullYear() + '-' +
+                         String(late.getMonth() + 1).padStart(2, '0') + '-' +
+                         String(late.getDate()).padStart(2, '0');
+        T.is(r.entries.find(e => e.id === 'l1').on, localDay,
+             'a timestamp becomes the local calendar date, not the UTC one');
+
+        // and the result is a practice that answers the same questions
+        const p = new Practice(r.nodes, r.entries, r.invoices);
+        T.is(p.byId('t1').title, 'Quarterly report', 'it loads');
+        T.is(p.clientOf(p.byId('t1')).title, 'Novawave', 'a task three levels down still knows its client');
+        T.is(p.minutesOn('c1', { includeChildren: true }), 95, 'time rolls up to the client');
+        T.is(p.stats('c2').unbilled, 0, 'already-billed time is not owed again');
+
+        T.is(r.counts.clients, 3, 'the count is reported for the dry run');
+        T.is(r.counts.deleted, 2, 'including how much of it is already in the bin');
+    });
+
+    await T.group('migration · nothing to bring', () => {
+        const r = fromV2({}, []);
+        T.is(r.nodes.length, 0, 'an empty practice migrates to an empty practice');
+        T.is(r.problems.length, 0, 'with nothing to report');
+        T.is(r.entries.length, 0, 'and no time');
+    });
+
     /* ------------------------------------------------------- formatting --- */
     await T.group('formatting', () => {
         T.is(fmtMinutes(0), '0m', 'zero');

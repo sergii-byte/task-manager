@@ -495,3 +495,7 @@ body.locked #tabs, body.locked #say, body.locked #find { display: none; }
 .door { max-width: 44ch; margin: 8vh auto 0; display: flex; flex-direction: column; gap: var(--s-3); }
 .door h1 { font-size: var(--t-2xl); }
 .door .acts { margin: var(--s-2) 0 0; }
+
+/* what the dry run found, before anything is written */
+.probs { margin: 0; padding-left: var(--s-4); max-width: 62ch; }
+.probs li { font-size: var(--t-sm); color: var(--fg); margin-bottom: var(--s-1); }
